@@ -1,6 +1,8 @@
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
 from oai_agents.common.arguments import get_args_to_save, set_args_from_load
 
+from overcooked_ai_py.mdp.overcooked_mdp import Action
+
 from abc import ABC, abstractmethod
 import argparse
 from pathlib import Path
@@ -27,6 +29,7 @@ class OAIAgent(nn.Module, ABC):
         self.args = args
         # Must define a policy. The policy must implement a get_distribution(obs) that returns the action distribution
         self.policy = None
+        self.p_idx = None
 
     @abstractmethod
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False) -> Tuple[int, Union[th.Tensor, None]]:
@@ -43,6 +46,16 @@ class OAIAgent(nn.Module, ABC):
         Structure should be the same as agents created using stable baselines:
         https://stable-baselines3.readthedocs.io/en/master/modules/base.html#stable_baselines3.common.base_class.BaseAlgorithm.predict
         """
+
+    def set_idx(self, p_idx):
+        self.p_idx = p_idx
+
+    def action(self, overcooked_state):
+        if self.p_idx is None:
+            raise ValueError('Please call set_idx() before action. Otherwise, call predict with agent specific obs')
+        obs = self.encoding_fn(overcooked_state, p_idx=self.p_idx)
+        action, _ = self.predict(obs, deterministic=True)
+        return Action.INDEX_TO_ACTION[action]
 
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
