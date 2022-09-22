@@ -92,18 +92,19 @@ class SB3Wrapper(OAIAgent):
         self.agent.learn(total_timesteps=total_timesteps, reset_num_timesteps=False)
         self.num_timesteps = self.agent.num_timesteps
 
-    def save(self, path: str) -> None:
+    def save(self, path: Path) -> None:
         """
         Save model to a given location.
         :param path:
         """
+        save_path = path / 'agent_file'
         args = get_args_to_save(self.args)
         th.save({'agent_type': type(self), 'sb3_model_type': type(self.agent),
-                 'const_params': self._get_constructor_parameters(), 'args': args}, path)
-        self.agent.save(str(path) + '_agent')
+                 'const_params': self._get_constructor_parameters(), 'args': args}, save_path)
+        self.agent.save(str(save_path) + '_sb3_agent')
 
     @classmethod
-    def load(cls, path: str, args: argparse.Namespace, **kwargs) -> 'SB3Wrapper':
+    def load(cls, path: Path, args: argparse.Namespace, **kwargs) -> 'SB3Wrapper':
         """
         Load model from path.
         :param path: path to save to
@@ -111,11 +112,12 @@ class SB3Wrapper(OAIAgent):
         :return:
         """
         device = args.device
-        saved_variables = th.load(path)
+        load_path = path / 'agent_file'
+        saved_variables = th.load(load_path)
         set_args_from_load(saved_variables['args'], args)
         saved_variables['const_params']['args'] = args
         # Create agent object
-        agent = saved_variables['sb3_model_type'].load(str(path) + '_agent' )
+        agent = saved_variables['sb3_model_type'].load(str(load_path) + '_sb3_agent' )
         # Create wrapper object
         model = cls(agent=agent, **saved_variables['const_params'], **kwargs)  # pytype: disable=not-instantiable
         model.to(device)
@@ -175,33 +177,34 @@ class OAITrainer(ABC):
         """
         return self.agents
 
-    def save_agents(self, path: Union[str, None] = None, tag: Union[str, None] = None):
+    def save_agents(self, path: Union[Path, None] = None, tag: Union[Path, None] = None):
         ''' Saves each agent that the trainer is training '''
         path = path or self.args.base_dir / 'agent_models' / self.name / self.args.layout_name
         tag = tag or self.args.exp_name
-        save_path = path / tag
-        agent_path = path / (tag + '_agents_dir')
+        save_path = path / tag / 'trainer_file'
+        agent_path = path / tag / 'agents_dir'
         Path(agent_path).mkdir(parents=True, exist_ok=True)
-        save_dict = {'model_type': type(self.agents[0]), 'agent_paths': []}
+        save_dict = {'model_type': type(self.agents[0]), 'agent_fns': []}
         for i, agent in enumerate(self.agents):
-            agent_path_i = agent_path / 'agent_{i}'
+            agent_path_i = agent_path / f'agent_{i}'
             agent.save(agent_path_i)
-            save_dict['agent_paths'].append(agent_path_i)
+            save_dict['agent_paths'].append(f'agent_{i}')
         th.save(save_dict, save_path)
         return path, tag
 
-    def load_agents(self, path: Union[str, None]=None, tag: Union[str, None]=None):
+    def load_agents(self, path: Union[Path, None]=None, tag: Union[Path, None]=None):
         ''' Loads each agent that the trainer is training '''
         path = path or self.args.base_dir / 'agent_models' / self.name / self.args.layout_name
         tag = tag or self.args.exp_name
-        load_path = path / tag
+        load_path = path / tag / 'trainer_file'
+        agent_path = path / tag / 'agents_dir'
         device = self.args.device
         saved_variables = th.load(load_path, map_location=device)
 
         # Load weights
         agents = []
-        for agent_path in saved_variables['agent_paths']:
-            agent = saved_variables['model_type'].load(agent_path, self.args)
+        for agent_fn in saved_variables['agent_fns']:
+            agent = saved_variables['model_type'].load(agent_path / agent_fn, self.args)
             agent.to(device)
             agents.append(agent)
         self.agents = agents

@@ -50,31 +50,33 @@ class MultiAgentSubtaskWorker(OAIAgent):
     def _get_constructor_parameters(self):
         return dict(name=self.name)
 
-    def save(self, path: str) -> None:
+    def save(self, path: Path) -> None:
         args = get_args_to_save(self.args)
-        agent_path = path + '_subtask_agents_dir'
-        Path(agent_path).mkdir(parents=True, exist_ok=True)
+        save_path = path / 'agent_file'
+        agent_dir = path / 'subtask_agents_dir'
+        Path(agent_dir).mkdir(parents=True, exist_ok=True)
 
-        save_dict = {'agent_type': type(self), 'sb3_model_type': type(self.agents[0]), 'agent_paths': [],
+        save_dict = {'agent_type': type(self), 'sb3_model_type': type(self.agents[0]), 'agent_fns': [],
                      'const_params': self._get_constructor_parameters(), 'args': args}
         for i, agent in enumerate(self.agents):
-            agent_path_i = agent_path + f'/subtask_{i}_agent'
+            agent_path_i = agent_dir / f'subtask_{i}_agent'
             agent.save(agent_path_i)
-
-            save_dict['agent_paths'].append(agent_path_i)
-        th.save(save_dict, path)
+            save_dict['agent_fns'].append(f'subtask_{i}_agent')
+        th.save(save_dict, save_path)
 
     @classmethod
-    def load(cls, path: str, args):
+    def load(cls, path: Path, args):
         device = args.device
-        saved_variables = th.load(path, map_location=device)
+        load_path = path / 'agent_file'
+        agent_dir = path / 'subtask_agents_dir'
+        saved_variables = th.load(load_path, map_location=device)
         set_args_from_load(saved_variables['args'], args)
         saved_variables['const_params']['args'] = args
 
         # Load weights
         agents = []
-        for agent_path in saved_variables['agent_paths']:
-            agent = saved_variables['sb3_model_type'].load(agent_path, args)
+        for agent_fn in saved_variables['agent_fns']:
+            agent = saved_variables['sb3_model_type'].load(agent_dir / agent_fn, args)
             agent.to(device)
             agents.append(agent)
         return cls(agents=agents, args=args)
@@ -107,7 +109,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         path = args.base_dir / 'agent_models' / model.name / args.layout_name
         Path(path).mkdir(parents=True, exist_ok=True)
         tag = args.exp_name
-        model.save(str(path / tag))
+        model.save(path / tag)
         return model, tms
 
 
@@ -159,22 +161,22 @@ class HierarchicalRL(OAIAgent):
         obs['curr_subtask'] = self.curr_subtask_id
         return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
 
-    def save(self, path: str) -> None:
+    def save(self, path: Path) -> None:
         """
         Save model to a given location.
         :param path:
         """
-        worker_save_path = str(path) + '_worker'
-        manager_save_path = str(path) + '_manager'
+        save_path = path / 'agent_file'
+        worker_save_path = path / 'worker'
+        manager_save_path = path / 'manager'
         self.worker.save(worker_save_path)
         self.manager.save(manager_save_path)
         args = get_args_to_save(self.args)
-        th.save({'worker_type': type(self.worker), 'worker_path': worker_save_path,
-                 'manager_type': type(self.manager), 'manager_path': manager_save_path,
-                 'agent_type': type(self), 'const_params': self._get_constructor_parameters(), 'args': args}, path)
+        th.save({'worker_type': type(self.worker), 'manager_type': type(self.manager),
+                 'agent_type': type(self), 'const_params': self._get_constructor_parameters(), 'args': args}, save_path)
 
     @classmethod
-    def load(cls, path: str, args) -> 'OAIAgent':
+    def load(cls, path: Path, args) -> 'OAIAgent':
         """
         Load model from path.
         :param path: path to save to
@@ -182,10 +184,11 @@ class HierarchicalRL(OAIAgent):
         :return:
         """
         device = args.device
-        saved_variables = th.load(path, map_location=device)
+        load_path = path / 'agent_file'
+        saved_variables = th.load(load_path, map_location=device)
         set_args_from_load(saved_variables['args'], args)
-        worker = saved_variables['worker_type'].load(saved_variables['worker_path'], args)
-        manager = saved_variables['manager_type'].load(saved_variables['manager_path'], args)
+        worker = saved_variables['worker_type'].load(path / 'worker', args)
+        manager = saved_variables['manager_type'].load(path / 'manager', args)
         saved_variables['const_params']['args'] = args
 
         # Create agent object

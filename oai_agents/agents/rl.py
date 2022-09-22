@@ -48,14 +48,9 @@ class SingleAgentTrainer(OAITrainer):
             sb3_agent = RecurrentPPO('MultiInputLstmPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1)
         else:
             sb3_agent = PPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1)
-        # sb3_agent.policy.to(self.device)
         self.learning_agent = self.wrap_agent(sb3_agent)
         self.agents = [self.learning_agent]
-        # for agent in self.agents:
-        #     agent.policy.to(self.device)
 
-        # for i in range(self.args.n_envs):
-        #     self.env.env_method('set_agent', self.teammates[np.random.randint(self.n_tm)], indices=i)
 
     def _get_constructor_parameters(self):
         return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, hidden_dim=self.hidden_dim, seed=self.seed)
@@ -219,16 +214,18 @@ class MultipleAgentsTrainer(OAITrainer):
                 mat = MultipleAgentsTrainer(args, num_agents=1, use_lstm=use_lstm, hidden_dim=h_dim,
                                             fcp_ck_rate=ck_rate, seed=seed)
                 mat.train_agents(total_timesteps=training_steps)
-                agents.extend(rl_sat.get_fcp_agents())
+                agents.extend(mat.get_fcp_agents())
         pop = MultipleAgentsTrainer(args, num_agents=0)
         pop.set_agents(agents)
-        pop.save_agents(str(self.args.base_dir / 'agent_models' / 'fcp' / self.args.layout_name / f'{len(agents)}_pop'))
+        pop.save_agents(args.base_dir / 'agent_models' / 'fcp' / args.layout_name / f'{len(agents)}_pop')
         return pop.get_agents()
 
 
 if __name__ == '__main__':
+    from pathlib import Path
     args = get_arguments()
     sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=1e3)
+    sp[0].save(Path('test_data'))
     # pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=3e6)
     # fcp = SingleAgentTrainer(pop, args, 'fcp')
     # fcp.train_agents(1e6)
