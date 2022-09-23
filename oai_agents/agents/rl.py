@@ -40,12 +40,15 @@ class SingleAgentTrainer(OAITrainer):
         self.use_subtask_eval = (type(eval_env) == OvercookedSubtaskGymEnv)
 
         policy_kwargs = dict(
-            features_extractor_class=OAISinglePlayerFeatureExtractor,
-            features_extractor_kwargs=dict(features_dim=hidden_dim),
+            # features_extractor_class=OAISinglePlayerFeatureExtractor,
+            # features_extractor_kwargs=dict(features_dim=hidden_dim),
             net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
         )
         if use_lstm:
-            sb3_agent = RecurrentPPO('MultiInputLstmPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1)
+            policy_kwargs['n_lstm_layers'] = 2
+            policy_kwargs['lstm_hidden_size'] = hidden_dim
+            sb3_agent = RecurrentPPO('MultiInputLstmPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1,
+                                     n_steps=2048, batch_size=64)
             agent_name = f'{name}_lstm'
         else:
             sb3_agent = PPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1)
@@ -111,16 +114,18 @@ class MultipleAgentsTrainer(OAITrainer):
         self.eval_env = OvercookedGymEnv(shape_rewards=False, args=args)
 
         policy_kwargs = dict(
-            features_extractor_class=OAISinglePlayerFeatureExtractor,
-            features_extractor_kwargs=dict(features_dim=hidden_dim),
+            # features_extractor_class=OAISinglePlayerFeatureExtractor,
+            # features_extractor_kwargs=dict(features_dim=hidden_dim),
             net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
         )
 
         self.agents = []
         if use_lstm:
+            policy_kwargs['n_lstm_layers'] = 2
+            policy_kwargs['lstm_hidden_size'] = hidden_dim
             for i in range(num_agents):
                 sb3_agent = RecurrentPPO('MultiInputLstmPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1,
-                                         n_steps=1024, batch_size=16)
+                                         n_steps=2048, batch_size=64)
                 agent_name = f'{name}_lstm_{i + 1}'
                 self.agents.append(SB3LSTMWrapper(sb3_agent, agent_name, args))
         else:
@@ -173,7 +178,7 @@ class MultipleAgentsTrainer(OAITrainer):
         if len(self.ck_list) < 3:
             raise ValueError('Must have at least 3 checkpoints saved. Increase fcp_ck_rate or training length')
         agents = []
-        best_score = 0
+        best_score = -1
         best_path, best_tag = None, None
         for score, path, tag in self.ck_list:
             if score > best_score:
@@ -208,13 +213,13 @@ class MultipleAgentsTrainer(OAITrainer):
     @staticmethod
     def create_fcp_population(args, training_steps=1e8):
         agents = []
-        for use_lstm in [True, False]:
-            # hidden_dim = 16
-            seed = 8
-            for h_dim in [256, 16]:
+        for h_dim in [256, 16]:
+            for use_lstm in [True, False]:
+                seed = 88
                 #     for seed in [1, 20]:#, 300, 4000]:
                 ck_rate = training_steps / 10
                 name = f'lstm_{h_dim}' if use_lstm else f'no_lstm_{h_dim}'
+                print(f'Starting training for: {name}')
                 mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_lstm=use_lstm, hidden_dim=h_dim,
                                             fcp_ck_rate=ck_rate, seed=seed)
                 mat.train_agents(total_timesteps=training_steps)
