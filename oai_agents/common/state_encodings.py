@@ -138,7 +138,7 @@ def OAI_BC_featurize_state(mdp: OvercookedGridworld, state: OvercookedState, gri
         agent_obs = np.stack(agent_obs, axis=0)
     return {'agent_obs': agent_obs}
 
-def OAI_RL_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int, p_idx=True):
+def OAI_RL_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int, p_idx=None):
     """
     Uses Overcooked-ai's RL lossless encoding by stacking 20 binary masks (20xNxM). Only returns visual_obss
     """

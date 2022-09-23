@@ -29,7 +29,10 @@ class OAIAgent(nn.Module, ABC):
         self.args = args
         # Must define a policy. The policy must implement a get_distribution(obs) that returns the action distribution
         self.policy = None
+        # Used in overcooked-demo code
         self.p_idx = None
+        self.mdp = None
+        self.horizon = None
 
     @abstractmethod
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False) -> Tuple[int, Union[th.Tensor, None]]:
@@ -50,13 +53,19 @@ class OAIAgent(nn.Module, ABC):
     def set_idx(self, p_idx):
         self.p_idx = p_idx
 
+    def set_encoding_params(self, mdp, horizon):
+        self.mdp = mdp
+        self.horizon = horizon
+
     def action(self, overcooked_state):
-        if self.p_idx is None:
-            raise ValueError('Please call set_idx() before action. Otherwise, call predict with agent specific obs')
-        obs = self.encoding_fn(overcooked_state, p_idx=self.p_idx)
+        if self.p_idx is None or self.mdp is None or self.horizon is None:
+            raise ValueError('Please call set_idx() and set_encoding_params() before action. '
+                             'Or, call predict with agent specific obs')
+        grid_shape = self.mdp.shape
+        obs = self.encoding_fn(self.mdp, overcooked_state, grid_shape, self.horizon, p_idx=self.p_idx)
         action, _ = self.predict(obs, deterministic=True)
-        print('?', action, flush=True)
-        return np.random.choice(Action.ALL_ACTIONS)
+        print('?', Action.INDEX_TO_ACTION[action], flush=True)
+        return Action.INDEX_TO_ACTION[action]
 
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
