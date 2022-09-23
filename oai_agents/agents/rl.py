@@ -147,7 +147,7 @@ class MultipleAgentsTrainer(OAITrainer):
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
                          dir=str(self.args.base_dir / 'wandb'),
-                         reinit=True, name=exp_name + '_rl_two_single_agents', mode=self.args.wandb_mode)
+                         reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
         # Each agent should learn for `total_timesteps` steps. Keep training until all agents hit this threshold
         while any(self.agents_in_training):
             # Randomly select new teammates from population (can include learner)
@@ -218,6 +218,7 @@ class MultipleAgentsTrainer(OAITrainer):
                 mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_lstm=use_lstm, hidden_dim=h_dim,
                                             fcp_ck_rate=ck_rate, seed=seed)
                 mat.train_agents(total_timesteps=training_steps)
+                mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp' / args.layout), tag=name)
                 agents.extend(mat.get_fcp_agents())
         pop = MultipleAgentsTrainer(args, num_agents=0)
         pop.set_agents(agents)
@@ -228,9 +229,9 @@ class MultipleAgentsTrainer(OAITrainer):
 if __name__ == '__main__':
     from pathlib import Path
     args = get_arguments()
-    sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=1e3)
-    sp[0].save(Path('test_data'))
-    # pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=3e6)
+    # sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=5e6)
+    # sp[0].save(Path('test_data'))
+    pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=5e6)
     # fcp = SingleAgentTrainer(pop, args, 'fcp')
     # fcp.train_agents(1e6)
 

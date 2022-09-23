@@ -64,8 +64,7 @@ class OAIAgent(nn.Module, ABC):
         grid_shape = self.mdp.shape
         obs = self.encoding_fn(self.mdp, overcooked_state, grid_shape, self.horizon, p_idx=self.p_idx)
         action, _ = self.predict(obs, deterministic=True)
-        print('?', Action.INDEX_TO_ACTION[action], flush=True)
-        return Action.INDEX_TO_ACTION[action]
+        return Action.INDEX_TO_ACTION[action], None
 
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
@@ -189,7 +188,7 @@ class OAITrainer(ABC):
         if visualize and not self.eval_env.visualization_enabled:
             self.eval_env.setup_visualization()
         self.eval_env.set_teammate(eval_teammate)
-        mean_reward, std_reward = evaluate_policy(eval_agent, self.eval_env, n_eval_episodes=num_episodes, warn=False)
+        mean_reward, std_reward = evaluate_policy(eval_agent, self.eval_env, n_eval_episodes=num_episodes, deterministic=False, warn=False)
         timestep = timestep or eval_agent.num_timesteps
         print(f'Eval at timestep {timestep}: {mean_reward}')
         wandb.log({'eval_mean_reward': mean_reward, 'timestep': timestep})
@@ -206,7 +205,7 @@ class OAITrainer(ABC):
         """
         return self.agents
 
-    def save_agents(self, path: Union[Path, None] = None, tag: Union[Path, None] = None):
+    def save_agents(self, path: Union[Path, None] = None, tag: Union[str, None] = None):
         ''' Saves each agent that the trainer is training '''
         path = path or self.args.base_dir / 'agent_models' / self.name / self.args.layout_name
         tag = tag or self.args.exp_name
@@ -221,7 +220,7 @@ class OAITrainer(ABC):
         th.save(save_dict, save_path)
         return path, tag
 
-    def load_agents(self, path: Union[Path, None]=None, tag: Union[Path, None]=None):
+    def load_agents(self, path: Union[Path, None]=None, tag: Union[str, None]=None):
         ''' Loads each agent that the trainer is training '''
         path = path or self.args.base_dir / 'agent_models' / self.name / self.args.layout_name
         tag = tag or self.args.exp_name
