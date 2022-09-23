@@ -55,7 +55,8 @@ class OAIAgent(nn.Module, ABC):
             raise ValueError('Please call set_idx() before action. Otherwise, call predict with agent specific obs')
         obs = self.encoding_fn(overcooked_state, p_idx=self.p_idx)
         action, _ = self.predict(obs, deterministic=True)
-        return Action.INDEX_TO_ACTION[action]
+        print('?', action, flush=True)
+        return np.random.choice(Action.ALL_ACTIONS)
 
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
