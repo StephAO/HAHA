@@ -125,20 +125,13 @@ class Manager:
 
 class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
-    def __init__(self, worker, teammates, args):
+    def __init__(self, worker, teammates, args, name=None):
+        name = name or 'rl_manager'
         kwargs = {'worker': worker, 'shape_rewards': True, 'args': args}
         env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=kwargs, vec_env_cls=VEC_ENV_CLS)
         eval_env = OvercookedManagerGymEnv(worker=worker, shape_rewards=False, args=args)
         self.worker = worker
-        super(RLManagerTrainer, self).__init__(teammates, args, env=env, eval_env=eval_env)
-
-    def wrap_agent(self, rl_agent):
-        if self.use_lstm:
-            agent = SB3LSTMWrapper(rl_agent, f'rl_lstm_manager', self.args)
-        else:
-            agent = SB3Wrapper(rl_agent, f'rl_manager', self.args)
-        return agent
-
+        super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env, eval_env=eval_env)
 
 class HierarchicalRL(OAIAgent):
     def __init__(self, worker, manager, args):

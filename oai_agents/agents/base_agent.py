@@ -60,6 +60,12 @@ class OAIAgent(nn.Module, ABC):
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
 
+    def step(self):
+        pass
+
+    def reset(self):
+        pass
+
     def save(self, path: str) -> None:
         """
         Save model to a given location.
