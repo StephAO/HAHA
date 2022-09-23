@@ -2,11 +2,13 @@ from oai_agents.agents.base_agent import *
 from oai_agents.agents.il import *
 from oai_agents.agents.rl import *
 from oai_agents.agents.hrl import *
+from oai_agents.common.arguments import get_arguments
 from pathlib import Path
 import torch as th
 
 
-def load_agent(agent_path, args):
+def load_agent(agent_path, args=None):
+    args = args or get_arguments()
     try:
         load_dict = th.load(agent_path / 'agent_file')
     except FileNotFoundError as e:
