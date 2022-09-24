@@ -16,7 +16,7 @@ class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self, play_both_players=False, base_env=None, horizon=None, grid_shape=None, shape_rewards=False,
-                 ret_completed_subtasks=False, args=None):
+                 ret_completed_subtasks=False, randomize_start=False, args=None):
         '''
         :param play_both_players: If true, play actions of both players. Step requires tuple(int, int) instead of int
         :param grid_shape: Shape over
@@ -30,7 +30,25 @@ class OvercookedGymEnv(Env):
         if base_env is None:
             self.mdp = OvercookedGridworld.from_layout_name(args.layout_name)
             horizon = horizon or args.horizon
-            self.env = OvercookedEnv.from_mdp(self.mdp, horizon=horizon)
+            
+            if randomize_start:
+                from overcooked_ai_py.planning.planners import MediumLevelActionManager
+                self.mdp = OvercookedGridworld.from_layout_name(args.layout_name)
+                all_counters = self.mdp.get_counter_locations()
+                COUNTERS_PARAMS = {
+                    'start_orientations': False,
+                    'wait_allowed': False,
+                    'counter_goals': all_counters,
+                    'counter_drop': all_counters,
+                    'counter_pickup': all_counters,
+                    'same_motion_goals': True
+                }
+                self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
+                ss_fn = self.mdp.get_fully_random_start_state_fn(self.mlam, random_start_pos=True, random_orientation=True, rnd_obj_prob_thresh=0.2)
+            else:
+                ss_fn = None
+            
+            self.env = OvercookedEnv.from_mdp(self.mdp, horizon=horizon, start_state_fn=ss_fn)
         else:
             self.env = base_env
         self.grid_shape = grid_shape or self.env.mdp.shape

@@ -109,9 +109,9 @@ class MultipleAgentsTrainer(OAITrainer):
         self.args = args
         self.fcp_ck_rate = fcp_ck_rate
 
-        env_kwargs = {'shape_rewards': True, 'args': args}
+        env_kwargs = {'shape_rewards': True, 'args': args, 'randomize_start': True}
         self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, env_kwargs={**env_kwargs})
-        self.eval_env = OvercookedGymEnv(shape_rewards=False, args=args)
+        self.eval_env = OvercookedGymEnv(shape_rewards=False, args=args, randomize_start=False)
 
         policy_kwargs = dict(
             # features_extractor_class=OAISinglePlayerFeatureExtractor,
@@ -149,6 +149,8 @@ class MultipleAgentsTrainer(OAITrainer):
             self.ck_list = []
             path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
             self.ck_list.append((0, path, tag))
+        best_path, best_tag = None, None
+        best_score = -1
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
                          dir=str(self.args.base_dir / 'wandb'),
@@ -172,6 +174,10 @@ class MultipleAgentsTrainer(OAITrainer):
                 if self.agents_timesteps[0] // self.fcp_ck_rate > (len(self.ck_list) - 1):
                     path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
                     self.ck_list.append((mean_reward, path, tag))
+            if mean_reward >= best_score:
+                best_path, best_tag = self.save_agents(tag='best')
+                best_score = mean_reward
+        self.load_agents(best_path, best_tag)
         run.finish()
 
     def get_fcp_agents(self):
@@ -185,11 +191,11 @@ class MultipleAgentsTrainer(OAITrainer):
                 best_score = score
                 best_path, best_tag = path, tag
         best = self.load_agents(best_path, best_tag)
-        agents.append(best.get_agents())
+        agents.extend(best)
         del best
         _, worst_path, worst_tag = self.ck_list[0]
         worst = self.load_agents(worst_path, worst_tag)
-        agents.append(worst.get_agents())
+        agents.extend(worst)
         del worst
 
         closest_to_mid_score = float('inf')
@@ -199,7 +205,7 @@ class MultipleAgentsTrainer(OAITrainer):
                 closest_to_mid_score = score
                 mid_path, mid_tag = path, tag
         mid = self.load_agents(mid_path, mid_tag)
-        agents.append(mid.get_agents())
+        agents.extend(mid)
         del mid
         return agents
 
@@ -214,7 +220,7 @@ class MultipleAgentsTrainer(OAITrainer):
     def create_fcp_population(args, training_steps=1e8):
         agents = []
         for h_dim in [256, 16]:
-            for use_lstm in [True, False]:
+            for use_lstm in [False, True]:
                 seed = 88
                 #     for seed in [1, 20]:#, 300, 4000]:
                 ck_rate = training_steps / 10
@@ -223,7 +229,7 @@ class MultipleAgentsTrainer(OAITrainer):
                 mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_lstm=use_lstm, hidden_dim=h_dim,
                                             fcp_ck_rate=ck_rate, seed=seed)
                 mat.train_agents(total_timesteps=training_steps)
-                mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp' / args.layout), tag=name)
+                mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp' / args.layout_name), tag=name)
                 agents.extend(mat.get_fcp_agents())
         pop = MultipleAgentsTrainer(args, num_agents=0)
         pop.set_agents(agents)
