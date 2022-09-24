@@ -75,7 +75,7 @@ class OAIAgent(nn.Module, ABC):
     def reset(self):
         pass
 
-    def save(self, path: str) -> None:
+    def save(self, path: Path) -> None:
         """
         Save model to a given location.
         :param path:
@@ -125,6 +125,7 @@ class SB3Wrapper(OAIAgent):
         Save model to a given location.
         :param path:
         """
+        Path(path).mkdir(parents=True, exist_ok=True)
         save_path = path / 'agent_file'
         args = get_args_to_save(self.args)
         th.save({'agent_type': type(self), 'sb3_model_type': type(self.agent),
@@ -216,7 +217,7 @@ class OAITrainer(ABC):
         for i, agent in enumerate(self.agents):
             agent_path_i = agent_path / f'agent_{i}'
             agent.save(agent_path_i)
-            save_dict['agent_paths'].append(f'agent_{i}')
+            save_dict['agent_fns'].append(f'agent_{i}')
         th.save(save_dict, save_path)
         return path, tag
 
