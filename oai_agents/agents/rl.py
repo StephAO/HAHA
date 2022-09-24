@@ -228,7 +228,7 @@ class MultipleAgentsTrainer(OAITrainer):
 
 if __name__ == '__main__':
     args = get_arguments()
-    sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=1e3)
+    sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=1e6)
     # pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=3e6)
     # fcp = SingleAgentTrainer(pop, args, 'fcp')
     # fcp.train_agents(1e6)

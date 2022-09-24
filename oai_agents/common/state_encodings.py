@@ -159,13 +159,13 @@ def OAI_RL_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_s
 
 
 def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState,
-                                ego_grid_shape: tuple, horizon: int, p_idx=None) -> Dict[str, np.array]:
+                                grid_shape: tuple, horizon: int, p_idx=None) -> Dict[str, np.array]:
     """
     Returns the egocentric encode state. Player will always be facing down (aka. SOUTH).
-    ego_grid_shape: The desired padded output shape from the egocentric view
+    grid_shape: The desired padded output shape from the egocentric view
     """
-    if len(ego_grid_shape) > 2 or ego_grid_shape[0] % 2 == 0 or ego_grid_shape[1] % 2 == 0:
-        raise ValueError(f'Ego grid shape must be 2D and both dimensions must be odd! {ego_grid_shape} is invalid.')
+    if len(grid_shape) > 2 or grid_shape[0] % 2 == 0 or grid_shape[1] % 2 == 0:
+        raise ValueError(f'Ego grid shape must be 2D and both dimensions must be odd! {grid_shape} is invalid.')
 
     # Get np.array representing current state
     visual_obs = mdp.lossless_state_encoding(state, horizon=horizon)  # This returns 2xNxMxF (F is # features)
@@ -184,12 +184,12 @@ def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState
     # Now we mask out the egocentric view
     assert len(state.players) == num_players
     if p_idx is not None:
-        ego_visual_obs = get_egocentric_grid(visual_obs[p_idx], ego_grid_shape, state.players[p_idx])
-        assert ego_visual_obs.shape == (num_features, *ego_grid_shape)
+        ego_visual_obs = get_egocentric_grid(visual_obs[p_idx], grid_shape, state.players[p_idx])
+        assert ego_visual_obs.shape == (num_features, *grid_shape)
     else:
-        ego_visual_obs = np.stack([get_egocentric_grid(visual_obs[idx], ego_grid_shape, player)
+        ego_visual_obs = np.stack([get_egocentric_grid(visual_obs[idx], grid_shape, player)
                                    for idx, player in enumerate(state.players)])
-        assert ego_visual_obs.shape == (num_players, num_features, *ego_grid_shape)
+        assert ego_visual_obs.shape == (num_players, num_features, *grid_shape)
 
     return {'visual_obs': ego_visual_obs}
 

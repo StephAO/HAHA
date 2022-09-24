@@ -12,7 +12,6 @@ import pygame
 from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE
 from stable_baselines3.common.env_checker import check_env
 
-
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
 
@@ -40,6 +39,10 @@ class OvercookedGymEnv(Env):
         self.args = args
         self.device = args.device
         self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
+        if args.encoding_fn == 'OAI_egocentric':
+            # Override grid shape to make it egocentric
+            assert grid_shape is None, 'Grid shape cannot be used when egocentric encodings are used!'
+            self.grid_shape = (7, 7)
         self.visualization_enabled = False
         self.step_count = 0
         self.teammate = None
