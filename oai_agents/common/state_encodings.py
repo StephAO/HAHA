@@ -1,10 +1,10 @@
-from overcooked_ai_py.mdp.overcooked_mdp import OvercookedState, OvercookedGridworld, Direction, Action
+from overcooked_ai_py.mdp.overcooked_mdp import OvercookedState, OvercookedGridworld, Direction, Action, PlayerState
 from overcooked_ai_py.planning.planners import MediumLevelActionManager, NO_COUNTERS_PARAMS
-
-from copy import deepcopy
+from typing import Dict, Tuple
 import numpy as np
 
 
+# Note: Don't use
 def encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int,
                  inc_agent_obs: bool=True, inc_soup_time: bool=True, inc_urgency=True, p_idx=None):
     """
@@ -126,6 +126,7 @@ def encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: t
         visual_obs = np.tile(visual_obs, (2,1,1,1))
     return {'visual_obs': visual_obs, 'agent_obs': agent_obs}
 
+
 def OAI_BC_featurize_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int, num_pots: int = 2, p_idx=None):
     """
     Uses Overcooked-ai's BC 64 dim BC featurization. Only returns agent_obs
@@ -138,9 +139,10 @@ def OAI_BC_featurize_state(mdp: OvercookedGridworld, state: OvercookedState, gri
         agent_obs = np.stack(agent_obs, axis=0)
     return {'agent_obs': agent_obs}
 
-def OAI_RL_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int, p_idx=True):
+
+def OAI_RL_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int, p_idx=None):
     """
-    Uses Overcooked-ai's RL lossless encoding by stacking 20 binary masks (20xNxM). Only returns visual_obss
+    Uses Overcooked-ai's RL lossless encoding by stacking 20 binary masks (20xNxM). Only returns visual_obs.
     """
     visual_obs = mdp.lossless_state_encoding(state, horizon=horizon)
     visual_obs = np.stack(visual_obs, axis=0)
@@ -155,9 +157,71 @@ def OAI_RL_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_s
         visual_obs = visual_obs[p_idx]
     return {'visual_obs': visual_obs}
 
+
+def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState,
+                                ego_grid_shape: tuple, horizon: int, p_idx=None) -> Dict[str, np.array]:
+    """
+    Returns the egocentric encode state. Player will always be facing down (aka. SOUTH).
+    ego_grid_shape: The desired padded output shape from the egocentric view
+    """
+    if len(ego_grid_shape) > 2 or ego_grid_shape[0] % 2 == 0 or ego_grid_shape[1] % 2 == 0:
+        raise ValueError(f'Ego grid shape must be 2D and both dimensions must be odd! {ego_grid_shape} is invalid.')
+
+    # Get np.array representing current state
+    visual_obs = mdp.lossless_state_encoding(state, horizon=horizon)  # This returns 2xNxMxF (F is # features)
+    visual_obs = np.stack(visual_obs, axis=0)
+    visual_obs = np.transpose(visual_obs, (0, 3, 1, 2))  # Reorder to features first --> 2xFxNxM
+    num_players, num_features = visual_obs.shape[0], visual_obs.shape[1]
+
+    # Remove orientation features since they are now irrelevant.
+    # There are num_players * num_directions features.
+    num_layers_to_skip = num_players*len(Direction.ALL_DIRECTIONS)
+    idx_slice =list(range(num_players)) + list(range(num_players+num_layers_to_skip, num_features))
+    visual_obs = visual_obs[:, idx_slice, :, :]
+    assert visual_obs.shape[1] == num_features - num_layers_to_skip
+    num_features = num_features - num_layers_to_skip
+
+    # Now we mask out the egocentric view
+    assert len(state.players) == num_players
+    if p_idx is not None:
+        ego_visual_obs = get_egocentric_grid(visual_obs[p_idx], ego_grid_shape, state.players[p_idx])
+        assert ego_visual_obs.shape == (num_features, *ego_grid_shape)
+    else:
+        ego_visual_obs = np.stack([get_egocentric_grid(visual_obs[idx], ego_grid_shape, player)
+                                   for idx, player in enumerate(state.players)])
+        assert ego_visual_obs.shape == (num_players, num_features, *ego_grid_shape)
+
+    return {'visual_obs': ego_visual_obs}
+
+
+def get_egocentric_grid(grid: np.array, ego_grid_shape: Tuple[int, int], player: PlayerState) -> np.array:
+    assert len(grid.shape) == 3  # (Features, X, Y)
+    # We pad so that we can mask the egocentric view without worrying about out-of-bounds errors
+    x_pad_amount = ego_grid_shape[0] // 2
+    y_pad_amount = ego_grid_shape[1] // 2
+    padding_amount = ((0, 0), (x_pad_amount, x_pad_amount), (y_pad_amount, y_pad_amount))
+    padded_grid = np.pad(grid, padding_amount)
+
+    player_obs = padded_grid[:,
+                             player.position[0]: player.position[0] + 2*x_pad_amount + 1,
+                             player.position[1]: player.position[1] + 2*y_pad_amount + 1]
+
+    if player.orientation == Direction.SOUTH:
+        return player_obs
+    elif player.orientation == Direction.NORTH:
+        return np.rot90(player_obs, k=2, axes=(1, 2))
+    elif player.orientation == Direction.EAST:
+        return np.rot90(player_obs, k=-1, axes=(1, 2))
+    elif player.orientation == Direction.WEST:
+        return np.rot90(player_obs, k=1, axes=(1, 2))
+
+    raise ValueError('Invalid direction! This should not be possible.')
+
+
 ENCODING_SCHEMES = {
     'OAI_feats': OAI_BC_featurize_state,
     'OAI_lossless': OAI_RL_encode_state,
+    'OAI_egocentric': OAI_egocentric_encode_state,
     'dense_lossless': encode_state
 }
 

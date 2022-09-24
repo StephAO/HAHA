@@ -18,6 +18,7 @@ def get_arguments(additional_args=[]):
                         help='Which subtask selection algorithm to use. Options: "value_based", "dist". Default: "value_based"')
     parser.add_argument('--horizon', type=int, default=400, help='Max timesteps in a rollout')
     parser.add_argument('--n-envs', type=int, default=16, help='Number of environments to use while training')
+    # TODO: Add new egocentric option here and integrate into training
     parser.add_argument('--encoding-fn', type=str, default='OAI_lossless',
                         help='Encoding scheme to use. Options: "dense_lossless", "OAI_lossless", "OAI_feats"')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
