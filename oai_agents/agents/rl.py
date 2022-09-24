@@ -19,7 +19,7 @@ VEC_ENV_CLS = DummyVecEnv#SubprocVecEnv
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, teammates, args, name=None, env=None, eval_env=None, use_lstm=False, hidden_dim=256, seed=None):
-        name = name or 'two_single_agents'
+        name = name or 'rl_singleagent'
         super(SingleAgentTrainer, self).__init__(name, args, seed=seed)
         self.args = args
         self.device = args.device
@@ -40,31 +40,31 @@ class SingleAgentTrainer(OAITrainer):
         self.use_subtask_eval = (type(eval_env) == OvercookedSubtaskGymEnv)
 
         policy_kwargs = dict(
-            features_extractor_class=OAISinglePlayerFeatureExtractor,
-            features_extractor_kwargs=dict(features_dim=hidden_dim),
+            # features_extractor_class=OAISinglePlayerFeatureExtractor,
+            # features_extractor_kwargs=dict(features_dim=hidden_dim),
             net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
         )
         if use_lstm:
-            sb3_agent = RecurrentPPO('MultiInputLstmPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1)
+            policy_kwargs['n_lstm_layers'] = 2
+            policy_kwargs['lstm_hidden_size'] = hidden_dim
+            sb3_agent = RecurrentPPO('MultiInputLstmPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1,
+                                     n_steps=2048, batch_size=64)
+            agent_name = f'{name}_lstm'
         else:
             sb3_agent = PPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1)
-        # sb3_agent.policy.to(self.device)
-        self.learning_agent = self.wrap_agent(sb3_agent)
+            agent_name = f'{name}'
+        self.learning_agent = self.wrap_agent(sb3_agent, agent_name)
         self.agents = [self.learning_agent]
-        # for agent in self.agents:
-        #     agent.policy.to(self.device)
 
-        # for i in range(self.args.n_envs):
-        #     self.env.env_method('set_agent', self.teammates[np.random.randint(self.n_tm)], indices=i)
 
     def _get_constructor_parameters(self):
         return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, hidden_dim=self.hidden_dim, seed=self.seed)
 
-    def wrap_agent(self, sb3_agent):
+    def wrap_agent(self, sb3_agent, name):
         if self.use_lstm:
-            agent = SB3LSTMWrapper(sb3_agent, f'rl_single_lstm_agent', self.args)
+            agent = SB3LSTMWrapper(sb3_agent, name, self.args)
         else:
-            agent = SB3Wrapper(sb3_agent, f'rl_single_agent', self.args)
+            agent = SB3Wrapper(sb3_agent, name, self.args)
         return agent
 
     def train_agents(self, total_timesteps=1e8, exp_name=None):
@@ -103,7 +103,7 @@ class MultipleAgentsTrainer(OAITrainer):
         :param fcp_ck_rate: If not none, rate to save agents. Used primarily to get agents for Fictitous Co-Play
         :param seed: Random see
         '''
-        name = name or 'two_single_agents'
+        name = name or 'rl_multiagents'
         super(MultipleAgentsTrainer, self).__init__(name, args, seed=seed)
         self.device = args.device
         self.args = args
@@ -114,21 +114,25 @@ class MultipleAgentsTrainer(OAITrainer):
         self.eval_env = OvercookedGymEnv(shape_rewards=False, args=args)
 
         policy_kwargs = dict(
-            features_extractor_class=OAISinglePlayerFeatureExtractor,
-            features_extractor_kwargs=dict(features_dim=hidden_dim),
+            # features_extractor_class=OAISinglePlayerFeatureExtractor,
+            # features_extractor_kwargs=dict(features_dim=hidden_dim),
             net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
         )
 
         self.agents = []
         if use_lstm:
+            policy_kwargs['n_lstm_layers'] = 2
+            policy_kwargs['lstm_hidden_size'] = hidden_dim
             for i in range(num_agents):
                 sb3_agent = RecurrentPPO('MultiInputLstmPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1,
-                                         n_steps=1024, batch_size=16)
-                self.agents.append(SB3LSTMWrapper(sb3_agent, f'rl_multiagent_lstm_{i + 1}', args))
+                                         n_steps=2048, batch_size=64)
+                agent_name = f'{name}_lstm_{i + 1}'
+                self.agents.append(SB3LSTMWrapper(sb3_agent, agent_name, args))
         else:
             for i in range(num_agents):
                 sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1)
-                self.agents.append(SB3Wrapper(sb3_agent, f'rl_multiagent_{i + 1}', args))
+                agent_name = f'{name}_{i + 1}'
+                self.agents.append(SB3Wrapper(sb3_agent, agent_name, args))
 
         self.teammates = self.agents
         self.agents_in_training = np.ones(len(self.agents))
@@ -148,7 +152,7 @@ class MultipleAgentsTrainer(OAITrainer):
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
                          dir=str(self.args.base_dir / 'wandb'),
-                         reinit=True, name=exp_name + '_rl_two_single_agents', mode=self.args.wandb_mode)
+                         reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
         # Each agent should learn for `total_timesteps` steps. Keep training until all agents hit this threshold
         while any(self.agents_in_training):
             # Randomly select new teammates from population (can include learner)
@@ -174,7 +178,7 @@ class MultipleAgentsTrainer(OAITrainer):
         if len(self.ck_list) < 3:
             raise ValueError('Must have at least 3 checkpoints saved. Increase fcp_ck_rate or training length')
         agents = []
-        best_score = 0
+        best_score = -1
         best_path, best_tag = None, None
         for score, path, tag in self.ck_list:
             if score > best_score:
@@ -209,24 +213,26 @@ class MultipleAgentsTrainer(OAITrainer):
     @staticmethod
     def create_fcp_population(args, training_steps=1e8):
         agents = []
-        for use_lstm in [True, False]:
-            # hidden_dim = 16
-            seed = 8
-            for h_dim in [256, 16]:
+        for h_dim in [256, 16]:
+            for use_lstm in [True, False]:
+                seed = 88
                 #     for seed in [1, 20]:#, 300, 4000]:
                 ck_rate = training_steps / 10
                 name = f'lstm_{h_dim}' if use_lstm else f'no_lstm_{h_dim}'
-                mat = MultipleAgentsTrainer(args, num_agents=1, use_lstm=use_lstm, hidden_dim=h_dim,
+                print(f'Starting training for: {name}')
+                mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_lstm=use_lstm, hidden_dim=h_dim,
                                             fcp_ck_rate=ck_rate, seed=seed)
                 mat.train_agents(total_timesteps=training_steps)
-                agents.extend(rl_sat.get_fcp_agents())
+                mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp' / args.layout), tag=name)
+                agents.extend(mat.get_fcp_agents())
         pop = MultipleAgentsTrainer(args, num_agents=0)
         pop.set_agents(agents)
-        pop.save_agents(str(self.args.base_dir / 'agent_models' / 'fcp' / self.args.layout_name / f'{len(agents)}_pop'))
+        pop.save_agents(args.base_dir / 'agent_models' / 'fcp' / args.layout_name / f'{len(agents)}_pop')
         return pop.get_agents()
 
 
 if __name__ == '__main__':
+    from pathlib import Path
     args = get_arguments()
     sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=1e6)
     # pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=3e6)

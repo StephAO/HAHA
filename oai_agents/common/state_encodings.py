@@ -4,7 +4,6 @@ from typing import Dict, Tuple
 import numpy as np
 
 
-# Note: Don't use
 def encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int,
                  inc_agent_obs: bool=True, inc_soup_time: bool=True, inc_urgency=True, p_idx=None):
     """

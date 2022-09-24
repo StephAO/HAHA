@@ -14,9 +14,16 @@ setup(name='oai_agents',
       author_email='stephane.aroca-ouellette@colorado.edu',
       url='https://github.com/StephAO/oai_agents',
       download_url='https://github.com/StephAO/oai_agents',
-      packages=find_packages('oai_agents'),
       keywords=['Overcooked', 'AI', 'Reinforcement Learning', 'Human Agent Collaboration'],
-      package_dir={"": "oai_agents"},
+      # packages=find_packages('oai_agents'),
+      # package_dir={"": "oai_agents"},
+      packages=['oai_agents', 'oai_agents.agents', 'oai_agents.gym_environments', 'oai_agents.common'],
+      package_dir={
+          'oai_agents': 'oai_agents',
+          'oai_agents.agents': 'oai_agents/agents',
+          'oai_agents.gym_environments': 'oai_agents/gym_environments',
+          'oai_agents.common': 'oai_agents/common'
+      },
       package_data={
         'oai_agents' : [
           'data/*.pickle'
