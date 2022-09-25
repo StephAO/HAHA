@@ -240,8 +240,9 @@ class MultipleAgentsTrainer(OAITrainer):
 if __name__ == '__main__':
     from pathlib import Path
     args = get_arguments()
-    sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=1e6)
-    # pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=3e6)
+    # sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=5e6)
+    # sp[0].save(Path('test_data'))
+    pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=5e6)
     # fcp = SingleAgentTrainer(pop, args, 'fcp')
     # fcp.train_agents(1e6)
 
