@@ -44,9 +44,16 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
                 joint_action = [np.random.choice(Action.ALL_ACTIONS), np.random.choice(Action.ALL_ACTIONS)]
 
-            self.prev_state, self.prev_actions = deepcopy(self.state), joint_action
+            self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
             next_state, r, done, info = self.env.step(joint_action)
-            reward += r
+            if self.shape_rewards:
+                ratio = min(self.step_count * self.args.n_envs / 2.5e6, 1)
+                sparse_r = sum(info['sparse_r_by_agent'])
+                shaped_r = info['shaped_r_by_agent'][self.p_idx] if self.p_idx else sum(info['shaped_r_by_agent'])
+                reward += sparse_r * ratio + shaped_r * (1 - ratio)
+            else:
+                reward += r
+            self.step_count += 1
             self.state = self.env.state
 
         return self.get_obs(self.p_idx), reward, done, info
