@@ -1,5 +1,5 @@
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
-from oai_agents.common.subtasks import Subtasks
+from oai_agents.common.subtasks import Subtasks, get_doable_subtasks
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
@@ -15,12 +15,16 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         super(OvercookedManagerGymEnv, self).__init__(grid_shape=grid_shape, shape_rewards=shape_rewards,
                                                       ret_completed_subtasks=True, randomize_start=randomize_start, args=args)
         self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
+        self.terrain = self.mdp.terrain_mtx
 
     def get_low_level_obs(self, p_idx=None):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
         if p_idx == self.p_idx:
             obs['curr_subtask'] = self.curr_subtask
         return obs
+
+    def action_masks(self):
+        return get_doable_subtasks(self.state, self.terrain, self.p_idx).astype(bool)
 
     def step(self, action):
         if self.teammate is None:

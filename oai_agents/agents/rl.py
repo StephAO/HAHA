@@ -9,7 +9,7 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import DummyVecEnv
-from sb3_contrib import RecurrentPPO
+from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
 EPOCH_TIMESTEPS = 10000
@@ -18,7 +18,8 @@ VEC_ENV_CLS = DummyVecEnv#SubprocVecEnv
 
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
-    def __init__(self, teammates, args, name=None, env=None, eval_env=None, use_lstm=False, hidden_dim=256, seed=None):
+    def __init__(self, teammates, args, name=None, env=None, eval_env=None, use_lstm=False, use_maskable_ppo=False,
+                 hidden_dim=256, seed=None):
         name = name or 'rl_singleagent'
         super(SingleAgentTrainer, self).__init__(name, args, seed=seed)
         self.args = args
@@ -50,6 +51,9 @@ class SingleAgentTrainer(OAITrainer):
             sb3_agent = RecurrentPPO('MultiInputLstmPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1,
                                      n_steps=2048, batch_size=64)
             agent_name = f'{name}_lstm'
+        elif use_maskable_ppo:
+            sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1)
+            agent_name = f'{name}'
         else:
             sb3_agent = PPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1)
             agent_name = f'{name}'
@@ -72,6 +76,8 @@ class SingleAgentTrainer(OAITrainer):
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
                          dir=str(self.args.base_dir / 'wandb'),
                          reinit=True, name=exp_name + '_' + self.learning_agent.name, mode=self.args.wandb_mode)
+        best_path, best_tag = None, None
+        best_score = -1
         if self.use_subtask_eval:
             self.num_success = 0
         while self.learning_agent.num_timesteps < total_timesteps:
@@ -85,8 +91,13 @@ class SingleAgentTrainer(OAITrainer):
                 if self.num_success >= 3:
                     break
             else:
-                self.evaluate(self.learning_agent, eval_teammate)
+                mean_reward = self.evaluate(self.learning_agent, eval_teammate)
+                if mean_reward >= best_score:
+                    best_path, best_tag = self.save_agents(tag='best')
+                    print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
+                    best_score = mean_reward
         path, tag = self.save_agents()
+        self.load_agents(best_path, best_tag)
         run.finish()
 
 
@@ -176,6 +187,7 @@ class MultipleAgentsTrainer(OAITrainer):
                     self.ck_list.append((mean_reward, path, tag))
             if mean_reward >= best_score:
                 best_path, best_tag = self.save_agents(tag='best')
+                print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
                 best_score = mean_reward
         self.load_agents(best_path, best_tag)
         run.finish()

@@ -131,7 +131,8 @@ class RLManagerTrainer(SingleAgentTrainer):
         env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=kwargs, vec_env_cls=VEC_ENV_CLS)
         eval_env = OvercookedManagerGymEnv(worker=worker, shape_rewards=False, randomize_start=False, args=args)
         self.worker = worker
-        super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env, eval_env=eval_env)
+        super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env, eval_env=eval_env,
+                                               use_maskable_ppo=True)
 
 class HierarchicalRL(OAIAgent):
     def __init__(self, worker, manager, args):
