@@ -402,11 +402,11 @@ if __name__ == '__main__':
     
 
     rlmt = RLManagerTrainer(worker, teammates, args)
-    rlmt.train_agents(total_timesteps=1e7, exp_name=args.exp_name + '_manager')
+    rlmt.train_agents(total_timesteps=5e6, exp_name=args.exp_name + '_manager')
     managers = rlmt.get_agents()
     manager = managers[0]
     hrl = HierarchicalRL(worker, manager, args)
-    hrl.save('/projects/star7023/oai/agent_models/rl_manager/counter_circuit_o_1order/test/')
+    hrl.save('/projects/star7023/oai/agent_models/hier_rl/counter_circuit_o_1order/test/')
     # hrl.save('test_data/test')
     # del hrl
     # hrl = HierarchicalRL.load('test_data/test', args)
