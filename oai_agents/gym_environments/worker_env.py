@@ -33,7 +33,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             'same_motion_goals': True
         }
         self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
-        ss_fn = self.mdp.get_subtask_start_state_fn(self.mlam, random_start_pos=True, random_orientation=True)
+        ss_fn = self.mdp.get_subtask_start_state_fn(self.mlam, random_start_pos=True, random_orientation=True, rnd_obj_prob_thresh=0.2)
         env = OvercookedEnv.from_mdp(self.mdp, horizon=100, start_state_fn=ss_fn)
         super(OvercookedSubtaskGymEnv, self).__init__(grid_shape=grid_shape, base_env=env, args=args)
         self.obs_dict['curr_subtask'] = spaces.Discrete(Subtasks.NUM_SUBTASKS)

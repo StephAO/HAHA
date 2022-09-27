@@ -10,10 +10,10 @@ import torch as th
 
 
 class OvercookedManagerGymEnv(OvercookedGymEnv):
-    def __init__(self, worker=None, grid_shape=None, shape_rewards=False, args=None):
+    def __init__(self, worker=None, grid_shape=None, shape_rewards=False, randomize_start=False, args=None):
         self.worker = worker
         super(OvercookedManagerGymEnv, self).__init__(grid_shape=grid_shape, shape_rewards=shape_rewards,
-                                                      ret_completed_subtasks=True, args=args)
+                                                      ret_completed_subtasks=True, randomize_start=randomize_start, args=args)
         self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
 
     def get_low_level_obs(self, p_idx=None):
@@ -31,7 +31,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         reward, done, info = 0, False, None
         while joint_action[self.p_idx] != Action.INTERACT and not done:
             joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(p_idx=self.p_idx))[0]
-            joint_action[self.t_idx] = self.teammate.predict(self.get_low_level_obs(p_idx=self.t_idx))[0][0]
+            joint_action[self.t_idx] = self.teammate.predict(self.get_low_level_obs(p_idx=self.t_idx))[0]
             # joint_action = [self.agents[i].predict(self.get_obs(p_idx=i))[0] for i in range(2)]
             joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
 

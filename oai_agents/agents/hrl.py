@@ -127,9 +127,9 @@ class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, worker, teammates, args, name=None):
         name = name or 'rl_manager'
-        kwargs = {'worker': worker, 'shape_rewards': True, 'args': args}
+        kwargs = {'worker': worker, 'shape_rewards': True, 'randomize_start': True, 'args': args}
         env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=kwargs, vec_env_cls=VEC_ENV_CLS)
-        eval_env = OvercookedManagerGymEnv(worker=worker, shape_rewards=False, args=args)
+        eval_env = OvercookedManagerGymEnv(worker=worker, shape_rewards=False, randomize_start=False, args=args)
         self.worker = worker
         super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env, eval_env=eval_env)
 
@@ -388,19 +388,27 @@ class DistBasedManager(Manager):
 
 if __name__ == '__main__':
     args = get_arguments()
-    worker, teammates = MultiAgentSubtaskWorker.create_model_from_scratch(args, dataset_file=args.dataset)
+    
+    mat = MultipleAgentsTrainer(args, num_agents=0)
+    mat.load_agents(path=Path('/projects/star7023/oai/agent_models/fcp/counter_circuit_o_1order/12_pop'), tag='test')
+    teammates = mat.get_agents()
 
-    # worker = MultiAgentSubtaskWorker.load(
-    #     '/projects/star7023/oai/agent_models/multi_agent_subtask_worker/counter_circuit_o_1order/fr', args)
+    #worker, teammates = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates)
+
+    worker = MultiAgentSubtaskWorker.load(
+             Path('/projects/star7023/oai/agent_models/multi_agent_subtask_worker/counter_circuit_o_1order/test/'), args)
+
+    
 
     rlmt = RLManagerTrainer(worker, teammates, args)
     rlmt.train_agents(total_timesteps=1e7, exp_name=args.exp_name + '_manager')
     managers = rlmt.get_agents()
     manager = managers[0]
     hrl = HierarchicalRL(worker, manager, args)
-    hrl.save('test_data/test')
-    del hrl
-    hrl = HierarchicalRL.load('test_data/test', args)
+    hrl.save('/projects/star7023/oai/agent_models/rl_manager/counter_circuit_o_1order/test/')
+    # hrl.save('test_data/test')
+    # del hrl
+    # hrl = HierarchicalRL.load('test_data/test', args)
     print('done')
 
 
