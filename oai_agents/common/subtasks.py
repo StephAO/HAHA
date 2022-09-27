@@ -33,6 +33,8 @@ def calculate_completed_subtask(layout, prev_state, curr_state, p_idx):
     # Object held didn't change -- This interaction didn't actually transition to a new subtask
     if prev_obj == curr_obj:
         subtask = None
+        return subtask
+
     # Pick up an onion
     elif prev_obj is None and curr_obj == 'onion':
         # Facing an onion dispenser
@@ -97,10 +99,7 @@ def calculate_completed_subtask(layout, prev_state, curr_state, p_idx):
     else:
         raise ValueError(f'Unexpected transition. {prev_obj} -> {curr_obj}.')
 
-    if subtask:
-        subtask = Subtasks.SUBTASKS_TO_IDS[subtask]
-
-    return subtask
+    return Subtasks.SUBTASKS_TO_IDS[subtask]
 
 def get_doable_subtasks(state, terrain, p_idx):
     '''

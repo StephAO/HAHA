@@ -1,5 +1,5 @@
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
-from oai_agents.common.subtasks import Subtasks, get_doable_subtasks
+from oai_agents.common.subtasks import Subtasks, get_doable_subtasks, calculate_completed_subtask
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
@@ -27,13 +27,14 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return get_doable_subtasks(self.state, self.terrain, self.p_idx).astype(bool)
 
     def step(self, action):
-        if self.teammate is None:
-            raise ValueError('set_teammate must be set called before starting game unless play_both_players is True')
+        # if self.teammate is None:
+        #     raise ValueError('set_teammate must be set called before starting game unless play_both_players is True')
         # Action is the subtask for subtask agent to perform
         self.curr_subtask = action.cpu() if type(action) == th.tensor else action
         joint_action = [Action.STAY, Action.STAY]
         reward, done, info = 0, False, None
-        while joint_action[self.p_idx] != Action.INTERACT and not done:
+        ready_for_next_subtask = False
+        while (not ready_for_next_subtask and not done):
             joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(p_idx=self.p_idx))[0]
             joint_action[self.t_idx] = self.teammate.predict(self.get_low_level_obs(p_idx=self.t_idx))[0]
             # joint_action = [self.agents[i].predict(self.get_obs(p_idx=i))[0] for i in range(2)]
@@ -55,6 +56,9 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 reward += r
             self.step_count += 1
             self.state = self.env.state
+
+            if joint_action[self.p_idx] == Action.INTERACT:
+                ready_for_next_subtask = calculate_completed_subtask(self.terrain, self.prev_state, self.state, self.p_idx) is not None
 
         return self.get_obs(self.p_idx), reward, done, info
 
