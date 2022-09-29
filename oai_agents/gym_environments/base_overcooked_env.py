@@ -1,7 +1,7 @@
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
 from oai_agents.common.subtasks import Subtasks, calculate_completed_subtask
 
-from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld, Action
+from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld, Action, Direction
 from overcooked_ai_py.mdp.overcooked_env import OvercookedEnv
 from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
 
@@ -27,7 +27,7 @@ class OvercookedGymEnv(Env):
         :param horizon: How many steps to run the env for. If None, default to args.horizon value
         :param args: Experiment arguments (see arguments.py)
         '''
-        self.play_both_players = False
+        self.play_both_players = play_both_players
         if base_env is None:
             self.mdp = OvercookedGridworld.from_layout_name(args.layout_name)
             horizon = horizon or args.horizon
@@ -119,7 +119,7 @@ class OvercookedGymEnv(Env):
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
         if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
-            joint_action = [np.random.choice(Action.ALL_ACTIONS), np.random.choice(Action.ALL_ACTIONS)]
+            joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
 
         self.prev_state, self.prev_actions = deepcopy(self.state), joint_action
 

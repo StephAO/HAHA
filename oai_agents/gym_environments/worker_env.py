@@ -38,6 +38,8 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         super(OvercookedSubtaskGymEnv, self).__init__(grid_shape=grid_shape, base_env=env, args=args)
         self.obs_dict['curr_subtask'] = spaces.Discrete(Subtasks.NUM_SUBTASKS)
         self.observation_space = spaces.Dict(self.obs_dict)
+        self.n_counters = len(self.find_free_counters_valid_for_both_players(self.env.state, mlam))
+        self.terrain = self.mdp.terrain_mtx
 
     def get_obs(self, p_idx=None):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
@@ -76,7 +78,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
         if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
-            joint_action = [np.random.choice(Action.ALL_ACTIONS), np.random.choice(Action.ALL_ACTIONS)]
+            joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
 
         self.prev_state, self.prev_actions = deepcopy(self.state), joint_action
         next_state, _, done, info = self.env.step(joint_action)
@@ -118,7 +120,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         self.state = self.env.state
         self.prev_state = None
         if self.goal_subtask != 'unknown':
-            assert get_doable_subtasks(self.state, self.mdp.terrain_mtx, self.p_idx)[self.goal_subtask_id]
+            assert get_doable_subtasks(self.state, self.terrain, self.p_idx, self.n_counters)[self.goal_subtask_id]
         return self.get_obs(self.p_idx)
 
     def evaluate(self, agent):
@@ -132,7 +134,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             while not done:
                 # If the subtask is no longer possible (e.g. other agent picked the only onion up from the counter)
                 # then stop the trial and don't count it
-                if not get_doable_subtasks(self.state, self.mdp.terrain_mtx, self.p_idx)[self.goal_subtask_id]:
+                if not get_doable_subtasks(self.state, self.terrain, self.p_idx, self.n_counters)[self.goal_subtask_id]:
                     invalid_trial = True
                     break
                 

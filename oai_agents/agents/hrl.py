@@ -127,7 +127,7 @@ class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, worker, teammates, args, name=None):
         name = name or 'rl_manager'
-        kwargs = {'worker': worker, 'shape_rewards': True, 'randomize_start': True, 'args': args}
+        kwargs = {'worker': worker, 'shape_rewards': True, 'randomize_start': False, 'args': args}
         env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=kwargs, vec_env_cls=VEC_ENV_CLS)
         eval_env = OvercookedManagerGymEnv(worker=worker, shape_rewards=False, randomize_start=False, args=args)
         self.worker = worker

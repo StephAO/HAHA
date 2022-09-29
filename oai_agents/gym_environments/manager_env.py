@@ -1,7 +1,7 @@
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
 from oai_agents.common.subtasks import Subtasks, get_doable_subtasks, calculate_completed_subtask
 
-from overcooked_ai_py.mdp.overcooked_mdp import Action
+from overcooked_ai_py.mdp.overcooked_mdp import Action, Direction
 
 from copy import deepcopy
 from gym import spaces
@@ -16,6 +16,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                                                       ret_completed_subtasks=True, randomize_start=randomize_start, args=args)
         self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
         self.terrain = self.mdp.terrain_mtx
+        self.n_counters = len(self.find_free_counters_valid_for_both_players(self.env.state, self.env.mlam))
 
     def get_low_level_obs(self, p_idx=None):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
@@ -24,7 +25,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return obs
 
     def action_masks(self):
-        return get_doable_subtasks(self.state, self.terrain, self.p_idx).astype(bool)
+        return get_doable_subtasks(self.state, self.terrain, self.p_idx, self.n_counters).astype(bool)
 
     def step(self, action):
         # if self.teammate is None:
@@ -34,6 +35,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         joint_action = [Action.STAY, Action.STAY]
         reward, done, info = 0, False, None
         ready_for_next_subtask = False
+        worker_steps = 0
         while (not ready_for_next_subtask and not done):
             joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(p_idx=self.p_idx))[0]
             joint_action[self.t_idx] = self.teammate.predict(self.get_low_level_obs(p_idx=self.t_idx))[0]
@@ -43,7 +45,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             # If the state didn't change from the previous timestep and the agent is choosing the same action
             # then play a random action instead. Prevents agents from getting stuck
             if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
-                joint_action = [np.random.choice(Action.ALL_ACTIONS), np.random.choice(Action.ALL_ACTIONS)]
+                joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
 
             self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
             next_state, r, done, info = self.env.step(joint_action)
@@ -55,7 +57,14 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             else:
                 reward += r
             self.step_count += 1
+            worker_steps += 1
             self.state = self.env.state
+
+            if worker_steps % 5 == 0:
+                if not get_doable_subtasks(self.state, self.terrain, self.p_idx, self.n_counters)[self.curr_subtask]:
+                    ready_for_next_subtask = True
+            if worker_steps % 40:
+                ready_for_next_subtask = True
 
             if joint_action[self.p_idx] == Action.INTERACT:
                 completed_subtask = calculate_completed_subtask(self.terrain, self.prev_state, self.state, self.p_idx)

@@ -111,6 +111,7 @@ class SB3Wrapper(OAIAgent):
         self.num_timesteps = 0
 
     def predict(self, obs, state=None, episode_start=None, deterministic=False):
+        # obs = {k: v for k, v in obs.items() if k in ['visual_obs', 'curr_subtask']}
         return self.agent.predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
 
     def get_distribution(self, obs: th.Tensor):
