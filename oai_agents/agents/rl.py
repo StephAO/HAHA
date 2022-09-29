@@ -71,7 +71,7 @@ class SingleAgentTrainer(OAITrainer):
             agent = SB3Wrapper(sb3_agent, name, self.args)
         return agent
 
-    def train_agents(self, total_timesteps=1e8, exp_name=None):
+    def train_agents(self, total_timesteps=2e6, exp_name=None):
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
                          dir=str(self.args.base_dir / 'wandb'),
@@ -88,7 +88,7 @@ class SingleAgentTrainer(OAITrainer):
                 self.eval_env.set_teammate(eval_teammate)
                 all_successes = self.eval_env.evaluate(self.learning_agent)
                 self.num_success = (self.num_success + 1) if all_successes else 0
-                if self.num_success >= 3:
+                if self.num_success >= 5:
                     break
             else:
                 mean_reward = self.evaluate(self.learning_agent, eval_teammate)

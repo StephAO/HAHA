@@ -394,15 +394,13 @@ if __name__ == '__main__':
     mat.load_agents(path=Path('/projects/star7023/oai/agent_models/fcp/counter_circuit_o_1order/12_pop'), tag='test')
     teammates = mat.get_agents()
 
-    #worker, teammates = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates)
+    worker, teammates = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates)
 
-    worker = MultiAgentSubtaskWorker.load(
-             Path('/projects/star7023/oai/agent_models/multi_agent_subtask_worker/counter_circuit_o_1order/test/'), args)
-
-    
+    #worker = MultiAgentSubtaskWorker.load(
+    #         Path('/projects/star7023/oai/agent_models/multi_agent_subtask_worker/counter_circuit_o_1order/test/'), args)
 
     rlmt = RLManagerTrainer(worker, teammates, args)
-    rlmt.train_agents(total_timesteps=5e6, exp_name=args.exp_name + '_manager')
+    rlmt.train_agents(total_timesteps=2e6, exp_name=args.exp_name + '_manager')
     managers = rlmt.get_agents()
     manager = managers[0]
     hrl = HierarchicalRL(worker, manager, args)

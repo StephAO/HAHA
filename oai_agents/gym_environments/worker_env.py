@@ -85,18 +85,17 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         reward = -0.01 # existence penalty
         if joint_action[self.p_idx] == Action.INTERACT:
             subtask = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx)
-            if subtask is not None:
-                done = True
-                reward = 1 if subtask == self.goal_subtask_id else -1
-                if self.goal_subtask == 'put_onion_closer':
-                    pot_locations = self.mdp.get_pot_locations()
-                    reward += self.get_proximity_reward(pot_locations)
-                elif self.goal_subtask == 'put_plate_closer':
-                    pot_locations = self.mdp.get_pot_locations()
-                    reward += self.get_proximity_reward(pot_locations)
-                elif self.goal_subtask == 'put_soup_closer':
-                    serving_locations = self.mdp.get_serving_locations()
-                    reward += self.get_proximity_reward(serving_locations)
+            done = True
+            reward = 1 if subtask == self.goal_subtask_id else -1
+            if self.goal_subtask == 'put_onion_closer':
+                pot_locations = self.mdp.get_pot_locations()
+                reward += self.get_proximity_reward(pot_locations)
+            elif self.goal_subtask == 'put_plate_closer':
+                pot_locations = self.mdp.get_pot_locations()
+                reward += self.get_proximity_reward(pot_locations)
+            elif self.goal_subtask == 'put_soup_closer':
+                serving_locations = self.mdp.get_serving_locations()
+                reward += self.get_proximity_reward(serving_locations)
 
         return self.get_obs(self.p_idx), reward, done, info
 
@@ -125,20 +124,33 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
     def evaluate(self, agent):
         results = np.zeros((Subtasks.NUM_SUBTASKS, 2))
         mean_reward = []
-        num_trials = 25
-        for trial in range(num_trials):
+        curr_trial, tot_trials = 0, 25
+        while curr_trial < tot_trials:
+            invalid_trial = False
             cum_reward, reward, done = 0, 0, False
             obs = self.reset(evaluate=True)
             while not done:
+                # If the subtask is no longer possible (e.g. other agent picked the only onion up from the counter)
+                # then stop the trial and don't count it
+                if not get_doable_subtasks(self.state, self.mdp.terrain_mtx, self.p_idx)[self.goal_subtask_id]:
+                    invalid_trial = True
+                    break
+                
                 action = agent.predict(obs)[0]
                 obs, reward, done, info = self.step(action)
                 cum_reward += reward
-
+            
+            if invalid_trial:
+                tot_trials -= 1
+                continue
+            
             if reward >= 1:
                 results[self.goal_subtask_id][0] += 1
             else:
                 results[self.goal_subtask_id][1] += 1
             mean_reward.append(cum_reward)
+            curr_trial += 1
+
         mean_reward = np.mean(mean_reward)
         num_succ = np.sum(results[:, 0])
 
@@ -149,6 +161,6 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             print(f'Going from level {self.curr_lvl} to {self.curr_lvl + 1}')
             self.curr_lvl += 1
         wandb.log({'subtask_reward': mean_reward, 'subtask_success': num_succ, 'timestep': agent.num_timesteps})
-        return num_succ == num_trials
+        return num_succ == tot_trials and num_succ > 10
 
 

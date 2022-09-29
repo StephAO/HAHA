@@ -58,7 +58,11 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             self.state = self.env.state
 
             if joint_action[self.p_idx] == Action.INTERACT:
-                ready_for_next_subtask = calculate_completed_subtask(self.terrain, self.prev_state, self.state, self.p_idx) is not None
+                completed_subtask = calculate_completed_subtask(self.terrain, self.prev_state, self.state, self.p_idx)
+                if completed_subtask != self.curr_subtask:
+                    completed_subtask_str = Subtasks.IDS_TO_SUBTASKS[completed_subtask] if (completed_subtask is not None) else 'None'
+                    print(f'Worker Failure! -> goal: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask]}, completed: {completed_subtask_str}', flush=True)
+                ready_for_next_subtask = (completed_subtask is not None)
 
         return self.get_obs(self.p_idx), reward, done, info
 
