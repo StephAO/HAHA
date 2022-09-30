@@ -61,7 +61,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             if worker_steps % 5 == 0:
                 if not get_doable_subtasks(self.state, self.terrain, self.p_idx, self.n_counters)[self.curr_subtask]:
                     ready_for_next_subtask = True
-            if worker_steps > 40:
+            if worker_steps > 25:
                 ready_for_next_subtask = True
 
             if joint_action[self.p_idx] == Action.INTERACT:
