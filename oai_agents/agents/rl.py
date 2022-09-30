@@ -60,7 +60,6 @@ class SingleAgentTrainer(OAITrainer):
         self.learning_agent = self.wrap_agent(sb3_agent, agent_name)
         self.agents = [self.learning_agent]
 
-
     def _get_constructor_parameters(self):
         return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, hidden_dim=self.hidden_dim, seed=self.seed)
 

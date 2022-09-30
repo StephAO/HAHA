@@ -111,11 +111,26 @@ class SB3Wrapper(OAIAgent):
         self.num_timesteps = 0
 
     def predict(self, obs, state=None, episode_start=None, deterministic=False):
-        # obs = {k: v for k, v in obs.items() if k in ['visual_obs', 'curr_subtask']}
-        return self.agent.predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
+        # Based on https://github.com/DLR-RM/stable-baselines3/blob/master/stable_baselines3/common/policies.py#L305
+        # Updated to include action masking
+        self.policy.set_training_mode(False)
+        obs, vectorized_env = self.policy.obs_to_tensor(obs)
+        with th.no_grad():
+            if 'subtask_mask' in obs and np.prod(obs['subtask_mask'].shape) == np.prod(self.agent.action_space.n):
+                dist = self.policy.get_distribution(obs, obs['subtask_mask'])
+            else:
+                dist = self.policy.get_distribution(obs)
+
+            actions = dist.get_actions(deterministic=deterministic)
+        # Convert to numpy, and reshape to the original action shape
+        actions = actions.cpu().numpy().reshape((-1,) + self.agent.action_space.shape)
+        # Remove batch dimension if needed
+        if not vectorized_env:
+            actions = actions.squeeze(axis=0)
+        return actions, state
 
     def get_distribution(self, obs: th.Tensor):
-        return self.agent.get_distribution(obs)
+        return self.policy.get_distribution(obs)
 
     def learn(self, total_timesteps):
         self.agent.learn(total_timesteps=total_timesteps, reset_num_timesteps=False)
@@ -160,14 +175,15 @@ class SB3LSTMWrapper(SB3Wrapper):
         self.lstm_states = None
 
     def predict(self, obs, state=None, episode_start=None, deterministic=False):
-        # TODO pass in episode starts
         episode_start = episode_start or np.ones((1,), dtype=bool)
         action, self.lstm_states = self.agent.predict(obs, state=state, episode_start=episode_start,
                                                       deterministic=deterministic)
         return action, self.lstm_states
 
-    def get_distribution(self, obs: th.Tensor):
-        return self.agent.get_distribution(obs)
+    def get_distribution(self, obs: th.Tensor, state=None, episode_start=None):
+        # TODO I think i need to store lstm states here
+        episode_start = episode_start or np.ones((1,), dtype=bool)
+        return self.agent.get_distribution(obs, lstm_states=state, episode_start=episode_start)
 
 
 class OAITrainer(ABC):
@@ -190,7 +206,7 @@ class OAITrainer(ABC):
         if visualize and not self.eval_env.visualization_enabled:
             self.eval_env.setup_visualization()
         self.eval_env.set_teammate(eval_teammate)
-        mean_reward, std_reward = evaluate_policy(eval_agent, self.eval_env, n_eval_episodes=num_episodes, deterministic=False, warn=False)
+        mean_reward, std_reward = evaluate_policy(eval_agent, self.eval_env, n_eval_episodes=num_episodes, deterministic=False, warn=False, render=visualize)
         timestep = timestep or eval_agent.num_timesteps
         print(f'Eval at timestep {timestep}: {mean_reward}')
         wandb.log({'eval_mean_reward': mean_reward, 'timestep': timestep})
@@ -214,7 +230,7 @@ class OAITrainer(ABC):
         save_path = path / tag / 'trainer_file'
         agent_path = path / tag / 'agents_dir'
         Path(agent_path).mkdir(parents=True, exist_ok=True)
-        save_dict = {'model_type': type(self.agents[0]), 'agent_fns': []}
+        save_dict = {'agent_fns': []}
         for i, agent in enumerate(self.agents):
             agent_path_i = agent_path / f'agent_{i}'
             agent.save(agent_path_i)
@@ -234,8 +250,20 @@ class OAITrainer(ABC):
         # Load weights
         agents = []
         for agent_fn in saved_variables['agent_fns']:
-            agent = saved_variables['model_type'].load(agent_path / agent_fn, self.args)
+            agent = load_agent(agent_path / agent_fn, self.args)
             agent.to(device)
             agents.append(agent)
         self.agents = agents
         return self.agents
+
+
+# Load any an
+def load_agent(agent_path, args=None):
+    args = args or get_arguments()
+    try:
+        load_dict = th.load(agent_path / 'agent_file')
+    except FileNotFoundError as e:
+        raise ValueError(f'Could not find file:{e}') # TODO print options
+    agent = load_dict['agent_type'].load(agent_path, args)
+    assert isinstance(agent, OAIAgent)
+    return agent

@@ -1,4 +1,4 @@
-from oai_agents.agents.base_agent import OAIAgent
+from oai_agents.agents.base_agent import OAIAgent, load_agent
 from oai_agents.agents.il import BehavioralCloningTrainer
 from oai_agents.agents.rl import MultipleAgentsTrainer, SingleAgentTrainer, SB3Wrapper, SB3LSTMWrapper, VEC_ENV_CLS
 from oai_agents.common.arguments import get_arguments, get_args_to_save, set_args_from_load
@@ -56,7 +56,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         agent_dir = path / 'subtask_agents_dir'
         Path(agent_dir).mkdir(parents=True, exist_ok=True)
 
-        save_dict = {'agent_type': type(self), 'sb3_model_type': type(self.agents[0]), 'agent_fns': [],
+        save_dict = {'agent_type': type(self), 'agent_fns': [],
                      'const_params': self._get_constructor_parameters(), 'args': args}
         for i, agent in enumerate(self.agents):
             agent_path_i = agent_dir / f'subtask_{i}_agent'
@@ -76,7 +76,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Load weights
         agents = []
         for agent_fn in saved_variables['agent_fns']:
-            agent = saved_variables['sb3_model_type'].load(agent_dir / agent_fn, args)
+            agent = load_agent(agent_dir / agent_fn, args)
             agent.to(device)
             agents.append(agent)
         return cls(agents=agents, args=args)
@@ -127,7 +127,7 @@ class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, worker, teammates, args, name=None):
         name = name or 'rl_manager'
-        kwargs = {'worker': worker, 'shape_rewards': True, 'randomize_start': False, 'args': args}
+        kwargs = {'worker': worker, 'shape_rewards': False, 'randomize_start': False, 'args': args}
         env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=kwargs, vec_env_cls=VEC_ENV_CLS)
         eval_env = OvercookedManagerGymEnv(worker=worker, shape_rewards=False, randomize_start=False, args=args)
         self.worker = worker
@@ -141,14 +141,14 @@ class HierarchicalRL(OAIAgent):
         self.manager = manager
 
     def get_distribution(self, obs, sample=True):
-        if obs['player_completed_subtasks'] is not None:
+        if obs['player_completed_subtasks'] < Subtasks.NUM_SUBTASKS:
             # Completed previous subtask, set new subtask
             self.curr_subtask_id = self.manager.predict(obs, sample=sample)[0]
         obs['curr_subtask'] = self.curr_subtask_id
         return self.worker.get_distribution(obs, sample=sample)
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
-        if obs['player_completed_subtasks'] is not None:
+        if obs['player_completed_subtasks'] < Subtasks.NUM_SUBTASKS:
             # Completed previous subtask, set new subtask
             self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
                                                         deterministic=deterministic)[0]
@@ -394,10 +394,10 @@ if __name__ == '__main__':
     mat.load_agents(path=Path('/projects/star7023/oai/agent_models/fcp/counter_circuit_o_1order/12_pop'), tag='test')
     teammates = mat.get_agents()
 
-    worker, teammates = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates)
+    # worker, teammates = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates)
 
-    #worker = MultiAgentSubtaskWorker.load(
-    #         Path('/projects/star7023/oai/agent_models/multi_agent_subtask_worker/counter_circuit_o_1order/test/'), args)
+    worker = MultiAgentSubtaskWorker.load(
+            Path('/projects/star7023/oai/agent_models/multi_agent_subtask_worker/counter_circuit_o_1order/test/'), args)
 
     rlmt = RLManagerTrainer(worker, teammates, args)
     rlmt.train_agents(total_timesteps=2e6, exp_name=args.exp_name + '_manager')

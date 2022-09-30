@@ -38,8 +38,6 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         super(OvercookedSubtaskGymEnv, self).__init__(grid_shape=grid_shape, base_env=env, args=args)
         self.obs_dict['curr_subtask'] = spaces.Discrete(Subtasks.NUM_SUBTASKS)
         self.observation_space = spaces.Dict(self.obs_dict)
-        self.n_counters = len(self.find_free_counters_valid_for_both_players(self.env.state, mlam))
-        self.terrain = self.mdp.terrain_mtx
 
     def get_obs(self, p_idx=None):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)

@@ -3,6 +3,7 @@ from oai_agents.common.subtasks import Subtasks, calculate_completed_subtask
 
 from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld, Action, Direction
 from overcooked_ai_py.mdp.overcooked_env import OvercookedEnv
+from overcooked_ai_py.planning.planners import MediumLevelActionManager
 from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
 
 from copy import deepcopy
@@ -31,24 +32,18 @@ class OvercookedGymEnv(Env):
         if base_env is None:
             self.mdp = OvercookedGridworld.from_layout_name(args.layout_name)
             horizon = horizon or args.horizon
-            
-            if randomize_start:
-                from overcooked_ai_py.planning.planners import MediumLevelActionManager
-                self.mdp = OvercookedGridworld.from_layout_name(args.layout_name)
-                all_counters = self.mdp.get_counter_locations()
-                COUNTERS_PARAMS = {
-                    'start_orientations': False,
-                    'wait_allowed': False,
-                    'counter_goals': all_counters,
-                    'counter_drop': all_counters,
-                    'counter_pickup': all_counters,
-                    'same_motion_goals': True
-                }
-                self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
-                ss_fn = self.mdp.get_fully_random_start_state_fn(self.mlam, random_start_pos=True, random_orientation=True, rnd_obj_prob_thresh=0.2)
-            else:
-                ss_fn = None
-            
+            all_counters = self.mdp.get_counter_locations()
+            COUNTERS_PARAMS = {
+                'start_orientations': False,
+                'wait_allowed': False,
+                'counter_goals': all_counters,
+                'counter_drop': all_counters,
+                'counter_pickup': all_counters,
+                'same_motion_goals': True
+            }
+            self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
+            ss_fn = self.mdp.get_fully_random_start_state_fn(self.mlam, random_start_pos=True, random_orientation=True,
+                                                             rnd_obj_prob_thresh=0.2) if randomize_start else None
             self.env = OvercookedEnv.from_mdp(self.mdp, horizon=horizon, start_state_fn=ss_fn)
         else:
             self.env = base_env
@@ -61,6 +56,8 @@ class OvercookedGymEnv(Env):
         self.visualization_enabled = False
         self.step_count = 0
         self.teammate = None
+        self.terrain = self.mdp.terrain_mtx
+        self.n_counters = len(self.mdp.find_free_counters_valid_for_both_players(self.env.state, self.mlam))
         obs = self.reset()
         self.visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
         self.agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0
@@ -72,7 +69,9 @@ class OvercookedGymEnv(Env):
         if np.prod(self.agent_obs_shape) > 0:
             self.obs_dict['agent_obs'] = spaces.Box(0, self.args.horizon, self.agent_obs_shape, dtype=np.float32)
         if ret_completed_subtasks:
-            self.terrain = self.mdp.terrain_mtx
+            self.obs_dict['player_completed_subtasks'] = spaces.Discrete(Subtasks.NUM_SUBTASKS + 1)
+            self.obs_dict['teammate_completed_subtasks'] = spaces.Discrete(Subtasks.NUM_SUBTASKS + 1)
+            self.obs_dict['subtask_mask'] = spaces.MultiBinary(Subtasks.NUM_SUBTASKS)
         self.observation_space = spaces.Dict(self.obs_dict)
 
         if play_both_players:  # We control both agents
@@ -92,16 +91,21 @@ class OvercookedGymEnv(Env):
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
 
+    def action_masks(self):
+        return get_doable_subtasks(self.state, self.terrain, self.p_idx, self.n_counters).astype(bool)
+
     def get_obs(self, p_idx=None):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
         if self.return_completed_subtasks:
+            obs['subtask_mask'] = self.action_masks()
             if self.prev_state is None:
                 obs['player_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
                 obs['teammate_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
             else:
                 comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, self.state, i) for i in range(2)]
-                obs['player_completed_subtasks'] = comp_st[p_idx]
-                obs['teammate_completed_subtasks'] = comp_st[1 - p_idx]
+                # If no subtask is completed, set it to one number greater than a possible subtask number
+                obs['player_completed_subtasks'] = comp_st[p_idx] or Subtasks.NUM_SUBTASKS
+                obs['teammate_completed_subtasks'] = comp_st[1 - p_idx] or Subtasks.NUM_SUBTASKS
         return obs
 
     def step(self, action):
@@ -148,7 +152,7 @@ class OvercookedGymEnv(Env):
             self.window = pygame.display.set_mode(surface.get_size(), HWSURFACE | DOUBLEBUF | RESIZABLE)
             self.window.blit(surface, (0, 0))
             pygame.display.flip()
-            pygame.time.wait(100)
+            pygame.time.wait(200)
 
     def close(self):
         pygame.quit()

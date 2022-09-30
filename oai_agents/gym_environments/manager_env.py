@@ -15,8 +15,6 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         super(OvercookedManagerGymEnv, self).__init__(grid_shape=grid_shape, shape_rewards=shape_rewards,
                                                       ret_completed_subtasks=True, randomize_start=randomize_start, args=args)
         self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
-        self.terrain = self.mdp.terrain_mtx
-        self.n_counters = len(self.find_free_counters_valid_for_both_players(self.env.state, self.env.mlam))
 
     def get_low_level_obs(self, p_idx=None):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
@@ -63,7 +61,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             if worker_steps % 5 == 0:
                 if not get_doable_subtasks(self.state, self.terrain, self.p_idx, self.n_counters)[self.curr_subtask]:
                     ready_for_next_subtask = True
-            if worker_steps % 40:
+            if worker_steps > 40:
                 ready_for_next_subtask = True
 
             if joint_action[self.p_idx] == Action.INTERACT:
@@ -73,7 +71,8 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                     print(f'Worker Failure! -> goal: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask]}, completed: {completed_subtask_str}', flush=True)
                 ready_for_next_subtask = (completed_subtask is not None)
 
-        return self.get_obs(self.p_idx), reward, done, info
+        obs = self.get_obs(self.p_idx)
+        return obs, reward, done, info
 
     def reset(self):
         self.env.reset()
@@ -82,4 +81,5 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
         self.curr_subtask = 0
-        return self.get_obs(self.p_idx)
+        obs = self.get_obs(self.p_idx)
+        return obs
