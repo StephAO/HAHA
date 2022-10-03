@@ -1,5 +1,5 @@
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
-from oai_agents.common.arguments import get_args_to_save, set_args_from_load
+from oai_agents.common.arguments import get_args_to_save, set_args_from_load, get_arguments
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
