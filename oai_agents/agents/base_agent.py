@@ -260,6 +260,7 @@ class OAITrainer(ABC):
 # Load any an
 def load_agent(agent_path, args=None):
     args = args or get_arguments()
+    agent_path = Path(agent_path)
     try:
         load_dict = th.load(agent_path / 'agent_file')
     except FileNotFoundError as e:
