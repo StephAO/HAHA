@@ -76,8 +76,8 @@ class OAIAgent(nn.Module, ABC):
             else:
                 comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, state, i) for i in range(2)]
                 # If no subtask is completed, set it to one number greater than a possible subtask number
-                obs['player_completed_subtasks'] = comp_st[self.p_idx] or Subtasks.NUM_SUBTASKS
-                obs['teammate_completed_subtasks'] = comp_st[1 - self.p_idx] or Subtasks.NUM_SUBTASKS
+                obs['player_completed_subtasks'] = comp_st[self.p_idx] if comp_st[self.p_idx] is not None else Subtasks.NUM_SUBTASKS
+                obs['teammate_completed_subtasks'] = comp_st[1 - self.p_idx] if comp_st[1 - self.p_idx] is not None else Subtasks.NUM_SUBTASKS
             self.prev_state = state
 
         action, _ = self.predict(obs, deterministic=True)
