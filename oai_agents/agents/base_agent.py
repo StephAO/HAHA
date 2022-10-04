@@ -61,7 +61,7 @@ class OAIAgent(nn.Module, ABC):
         self.terrain = self.mdp.terrain_mtx
         self.n_counters = 3
 
-    def action(self, state):
+    def action(self, state, deterministic=False):
         if self.p_idx is None or self.mdp is None or self.horizon is None:
             raise ValueError('Please call set_idx() and set_encoding_params() before action. '
                              'Or, call predict with agent specific obs')
@@ -80,7 +80,7 @@ class OAIAgent(nn.Module, ABC):
                 obs['teammate_completed_subtasks'] = comp_st[1 - self.p_idx] if comp_st[1 - self.p_idx] is not None else Subtasks.NUM_SUBTASKS
             self.prev_state = state
 
-        action, _ = self.predict(obs, deterministic=True)
+        action, _ = self.predict(obs, deterministic=deterministic)
         return Action.INDEX_TO_ACTION[action], None
 
     def _get_constructor_parameters(self):
