@@ -74,7 +74,7 @@ class OAIAgent(nn.Module, ABC):
                 obs['player_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
                 obs['teammate_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
             else:
-                comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, self.state, i) for i in range(2)]
+                comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, state, i) for i in range(2)]
                 # If no subtask is completed, set it to one number greater than a possible subtask number
                 obs['player_completed_subtasks'] = comp_st[p_idx] or Subtasks.NUM_SUBTASKS
                 obs['teammate_completed_subtasks'] = comp_st[1 - p_idx] or Subtasks.NUM_SUBTASKS
