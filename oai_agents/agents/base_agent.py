@@ -60,15 +60,15 @@ class OAIAgent(nn.Module, ABC):
         self.terrain = self.mdp.terrain_mtx
         self.n_counters = 3
 
-    def action(self, overcooked_state):
+    def action(self, state):
         if self.p_idx is None or self.mdp is None or self.horizon is None:
             raise ValueError('Please call set_idx() and set_encoding_params() before action. '
                              'Or, call predict with agent specific obs')
         grid_shape = self.mdp.shape
-        obs = self.encoding_fn(self.mdp, overcooked_state, grid_shape, self.horizon, p_idx=self.p_idx)
+        obs = self.encoding_fn(self.mdp, state, grid_shape, self.horizon, p_idx=self.p_idx)
 
         if hasattr(self, 'manager'):
-            obs['subtask_mask'] = get_doable_subtasks(self.state, self.terrain, self.p_idx, self.n_counters).astype(bool)
+            obs['subtask_mask'] = get_doable_subtasks(state, self.terrain, self.p_idx, self.n_counters).astype(bool)
             if self.prev_state is None:
                 obs['player_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
                 obs['teammate_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
@@ -77,7 +77,7 @@ class OAIAgent(nn.Module, ABC):
                 # If no subtask is completed, set it to one number greater than a possible subtask number
                 obs['player_completed_subtasks'] = comp_st[p_idx] or Subtasks.NUM_SUBTASKS
                 obs['teammate_completed_subtasks'] = comp_st[1 - p_idx] or Subtasks.NUM_SUBTASKS
-            self.prev_state = overcooked_state
+            self.prev_state = state
 
         action, _ = self.predict(obs, deterministic=True)
         return Action.INDEX_TO_ACTION[action], None
