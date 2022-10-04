@@ -67,7 +67,7 @@ class OAIAgent(nn.Module, ABC):
         grid_shape = self.mdp.shape
         obs = self.encoding_fn(self.mdp, overcooked_state, grid_shape, self.horizon, p_idx=self.p_idx)
 
-        if self.return_completed_subtasks:
+        if hasattr(self, 'manager'):
             obs['subtask_mask'] = get_doable_subtasks(self.state, self.terrain, self.p_idx, self.n_counters).astype(bool)
             if self.prev_state is None:
                 obs['player_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
