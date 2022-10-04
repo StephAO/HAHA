@@ -33,6 +33,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
 
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False):
         assert 'curr_subtask' in obs.keys()
+        obs = {k: v for k, v in obs.items() if k in ['visual_obs', 'agent_obs', 'curr_subtask']}
         try: # curr_subtask is iterable because this is a training batch
             preds = [self.agents[st].predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
                      for st in obs['curr_subtask']]
