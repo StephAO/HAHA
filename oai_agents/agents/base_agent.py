@@ -53,6 +53,7 @@ class OAIAgent(nn.Module, ABC):
 
     def set_idx(self, p_idx):
         self.p_idx = p_idx
+        self.prev_state = None
 
     def set_encoding_params(self, mdp, horizon):
         self.mdp = mdp
