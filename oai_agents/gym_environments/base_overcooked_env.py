@@ -104,8 +104,8 @@ class OvercookedGymEnv(Env):
             else:
                 comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, self.state, i) for i in range(2)]
                 # If no subtask is completed, set it to one number greater than a possible subtask number
-                obs['player_completed_subtasks'] = comp_st[p_idx] or Subtasks.NUM_SUBTASKS
-                obs['teammate_completed_subtasks'] = comp_st[1 - p_idx] or Subtasks.NUM_SUBTASKS
+                obs['player_completed_subtasks'] = comp_st[p_idx] if comp_st[p_idx] is not None else Subtasks.NUM_SUBTASKS
+                obs['teammate_completed_subtasks'] = comp_st[1 - p_idx] if comp_st[1 - p_idx] is not None else Subtasks.NUM_SUBTASKS
         return obs
 
     def step(self, action):

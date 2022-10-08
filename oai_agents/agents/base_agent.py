@@ -1,5 +1,6 @@
+from oai_agents.common.arguments import get_args_to_save, set_args_from_load, get_arguments
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
-from oai_agents.common.arguments import get_args_to_save, set_args_from_load
+from oai_agents.common.subtasks import calculate_completed_subtask, get_doable_subtasks, Subtasks
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
@@ -52,18 +53,34 @@ class OAIAgent(nn.Module, ABC):
 
     def set_idx(self, p_idx):
         self.p_idx = p_idx
+        self.prev_state = None
 
     def set_encoding_params(self, mdp, horizon):
         self.mdp = mdp
         self.horizon = horizon
+        self.terrain = self.mdp.terrain_mtx
+        self.n_counters = 3
 
-    def action(self, overcooked_state):
+    def action(self, state, deterministic=False):
         if self.p_idx is None or self.mdp is None or self.horizon is None:
             raise ValueError('Please call set_idx() and set_encoding_params() before action. '
                              'Or, call predict with agent specific obs')
         grid_shape = self.mdp.shape
-        obs = self.encoding_fn(self.mdp, overcooked_state, grid_shape, self.horizon, p_idx=self.p_idx)
-        action, _ = self.predict(obs, deterministic=True)
+        obs = self.encoding_fn(self.mdp, state, grid_shape, self.horizon, p_idx=self.p_idx)
+
+        if hasattr(self, 'manager'):
+            obs['subtask_mask'] = get_doable_subtasks(state, self.terrain, self.p_idx, self.n_counters).astype(bool)
+            if self.prev_state is None:
+                obs['player_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
+                obs['teammate_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
+            else:
+                comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, state, i) for i in range(2)]
+                # If no subtask is completed, set it to one number greater than a possible subtask number
+                obs['player_completed_subtasks'] = comp_st[self.p_idx] if comp_st[self.p_idx] is not None else Subtasks.NUM_SUBTASKS
+                obs['teammate_completed_subtasks'] = comp_st[1 - self.p_idx] if comp_st[1 - self.p_idx] is not None else Subtasks.NUM_SUBTASKS
+            self.prev_state = state
+
+        action, _ = self.predict(obs, deterministic=deterministic)
         return Action.INDEX_TO_ACTION[action], None
 
     def _get_constructor_parameters(self):
@@ -260,6 +277,7 @@ class OAITrainer(ABC):
 # Load any an
 def load_agent(agent_path, args=None):
     args = args or get_arguments()
+    agent_path = Path(agent_path)
     try:
         load_dict = th.load(agent_path / 'agent_file')
     except FileNotFoundError as e:
