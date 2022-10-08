@@ -114,7 +114,7 @@ def empty_pot_exists(state, terrain):
             n_full_soups += 1
     return n_full_soups < 2
 
-def get_doable_subtasks(state, terrain, p_idx, n_counters):
+def get_doable_subtasks(state, prev_subtask, terrain, p_idx, n_counters):
     '''
     Returns a mask subtasks that could be accomplished for a given state and player idx
     :param state: curr state
@@ -131,11 +131,11 @@ def get_doable_subtasks(state, terrain, p_idx, n_counters):
         # These are only possible if the respective objects exist on a counter somewhere
         for obj in state.objects.values():
             x, y = obj.position
-            if obj.name == 'onion':
+            if obj.name == 'onion' and prev_subtask != 'put_onion_closer':
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']] = 1
-            elif obj.name == 'dish':
+            elif obj.name == 'dish' and prev_subtask != 'put_plate_closer':
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']] = 1
-            elif obj.name == 'soup' and obj.is_ready and terrain[y][x] != 'P':
+            elif obj.name == 'soup' and obj.is_ready and terrain[y][x] != 'P' and prev_subtask != 'put_soup_closer':
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_soup_from_counter']] = 1
     # The player is holding an onion, so it can only accomplish tasks that involve putting the onion somewhere
     elif state.players[p_idx].held_object.name == 'onion':

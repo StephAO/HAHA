@@ -13,7 +13,8 @@ import wandb
 
 
 class OvercookedSubtaskGymEnv(OvercookedGymEnv):
-    def __init__(self, grid_shape=None, single_subtask_id=None, use_curriculum=False, args=None):
+    def init(self, index=None, single_subtask_id=None, use_curriculum=False, **kwargs):
+        assert index is not None
         self.use_curriculum = use_curriculum
         self.use_single_subtask = single_subtask_id is not None
         assert not (use_curriculum and self.use_single_subtask)  # only one of them can be true
@@ -22,7 +23,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         elif self.use_curriculum:
             self.curr_lvl = 0
 
-        self.mdp = OvercookedGridworld.from_layout_name(args.layout_name)
+        self.mdp = OvercookedGridworld.from_layout_name(args.layout_names[index])
         all_counters = self.mdp.get_counter_locations()
         COUNTERS_PARAMS = {
             'start_orientations': False,
@@ -36,7 +37,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         ss_fn = self.mdp.get_subtask_start_state_fn(self.mlam, random_start_pos=True, random_orientation=True,
                                                     max_objects=USEABLE_COUNTERS)
         env = OvercookedEnv.from_mdp(self.mdp, horizon=100, start_state_fn=ss_fn)
-        super(OvercookedSubtaskGymEnv, self).__init__(grid_shape=grid_shape, base_env=env, args=args)
+        super(OvercookedSubtaskGymEnv, self).init(index=index, base_env=env, **kwargs)
         self.obs_dict['curr_subtask'] = spaces.Discrete(Subtasks.NUM_SUBTASKS)
         self.observation_space = spaces.Dict(self.obs_dict)
 
@@ -100,7 +101,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         return self.get_obs(self.p_idx), reward, done, info
 
-    def reset(self, evaluate=False):
+    def reset(self, evaluation_trial_num=-1):
         self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
         # TODO randomly set p_idx
@@ -115,25 +116,32 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             subtask_probs = subtask_mask / np.sum(subtask_mask)
             self.goal_subtask = np.random.choice(Subtasks.SUBTASKS, p=subtask_probs)
         self.goal_subtask_id = Subtasks.SUBTASKS_TO_IDS[self.goal_subtask]
-        self.env.reset(start_state_kwargs={'p_idx': self.p_idx, 'curr_subtask': self.goal_subtask})
+        if evaluation_trial_num >= 0:
+            counters = evaluation_trial_num % USEABLE_COUNTERS
+            ss_kwargs = {'p_idx': self.p_idx, 'curr_subtask': self.goal_subtask, 'num_random_objects': counters}
+        else:
+            ss_kwargs = {'p_idx': self.p_idx, 'curr_subtask': self.goal_subtask, 'max_random_objs': USEABLE_COUNTERS}
+        self.env.reset(start_state_kwargs=ss_kwargs)
         self.state = self.env.state
         self.prev_state = None
         if self.goal_subtask != 'unknown':
-            assert get_doable_subtasks(self.state, self.terrain, self.p_idx, USEABLE_COUNTERS)[self.goal_subtask_id]
+            unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
+            assert get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS)[self.goal_subtask_id]
         return self.get_obs(self.p_idx)
 
     def evaluate(self, agent):
         results = np.zeros((Subtasks.NUM_SUBTASKS, 2))
         mean_reward = []
-        curr_trial, tot_trials = 0, 25
+        curr_trial, tot_trials = 0, USEABLE_COUNTERS * 20
         while curr_trial < tot_trials:
             invalid_trial = False
             cum_reward, reward, done = 0, 0, False
-            obs = self.reset(evaluate=True)
+            obs = self.reset(evaluation_trial_num=curr_trial)
             while not done:
                 # If the subtask is no longer possible (e.g. other agent picked the only onion up from the counter)
                 # then stop the trial and don't count it
-                if not get_doable_subtasks(self.state, self.terrain, self.p_idx, USEABLE_COUNTERS)[self.goal_subtask_id]:
+                unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
+                if not get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS)[self.goal_subtask_id]:
                     invalid_trial = True
                     break
                 

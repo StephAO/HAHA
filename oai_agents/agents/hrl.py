@@ -99,15 +99,24 @@ class MultiAgentSubtaskWorker(OAIAgent):
         agents = []
         for i in range(Subtasks.NUM_SUBTASKS):
             # RL single subtask agents trained with BC partner
-            kwargs = {'single_subtask_id': i, 'args': args}
-            env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs=kwargs, vec_env_cls=VEC_ENV_CLS)
-            eval_env = OvercookedSubtaskGymEnv(**kwargs)
-            rl_sat = SingleAgentTrainer(tms, args, env=env, eval_env=eval_env)
+            # Make necessary envs
+            n_layouts = len(self.args.layout_names)
+            env_kwargs = {'single_subtask_id': i, 'args': args}
+            env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs={'call_init': False},
+                               vec_env_cls=VEC_ENV_CLS)
+            for i in range(self.args.n_envs):
+                env.env_method('init', indices=i, kwargs={'index': i % n_layouts, **env_kwargs})
+
+            eval_envs = [OvercookedSubtaskGymEnv(kwargs={'index': i, 'is_eval_env': True, **env_kwargs})
+                         for i in range(n_layouts)]
+            # Create trainer
+            rl_sat = SingleAgentTrainer(tms, args, env=env, eval_envs=eval_envs)
+            # Train if it makes sense to (can't train on an unknown task)
             if i != Subtasks.SUBTASKS_TO_IDS['unknown']:
                 rl_sat.train_agents(total_timesteps=1e7, exp_name=args.exp_name + f'_subtask_{i}')
             agents.extend(rl_sat.get_agents())
         model = cls(agents=agents, args=args)
-        path = args.base_dir / 'agent_models' / model.name / args.layout_name
+        path = args.base_dir / 'agent_models' / model.name
         Path(path).mkdir(parents=True, exist_ok=True)
         tag = args.exp_name
         model.save(path / tag)
@@ -128,11 +137,19 @@ class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, worker, teammates, args, name=None):
         name = name or 'rl_manager'
-        kwargs = {'worker': worker, 'shape_rewards': False, 'randomize_start': False, 'args': args}
-        env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=kwargs, vec_env_cls=VEC_ENV_CLS)
-        eval_env = OvercookedManagerGymEnv(worker=worker, shape_rewards=False, randomize_start=False, args=args)
+
+        n_layouts = len(self.args.layout_names)
+        env_kwargs = {'worker': worker, 'shape_rewards': False, 'randomize_start': True, 'args': args}
+        env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs={'call_init': False},
+                           vec_env_cls=VEC_ENV_CLS)
+        for i in range(self.args.n_envs):
+            env.env_method('init', indices=i, kwargs={'index': i % n_layouts, **env_kwargs})
+
+        eval_envs_kwargs = {'worker': worker, 'shape_rewards': False, 'is_eval_env': True, 'args': args}
+        eval_envs = [OvercookedManagerGymEnv(kwargs={'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
+
         self.worker = worker
-        super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env, eval_env=eval_env,
+        super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env, eval_envs=eval_envs,
                                                use_maskable_ppo=True)
 
 class HierarchicalRL(OAIAgent):
@@ -220,7 +237,7 @@ class ValueBasedManager(Manager):
         self.worker = worker
         assert worker.p_idx == p_idx
         self.trajectory = []
-        self.terrain = OvercookedGridworld.from_layout_name(args.layout_name).terrain_mtx
+        self.terrain = OvercookedGridworld.from_layout_name(args.layout_names[index]).terrain_mtx
         # for i in range(len(self.terrain)):
         #     self.terrain[i] = ''.join(self.terrain[i])
         # self.terrain = str(self.terrain)

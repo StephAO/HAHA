@@ -10,7 +10,7 @@ def get_arguments(additional_args=[]):
     :return:
     """
     parser = argparse.ArgumentParser(description='PyTorch Soft Actor-Critic Args')
-    parser.add_argument('--layout-name', default='counter_circuit_o_1order',  help='Overcooked map to use')
+    parser.add_argument('--layout-names', default='counter_circuit_o_1order',  help='Overcooked maps to use')
     parser.add_argument('--use-subtasks', action='store_true', help='Condition IL agents on subtasks (default: False)')
     parser.add_argument('--policy-selection', type=str, default='CEM',
                         help='Which policy selection algorithm to use. Options: "CEM", "PLASTIC". Default: "CEM"')
@@ -45,6 +45,7 @@ def get_arguments(additional_args=[]):
     args = parser.parse_args()
     args.base_dir = Path(args.base_dir)
     args.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
+    args.layout_names = args.layout_names.split(',')
 
     return args
 

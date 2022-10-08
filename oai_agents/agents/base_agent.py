@@ -35,6 +35,7 @@ class OAIAgent(nn.Module, ABC):
         self.p_idx = None
         self.mdp = None
         self.horizon = None
+        self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
 
     @abstractmethod
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False) -> Tuple[int, Union[th.Tensor, None]]:
@@ -69,15 +70,20 @@ class OAIAgent(nn.Module, ABC):
         obs = self.encoding_fn(self.mdp, state, grid_shape, self.horizon, p_idx=self.p_idx)
 
         if hasattr(self, 'manager'):
-            obs['subtask_mask'] = get_doable_subtasks(state, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
+            obs['subtask_mask'] = \
+                get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
             if self.prev_state is None:
                 obs['player_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
                 obs['teammate_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
             else:
                 comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, state, i) for i in range(2)]
                 # If no subtask is completed, set it to one number greater than a possible subtask number
-                obs['player_completed_subtasks'] = comp_st[self.p_idx] if comp_st[self.p_idx] is not None else Subtasks.NUM_SUBTASKS
-                obs['teammate_completed_subtasks'] = comp_st[1 - self.p_idx] if comp_st[1 - self.p_idx] is not None else Subtasks.NUM_SUBTASKS
+                p_comp_st = comp_st[self.p_idx] if comp_st[self.p_idx] is not None else Subtasks.NUM_SUBTASKS
+                t_comp_st = comp_st[1 - self.p_idx] if comp_st[1 - self.p_idx] is not None else Subtasks.NUM_SUBTASKS
+                obs['player_completed_subtasks'] = p_comp_st
+                obs['teammate_completed_subtasks'] = t_comp_st
+                if p_comp_st is not None:
+                    self.prev_st = p_comp_st
             self.prev_state = state
 
         action, _ = self.predict(obs, deterministic=deterministic)
@@ -219,15 +225,18 @@ class OAITrainer(ABC):
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
 
-    def evaluate(self, eval_agent, eval_teammate, num_episodes=10, visualize=False, timestep=None):
-        if visualize and not self.eval_env.visualization_enabled:
-            self.eval_env.setup_visualization()
-        self.eval_env.set_teammate(eval_teammate)
-        mean_reward, std_reward = evaluate_policy(eval_agent, self.eval_env, n_eval_episodes=num_episodes, deterministic=False, warn=False, render=visualize)
+    def evaluate(self, eval_agent, eval_teammate, num_episodes=1, visualize=False, timestep=None):
+        tot_mean_reward = []
         timestep = timestep or eval_agent.num_timesteps
-        print(f'Eval at timestep {timestep}: {mean_reward}')
-        wandb.log({'eval_mean_reward': mean_reward, 'timestep': timestep})
-        return mean_reward
+        for i, env in enumerate(self.eval_envs):
+            env.set_teammate(eval_teammate)
+            mean_reward, std_reward = evaluate_policy(eval_agent, self.env, n_eval_episodes=num_episodes, deterministic=False, warn=False, render=visualize)
+            tot_mean_reward.append(mean_reward)
+            print(f'Eval at timestep {timestep} for layout {self.args.layout_names[i]}: {mean_reward}')
+            wandb.log({f'eval_mean_reward_{self.args.layout_names[i]}': mean_reward, 'timestep': timestep})
+        print(f'Eval at timestep {timestep}: {np.mean(tot_mean_reward)}')
+        wandb.log({f'eval_mean_reward': np.mean(tot_mean_reward), 'timestep': timestep})
+        return np.mean(tot_mean_reward)
 
     def set_new_teammates(self):
         for i in range(self.args.n_envs):
@@ -242,7 +251,7 @@ class OAITrainer(ABC):
 
     def save_agents(self, path: Union[Path, None] = None, tag: Union[str, None] = None):
         ''' Saves each agent that the trainer is training '''
-        path = path or self.args.base_dir / 'agent_models' / self.name / self.args.layout_name
+        path = path or self.args.base_dir / 'agent_models' / self.name
         tag = tag or self.args.exp_name
         save_path = path / tag / 'trainer_file'
         agent_path = path / tag / 'agents_dir'
@@ -257,7 +266,7 @@ class OAITrainer(ABC):
 
     def load_agents(self, path: Union[Path, None]=None, tag: Union[str, None]=None):
         ''' Loads each agent that the trainer is training '''
-        path = path or self.args.base_dir / 'agent_models' / self.name / self.args.layout_name
+        path = path or self.args.base_dir / 'agent_models' / self.name
         tag = tag or self.args.exp_name
         load_path = path / tag / 'trainer_file'
         agent_path = path / tag / 'agents_dir'

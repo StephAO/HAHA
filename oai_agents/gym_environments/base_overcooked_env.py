@@ -20,8 +20,12 @@ USEABLE_COUNTERS = 5
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, play_both_players=False, base_env=None, horizon=None, grid_shape=None, shape_rewards=False,
-                 ret_completed_subtasks=False, randomize_start=False, args=None):
+    def __init__(self, call_init=True, **kwargs):
+        if call_init:
+            self.init(**kwargs)
+
+    def init(self, index=None, play_both_players=False, base_env=None, horizon=None, grid_shape=None, is_eval_env=False,
+                   shape_rewards=False, ret_completed_subtasks=False, args=None):
         '''
         :param play_both_players: If true, play actions of both players. Step requires tuple(int, int) instead of int
         :param grid_shape: Shape over
@@ -31,9 +35,11 @@ class OvercookedGymEnv(Env):
         :param horizon: How many steps to run the env for. If None, default to args.horizon value
         :param args: Experiment arguments (see arguments.py)
         '''
+        assert index is not None
+        self.layout_name = args.layout_names[index]
         self.play_both_players = play_both_players
         if base_env is None:
-            self.mdp = OvercookedGridworld.from_layout_name(args.layout_name)
+            self.mdp = OvercookedGridworld.from_layout_name(self.layout_name)
             horizon = horizon or args.horizon
             all_counters = self.mdp.get_counter_locations()
             COUNTERS_PARAMS = {
@@ -45,12 +51,13 @@ class OvercookedGymEnv(Env):
                 'same_motion_goals': True
             }
             self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
-            ss_fn = self.mdp.get_fully_random_start_state_fn(self.mlam, random_start_pos=True, random_orientation=True,
-                                                             max_objects=USEABLE_COUNTERS) if randomize_start else None
+            # To ensure that an agent is on both sides of the counter, remove random starts for forced coord
+            ss_fn = self.mdp.get_fully_random_start_state_fn(self.mlam)
             self.env = OvercookedEnv.from_mdp(self.mdp, horizon=horizon, start_state_fn=ss_fn)
         else:
             self.env = base_env
         self.grid_shape = grid_shape or self.env.mdp.shape
+        self.is_eval_env = is_eval_env
         self.shape_rewards = shape_rewards
         self.return_completed_subtasks = ret_completed_subtasks
         self.args = args
@@ -60,6 +67,7 @@ class OvercookedGymEnv(Env):
         self.step_count = 0
         self.teammate = None
         self.terrain = self.mdp.terrain_mtx
+        self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
         obs = self.reset()
         self.visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
         self.agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0
@@ -94,7 +102,7 @@ class OvercookedGymEnv(Env):
         pygame.display.flip()
 
     def action_masks(self):
-        return get_doable_subtasks(self.state, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
 
     def get_obs(self, p_idx=None):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
@@ -106,8 +114,12 @@ class OvercookedGymEnv(Env):
             else:
                 comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, self.state, i) for i in range(2)]
                 # If no subtask is completed, set it to one number greater than a possible subtask number
-                obs['player_completed_subtasks'] = comp_st[p_idx] if comp_st[p_idx] is not None else Subtasks.NUM_SUBTASKS
-                obs['teammate_completed_subtasks'] = comp_st[1 - p_idx] if comp_st[1 - p_idx] is not None else Subtasks.NUM_SUBTASKS
+                p_comp_st = comp_st[p_idx] if comp_st[p_idx] is not None else Subtasks.NUM_SUBTASKS
+                t_comp_st = comp_st[1 - p_idx] if comp_st[1 - p_idx] is not None else Subtasks.NUM_SUBTASKS
+                obs['player_completed_subtasks'] = p_comp_st
+                obs['teammate_completed_subtasks'] = t_comp_st
+                if p_comp_st is not None:
+                    self.prev_st = p_comp_st
         return obs
 
     def step(self, action):
@@ -131,7 +143,7 @@ class OvercookedGymEnv(Env):
 
         next_state, reward, done, info = self.env.step(joint_action)
         self.state = self.env.state
-        if self.shape_rewards:
+        if self.shape_rewards and not self.is_eval_env:
             ratio = min(self.step_count * self.args.n_envs / 2.5e6, 1)
             sparse_r = sum(info['sparse_r_by_agent'])
             shaped_r = info['shaped_r_by_agent'][self.p_idx] if self.p_idx else sum(info['shaped_r_by_agent'])
@@ -143,7 +155,13 @@ class OvercookedGymEnv(Env):
         if not self.play_both_players:
             self.p_idx = np.random.randint(2)
             self.t_idx = 1 - self.p_idx
-        self.env.reset()
+
+        if self.is_eval_env:
+            ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
+        else:
+            random_pos = (self.layout_name != 'forced_coordination')
+            ss_kwargs = {'random_pos': random_pos, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS}
+        self.env.reset(start_state_kwargs=ss_kwargs)
         self.prev_state = None
         self.state = self.env.state
         return self.get_obs(self.p_idx)

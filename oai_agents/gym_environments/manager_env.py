@@ -10,10 +10,9 @@ import torch as th
 
 
 class OvercookedManagerGymEnv(OvercookedGymEnv):
-    def __init__(self, worker=None, grid_shape=None, shape_rewards=False, randomize_start=False, args=None):
+    def init(self, worker=None, ret_completed_subtasks=True, **kwargs):
         self.worker = worker
-        super(OvercookedManagerGymEnv, self).__init__(grid_shape=grid_shape, shape_rewards=shape_rewards,
-                                                      ret_completed_subtasks=True, randomize_start=randomize_start, args=args)
+        super(OvercookedManagerGymEnv, self).init(ret_completed_subtasks=True, **kwargs)
         self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
 
     def get_low_level_obs(self, p_idx=None):
@@ -23,13 +22,19 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return obs
 
     def action_masks(self):
-        return get_doable_subtasks(self.state, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
 
     def step(self, action):
         # if self.teammate is None:
         #     raise ValueError('set_teammate must be set called before starting game unless play_both_players is True')
         # Action is the subtask for subtask agent to perform
         self.curr_subtask = action.cpu() if type(action) == th.tensor else action
+        # Manager can only choose the unknown subtask if no other subtask is possible. If this is the case, the manager
+        # put itself in a bad position, penalize with -1 and end current episode
+        if self.curr_subtask == Subtasks.SUBTASKS_TO_IDS['unknown']:
+            obs = self.get_obs(self.p_idx)
+            reward = -1
+            return obs, reward, True, {}
         joint_action = [Action.STAY, Action.STAY]
         reward, done, info = 0, False, None
         ready_for_next_subtask = False
@@ -59,7 +64,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             self.state = self.env.state
 
             if worker_steps % 5 == 0:
-                if not get_doable_subtasks(self.state, self.terrain, self.p_idx, USEABLE_COUNTERS)[self.curr_subtask]:
+                if not get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS)[self.curr_subtask]:
                     ready_for_next_subtask = True
             if worker_steps > 25:
                 ready_for_next_subtask = True
@@ -75,7 +80,12 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return obs, reward, done, info
 
     def reset(self):
-        self.env.reset()
+        if self.evaluation_mode:
+            ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
+        else:
+            random_pos = (self.layout_name != 'forced_coordination')
+            ss_kwargs = {'random_pos': random_pos, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS}
+        self.env.reset(start_state_kwargs=ss_kwargs)
         self.state = self.env.state
         self.prev_state = None
         self.p_idx = np.random.randint(2)

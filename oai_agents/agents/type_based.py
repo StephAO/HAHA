@@ -176,7 +176,7 @@ class TypeBasedAdaptor(OAIAgent):
 
     def save(self, path: str = None):
         """Save all models and selfplay table"""
-        base_dir = args.base_dir / 'agent_models' / 'type_based_agents' / self.args.layout_name
+        base_dir = args.base_dir / 'agent_models' / 'type_based_agents'
         Path(base_dir).mkdir(parents=True, exist_ok=True)
         for model in self.p1_agents:
             save_path = base_dir / model.name
@@ -190,7 +190,7 @@ class TypeBasedAdaptor(OAIAgent):
 
     def load(self, path: str = None):
         """Load all models and selfplay table"""
-        base_dir = args.base_dir / 'agent_models' / 'type_based_agents' / self.args.layout_name
+        base_dir = args.base_dir / 'agent_models' / 'type_based_agents'
         for model in self.p1_agents:
             load_path = base_dir / model.name
             model.load(load_path)

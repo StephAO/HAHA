@@ -421,7 +421,7 @@ if __name__ == "__main__":
     #     agents = [Manager(visual_obs_shape, agent_obs_shape, 0, args),
     #               Manager(visual_obs_shape, agent_obs_shape, 1, args)]
     #     for i, agent in enumerate(agents):
-    #         path = args.base_dir / 'agent_models' / 'IL_agents' / args.layout_name / (args.agent_file + f'_p{i + 1}')
+    #         path = args.base_dir / 'agent_models' / 'IL_agents' / (args.agent_file + f'_p{i + 1}')
     #         agent.load(path)
     #
     #     agents[0] = 'human'
