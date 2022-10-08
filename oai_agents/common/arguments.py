@@ -19,7 +19,8 @@ def get_arguments(additional_args=[]):
     parser.add_argument('--horizon', type=int, default=400, help='Max timesteps in a rollout')
     parser.add_argument('--n-envs', type=int, default=1, help='Number of environments to use while training')
     parser.add_argument('--encoding-fn', type=str, default='OAI_lossless',
-                        help='Encoding scheme to use. Options: "dense_lossless", "OAI_lossless", "OAI_feats"')
+                        help='Encoding scheme to use. '
+                             'Options: "dense_lossless", "OAI_lossless", "OAI_feats", "OAI_egocentric"')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
     parser.add_argument('--batch-size', type=int, default=256, help='learning rate')
     parser.add_argument('--eta', type=float, default=0.1, help='eta used in plastic policy update.')

@@ -37,5 +37,6 @@ setup(name='oai_agents',
         'wandb',
         'gym',
         'pygame',
-      ]
+      ],
+      tests_require=['pytest']
     )
