@@ -1,4 +1,4 @@
-from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
+from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv, USEABLE_COUNTERS
 from oai_agents.common.subtasks import Subtasks, get_doable_subtasks, calculate_completed_subtask
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action, Direction
@@ -23,7 +23,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return obs
 
     def action_masks(self):
-        return get_doable_subtasks(self.state, self.terrain, self.p_idx, self.n_counters).astype(bool)
+        return get_doable_subtasks(self.state, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
 
     def step(self, action):
         # if self.teammate is None:
@@ -59,7 +59,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             self.state = self.env.state
 
             if worker_steps % 5 == 0:
-                if not get_doable_subtasks(self.state, self.terrain, self.p_idx, self.n_counters)[self.curr_subtask]:
+                if not get_doable_subtasks(self.state, self.terrain, self.p_idx, USEABLE_COUNTERS)[self.curr_subtask]:
                     ready_for_next_subtask = True
             if worker_steps > 25:
                 ready_for_next_subtask = True

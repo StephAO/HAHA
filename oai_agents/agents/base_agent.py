@@ -1,6 +1,7 @@
 from oai_agents.common.arguments import get_args_to_save, set_args_from_load, get_arguments
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
 from oai_agents.common.subtasks import calculate_completed_subtask, get_doable_subtasks, Subtasks
+from oai_agents.gym_environments.base_overcooked_env import USEABLE_COUNTERS
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
@@ -59,7 +60,6 @@ class OAIAgent(nn.Module, ABC):
         self.mdp = mdp
         self.horizon = horizon
         self.terrain = self.mdp.terrain_mtx
-        self.n_counters = 3
 
     def action(self, state, deterministic=False):
         if self.p_idx is None or self.mdp is None or self.horizon is None:
@@ -69,7 +69,7 @@ class OAIAgent(nn.Module, ABC):
         obs = self.encoding_fn(self.mdp, state, grid_shape, self.horizon, p_idx=self.p_idx)
 
         if hasattr(self, 'manager'):
-            obs['subtask_mask'] = get_doable_subtasks(state, self.terrain, self.p_idx, self.n_counters).astype(bool)
+            obs['subtask_mask'] = get_doable_subtasks(state, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
             if self.prev_state is None:
                 obs['player_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
                 obs['teammate_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']

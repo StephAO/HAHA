@@ -391,9 +391,6 @@ class DistBasedManager(Manager):
 if __name__ == '__main__':
     args = get_arguments()
 
-    from oai_agents.agents.base_agent import load_agent
-    a = load_agent('/home/miguel/Documents/projects/overcooked-demo/server/static/assets/agents/oai_hrl')
-    print(type(a))
     #
     # mat = MultipleAgentsTrainer(args, num_agents=0)
     # mat.load_agents(path=Path('/projects/star7023/oai/agent_models/fcp/counter_circuit_o_1order/12_pop'), tag='test')

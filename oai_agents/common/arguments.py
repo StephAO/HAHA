@@ -17,7 +17,7 @@ def get_arguments(additional_args=[]):
     parser.add_argument('--subtask-selection', type=str, default='value_based',
                         help='Which subtask selection algorithm to use. Options: "value_based", "dist". Default: "value_based"')
     parser.add_argument('--horizon', type=int, default=400, help='Max timesteps in a rollout')
-    parser.add_argument('--n-envs', type=int, default=16, help='Number of environments to use while training')
+    parser.add_argument('--n-envs', type=int, default=1, help='Number of environments to use while training')
     parser.add_argument('--encoding-fn', type=str, default='OAI_lossless',
                         help='Encoding scheme to use. Options: "dense_lossless", "OAI_lossless", "OAI_feats"')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
@@ -34,7 +34,7 @@ def get_arguments(additional_args=[]):
                              'See https://github.com/HumanCompatibleAI/human_aware_rl/tree/master/human_aware_rl/static/human_data for options')
     parser.add_argument('--num_workers', type=int, default=4, metavar='N',
                         help='number of workers for pytorch train_dataloader (default: 4)')
-    parser.add_argument('--wandb-mode', type=str, default='online',
+    parser.add_argument('--wandb-mode', type=str, default='disabled',
                         help='Wandb mode. One of ["online", "offline", "disabled"')
     parser.add_argument('--wandb-ent', type=str, default='stephaneao',
                         help='Wandb entity to log to.')

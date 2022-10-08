@@ -14,6 +14,9 @@ from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE
 from stable_baselines3.common.env_checker import check_env
 
 
+USEABLE_COUNTERS = 5
+
+
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
 
@@ -43,7 +46,7 @@ class OvercookedGymEnv(Env):
             }
             self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
             ss_fn = self.mdp.get_fully_random_start_state_fn(self.mlam, random_start_pos=True, random_orientation=True,
-                                                             rnd_obj_prob_thresh=0.2) if randomize_start else None
+                                                             max_objects=USEABLE_COUNTERS) if randomize_start else None
             self.env = OvercookedEnv.from_mdp(self.mdp, horizon=horizon, start_state_fn=ss_fn)
         else:
             self.env = base_env
@@ -57,7 +60,6 @@ class OvercookedGymEnv(Env):
         self.step_count = 0
         self.teammate = None
         self.terrain = self.mdp.terrain_mtx
-        self.n_counters = len(self.mdp.find_free_counters_valid_for_both_players(self.env.state, self.mlam))
         obs = self.reset()
         self.visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
         self.agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0
@@ -92,7 +94,7 @@ class OvercookedGymEnv(Env):
         pygame.display.flip()
 
     def action_masks(self):
-        return get_doable_subtasks(self.state, self.terrain, self.p_idx, self.n_counters).astype(bool)
+        return get_doable_subtasks(self.state, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
 
     def get_obs(self, p_idx=None):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
