@@ -275,5 +275,22 @@ if __name__ == '__main__':
     #
     # rlmt = SingleAgentTrainer(teammates, args, name='fcp_main_agent')
     # rlmt.train_agents(total_timesteps=5e6, exp_name=args.exp_name + '_fcp')
+    # sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=5e6)
+    # sp[0].save(Path('test_data'))
+    # pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=5e6)
+    # fcp = SingleAgentTrainer(pop, args, 'fcp')
+    # fcp.train_agents(1e6)
+    #mat = MultipleAgentsTrainer(args, num_agents=0)
+    #mat.load_agents(path=Path('/projects/star7023/oai/agent_models/fcp/counter_circuit_o_1order/12_pop'), tag='test')
+    #teammates = mat.get_agents()
+
+    # from oai_agents.agents.il import BehavioralCloningTrainer
+    #
+    # bct = BehavioralCloningTrainer(args.dataset, args)
+    # bct.train_agents(epochs=250)
+    # teammates = bct.get_agents()
+    #
+    # rlmt = SingleAgentTrainer(teammates, args, name='bcp')
+    # rlmt.train_agents(total_timesteps=5e6, exp_name=args.exp_name + '_bcp')
 
 
