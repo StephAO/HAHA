@@ -1,5 +1,6 @@
 import json
 import pandas as pd
+from pathlib import Path
 import pygame
 from pygame import K_UP, K_LEFT, K_RIGHT, K_DOWN, K_SPACE, K_s
 from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE
@@ -11,10 +12,13 @@ import re
 
 from oai_agents.agents import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
-from oai_agents.agents import Manager
+from oai_agents.agents.rl import MultipleAgentsTrainer
+from oai_agents.agents.hrl import MultiAgentSubtaskWorker
+# from oai_agents.agents import Manager
 from oai_agents.common.arguments import get_arguments
+from oai_agents.common.subtasks import Subtasks
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
-from oai_agents.gym_environments import OvercookedSubtaskGymEnv
+# from oai_agents.gym_environments import OvercookedSubtaskGymEnv
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
 from overcooked_ai_py.mdp.overcooked_mdp import Direction, Action, OvercookedState
 # from overcooked_ai_py.planning.planners import MediumLevelPlanner
@@ -71,13 +75,13 @@ def str_to_state(state):
 class App:
     """Class to run an Overcooked Gridworld game, leaving one of the agents as fixed.
     Useful for debugging. Most of the code from http://pygametutorials.wikidot.com/tutorials-basic."""
-    def __init__(self, args, agents=None, traj_file=None, slowmo_rate=1):
+    def __init__(self, args, agent=None, teammate=None, traj_file=None, slowmo_rate=1):
         self._running = True
         self._display_surf = None
         self.args = args
         self.layout_name = args.layout_name
 
-        self.use_subtask_env = True
+        self.use_subtask_env = False
         if self.use_subtask_env:
             self.p_idx = 0
             self.t_idx = (self.p_idx + 1) % 2
@@ -87,19 +91,20 @@ class App:
             self.env = OvercookedSubtaskGymEnv(**p_kwargs, **kwargs)
             agents = ['human', tm]
         else:
-            self.env = OvercookedGymEnv(args=args)
+            self.env = OvercookedGymEnv(args=args, ret_completed_subtasks=True)
+            self.env.set_teammate(teammate)
 
         self.grid_shape = self.env.grid_shape
         if traj_file is not None:
             self.mode = 'replay'
-        elif agents is not None:
+        elif agent is not None:
             self.mode = 'play'
             self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
         else:
             self.mode = 'collect_data'
-        self.agents = agents
+        self.agent = agent
         self.slowmo_rate = slowmo_rate
-        self.fps = 300 // slowmo_rate
+        self.fps = 30 // slowmo_rate
         self.score = 0
         self.curr_tick = 0
         self.joint_action = [None, None]
@@ -165,7 +170,7 @@ class App:
         self.score += curr_reward
         transition = {
             "state" : json.dumps(prev_state.to_dict()),
-            "joint_action" : json.dumps(joint_action),
+            "joint_action" : json.dumps(joint_action.item()),
             "reward" : curr_reward,
             "time_left" : max((1200 - self.curr_tick) / self.fps, 0),
             "score" : self.score,
@@ -244,24 +249,36 @@ class App:
         if self.on_init() == False:
             self._running = False
         sleep_time = 1000 // self.fps
-        for i in range(2):
-            if isinstance(self.agents[i], OAIAgent):
-                self.agents[i].reset(self.env.state)
+        # for i in range(2):
+        #     if isinstance(self.agents[i], OAIAgent):
+        #         self.agents[i].reset(self.env.state)
         while (self._running):
-            self.joint_action = [None, None]
-            for i in range(2):
-                if self.agents[i] == 'human':
-                    self.on_render(pidx=i)
-                    while self.joint_action[i] is None:
-                        for event in pygame.event.get():
-                            self.on_event(event, i)
-                        pygame.event.pump()
-                else:
-                    obs = self.env.get_obs(i)
-                    self.joint_action[i] = self.agents[i].predict(obs)[0].squeeze().detach().item()
-                    pygame.time.wait(sleep_time)
+            # self.joint_action = [None, None]
+            # for i in range(2):
+            #     if self.agent == 'human':
+            #
+            #         while self.joint_action[i] is None:
+            #             for event in pygame.event.get():
+            #                 self.on_event(event, i)
+            #             pygame.event.pump()
+            #     else:
+            obs = self.env.get_obs(self.env.p_idx)
+            # if type(self.agent) == HumanManagerHRL:
+            self.agent_action = self.agent.predict(obs)[0].squeeze()#.detach().item()
+                    # else:
+                    #     obs.pop('player_completed_subtasks')
+                    #     obs.pop('teammate_completed_subtasks')
+                    #     self.joint_action[i] = self.agents[i].predict(obs)[0].squeeze()
+            pygame.time.wait(sleep_time)
             self.on_render()
-            self.on_loop()
+
+            done = self.step_env(self.agent_action)
+            self.curr_tick += 1
+
+            if done:
+                self._running = False
+
+            # self.on_loop()
 
         self.on_cleanup()
         print(f'Trial finished in {self.curr_tick} steps with total reward {self.score}')
@@ -305,6 +322,31 @@ def setup_game(env_name, player_idx):
     agent = None
 
 
+class HumanManagerHRL(OAIAgent):
+    def __init__(self, worker, args):
+        super(HumanManagerHRL, self).__init__('hierarchical_rl', args)
+        self.worker = worker
+        self.curr_subtask_id = 11
+
+    def get_distribution(self, obs, sample=True):
+        if obs['player_completed_subtasks'] is not None:
+            # Completed previous subtask, set new subtask
+            print(f'GOAL: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id]}, DONE: {obs["player_completed_subtasks"]}')
+            next_st = input("Enter next subtask (0-10): ")
+            self.curr_subtask_id = int(next_st)
+        obs['curr_subtask'] = self.curr_subtask_id
+        return self.worker.get_distribution(obs, sample=sample)
+
+    def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
+        if obs['player_completed_subtasks'] is not None:
+            print(f'GOAL: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id]}, DONE: {Subtasks.IDS_TO_SUBTASKS[obs["player_completed_subtasks"]]}')
+            next_st = input("Enter next subtask (0-10): ")
+            self.curr_subtask_id = int(next_st)
+        obs['curr_subtask'] = self.curr_subtask_id
+        obs.pop('player_completed_subtasks')
+        obs.pop('teammate_completed_subtasks')
+        return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
+
 
 
 if __name__ == "__main__":
@@ -339,24 +381,54 @@ if __name__ == "__main__":
 
     args = get_arguments(additional_args)
 
-    agents = None
     data_path = args.base_dir / args.data_path
-    if args.agent_file is not None:
-        env = OvercookedGymEnv(args=args)
-        obs = env.get_obs()
-        visual_obs_shape = obs['visual_obs'][0].shape
-        agent_obs_shape = obs['agent_obs'][0].shape
-        agents = [Manager(visual_obs_shape, agent_obs_shape, 0, args),
-                  Manager(visual_obs_shape, agent_obs_shape, 1, args)]
-        for i, agent in enumerate(agents):
-            path = args.base_dir / 'agent_models' / 'IL_agents' / args.layout_name / (args.agent_file + f'_p{i + 1}')
-            agent.load(path)
 
-        agents[0] = 'human'
+    mat = MultipleAgentsTrainer(args, num_agents=0)
+    mat.load_agents(path=Path('./agent_models/fcp/counter_circuit_o_1order/12_pop'), tag='test')
+    teammates = mat.get_agents()
 
-    if args.combine:
-        App.combine_df(data_path)
-    else:
-        layout_name = 'asymmetric_advantages'
-        dc = App(args, traj_file=args.traj_file, agents=agents, slowmo_rate=8, )
-        dc.on_execute()
+    worker = MultiAgentSubtaskWorker.load(
+            Path('./agent_models/multi_agent_subtask_worker/counter_circuit_o_1order/test/'), args)
+
+
+    hm_hrl = HumanManagerHRL(worker, args)
+
+    tm = teammates[1]
+
+    agents = [hm_hrl, tm]
+
+    dc = App(args, agent=hm_hrl, teammate=tm, slowmo_rate=8, )
+    dc.on_execute()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # if args.agent_file is not None:
+    #     env = OvercookedGymEnv(args=args)
+    #     obs = env.get_obs()
+    #     visual_obs_shape = obs['visual_obs'][0].shape
+    #     agent_obs_shape = obs['agent_obs'][0].shape
+    #     agents = [Manager(visual_obs_shape, agent_obs_shape, 0, args),
+    #               Manager(visual_obs_shape, agent_obs_shape, 1, args)]
+    #     for i, agent in enumerate(agents):
+    #         path = args.base_dir / 'agent_models' / 'IL_agents' / (args.agent_file + f'_p{i + 1}')
+    #         agent.load(path)
+    #
+    #     agents[0] = 'human'
+    #
+    # if args.combine:
+    #     App.combine_df(data_path)
+    # else:
+    #     layout_name = 'asymmetric_advantages'
+    #     dc = App(args, traj_file=args.traj_file, agents=agents, slowmo_rate=8, )
+    #     dc.on_execute()

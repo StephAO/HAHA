@@ -182,9 +182,9 @@ class OvercookedDataset(Dataset):
 
 def main():
     args = get_arguments()
-    env = OvercookedEnv.from_mdp(OvercookedGridworld.from_layout_name(args.layout_name), horizon=400)
+    env = OvercookedEnv.from_mdp(OvercookedGridworld.from_layout_name(args.layout_names[0]), horizon=400)
     encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
-    OD = OvercookedDataset(encoding_fn, [args.layout_name], args) #OvercookedDataset(env, encoding_fn, args)
+    OD = OvercookedDataset(encoding_fn, args.layout_names, args) #OvercookedDataset(env, encoding_fn, args)
 
     dataloader = DataLoader(OD, batch_size=1, shuffle=True, num_workers=0)
     for batch in dataloader:

@@ -121,10 +121,10 @@ class BehavioralCloningTrainer(OAITrainer):
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
         self.num_players = 2
         self.dataset = dataset
-        self.train_dataset = OvercookedDataset(dataset, [args.layout_name], args)
+        self.train_dataset = OvercookedDataset(dataset, [args.layout_names], args)
         self.grid_shape = self.train_dataset.grid_shape
-        self.eval_env = OvercookedGymEnv(shape_rewards=False, grid_shape=self.grid_shape, args=args)
-        obs = self.eval_env.get_obs()
+        self.eval_envs = OvercookedGymEnv(shape_rewards=False, is_eval_env=True, grid_shape=self.grid_shape, args=args)
+        obs = self.eval_envs.get_obs()
         visual_obs_shape = obs['visual_obs'][0].shape if 'visual_obs' in obs else 0
         agent_obs_shape = obs['agent_obs'][0].shape if 'agent_obs' in obs else 0
         self.agent = BehaviouralCloningAgent(visual_obs_shape, agent_obs_shape, args)
@@ -133,7 +133,7 @@ class BehavioralCloningTrainer(OAITrainer):
         action_weights = th.tensor(self.train_dataset.get_action_weights(), dtype=th.float32, device=self.device)
         self.action_criterion = nn.CrossEntropyLoss(weight=action_weights)
         if vis_eval:
-            self.eval_env.setup_visualization()
+            self.eval_envs.setup_visualization()
 
     def train_on_batch(self, batch):
         """Train BC agent on a batch of data"""
@@ -169,7 +169,7 @@ class BehavioralCloningTrainer(OAITrainer):
         """ Training routine """
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent, dir=str(self.args.base_dir / 'wandb'),
-                         reinit=True, name='_'.join([exp_name, self.args.layout_name, 'bc']),
+                         reinit=True, name='_'.join([exp_name, 'bc']),
                          mode=self.args.wandb_mode)
 
         best_reward, best_path, best_tag = 0, None, None
@@ -193,5 +193,5 @@ if __name__ == '__main__':
         bct = BehavioralCloningTrainer('tf_test_5_5.2.pickle', args, vis_eval=True)
     else:
         args.batch_size = 4
-        args.layout_name = 'tf_test_5_5'
+        args.layout_names = ['tf_test_5_5']
         bct = BehavioralCloningTrainer('tf_test_5_5.2.pickle', args, vis_eval=True)

@@ -33,6 +33,8 @@ def calculate_completed_subtask(layout, prev_state, curr_state, p_idx):
     # Object held didn't change -- This interaction didn't actually transition to a new subtask
     if prev_obj == curr_obj:
         subtask = None
+        return subtask
+
     # Pick up an onion
     elif prev_obj is None and curr_obj == 'onion':
         # Facing an onion dispenser
@@ -97,12 +99,22 @@ def calculate_completed_subtask(layout, prev_state, curr_state, p_idx):
     else:
         raise ValueError(f'Unexpected transition. {prev_obj} -> {curr_obj}.')
 
-    if subtask:
-        subtask = Subtasks.SUBTASKS_TO_IDS[subtask]
+    return Subtasks.SUBTASKS_TO_IDS[subtask]
 
-    return subtask
 
-def get_doable_subtasks(state, terrain, p_idx):
+def empty_pot_exists(state, terrain):
+    """
+    Returns true if there is currenlty an empty soup
+    NOTE: Assumes there are 2 pots
+    """
+    n_full_soups = 0
+    for obj in state.objects.values():
+        x, y = obj.position
+        if obj.name == 'soup' and terrain[y][x] == 'P' and not obj.is_idle:
+            n_full_soups += 1
+    return n_full_soups < 2
+
+def get_doable_subtasks(state, prev_subtask, terrain, p_idx, n_counters):
     '''
     Returns a mask subtasks that could be accomplished for a given state and player idx
     :param state: curr state
@@ -119,30 +131,40 @@ def get_doable_subtasks(state, terrain, p_idx):
         # These are only possible if the respective objects exist on a counter somewhere
         for obj in state.objects.values():
             x, y = obj.position
-            if obj.name == 'onion':
+            if obj.name == 'onion' and prev_subtask != 'put_onion_closer':
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']] = 1
-            elif obj.name == 'dish':
+            elif obj.name == 'dish' and prev_subtask != 'put_plate_closer':
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']] = 1
-            elif obj.name == 'soup' and obj.is_ready and terrain[y][x] != 'P':
+            elif obj.name == 'soup' and obj.is_ready and terrain[y][x] != 'P' and prev_subtask != 'put_soup_closer':
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_soup_from_counter']] = 1
     # The player is holding an onion, so it can only accomplish tasks that involve putting the onion somewhere
     elif state.players[p_idx].held_object.name == 'onion':
-        subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']] = 1
-        subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_closer']] = 1
+        # There must be an empty counter to put something down
+        if len(state.objects.values()) < n_counters:
+            subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_closer']] = 1
+        # There must be an empty pot to put an onion into
+        elif empty_pot_exists(state, terrain):
+            subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']] = 1
     # The player is holding a plate, so it can only accomplish tasks that involve putting the plate somewhere
     elif state.players[p_idx].held_object.name == 'dish':
-        subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_plate_closer']] = 1
+        # There must be an empty counter to put something down
+        if len(state.objects.values()) < n_counters:
+            subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_plate_closer']] = 1
         # Can only grab the soup using the plate if a soup is currently cooking
         for obj in state.objects.values():
             x, y = obj.position
             if obj.name == 'soup' and terrain[y][x] == 'P' and not obj.is_idle:
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_soup']] = 1
+                break
     # The player is holding a soup, so it can only accomplish tasks that involve putting the soup somewhere
     elif state.players[p_idx].held_object.name == 'soup':
         subtask_mask[Subtasks.SUBTASKS_TO_IDS['serve_soup']] = 1
-        subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_soup_closer']] = 1
-    # print('Doable subtasks:')
-    # for i in range(len(subtask_mask)):
-    #     if subtask_mask[i] == 1:
-    #         print(Subtasks.IDS_TO_SUBTASKS[i])
+        # There must be an empty counter to put something down
+        if len(state.objects.values()) < n_counters:
+            subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_soup_closer']] = 1
+
+    # If no other subtask is possible, then set subtask to unknown
+    if np.sum(subtask_mask) == 0:
+        subtask_mask[Subtasks.SUBTASKS_TO_IDS['unknown']] = 1
+
     return subtask_mask

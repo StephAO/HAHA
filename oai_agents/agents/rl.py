@@ -9,7 +9,7 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import DummyVecEnv
-from sb3_contrib import RecurrentPPO
+from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
 EPOCH_TIMESTEPS = 10000
@@ -18,7 +18,8 @@ VEC_ENV_CLS = DummyVecEnv#SubprocVecEnv
 
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
-    def __init__(self, teammates, args, name=None, env=None, eval_env=None, use_lstm=False, hidden_dim=256, seed=None):
+    def __init__(self, teammates, args, name=None, env=None, eval_envs=None, use_lstm=False, use_maskable_ppo=False,
+                 hidden_dim=256, use_subtask_eval=False, seed=None):
         name = name or 'rl_singleagent'
         super(SingleAgentTrainer, self).__init__(name, args, seed=seed)
         self.args = args
@@ -29,15 +30,20 @@ class SingleAgentTrainer(OAITrainer):
         self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
         self.teammates = teammates
         self.n_tm = len(teammates)
-        env_kwargs = {'shape_rewards': True, 'args': args}
         if env is None:
-            self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs,
+            n_layouts = len(self.args.layout_names)
+            env_kwargs = {'shape_rewards': True, 'randomize_start': True, 'args': args}
+            self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, env_kwargs={'call_init': False},
                                     vec_env_cls=VEC_ENV_CLS)
-            self.eval_env = OvercookedGymEnv(shape_rewards=False, args=args)
+            for i in range(self.args.n_envs):
+                self.env.env_method('init', indices=i, kwargs={'index': i % n_layouts, **env_kwargs})
+
+            eval_envs_kwargs = {'is_eval_env': True, 'args': args}
+            self.eval_envs = [OvercookedGymEnv(kwargs={'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
         else:
             self.env = env
-            self.eval_env = eval_env
-        self.use_subtask_eval = (type(eval_env) == OvercookedSubtaskGymEnv)
+            self.eval_envs = eval_envs
+        self.use_subtask_eval = use_subtask_eval
 
         policy_kwargs = dict(
             # features_extractor_class=OAISinglePlayerFeatureExtractor,
@@ -50,12 +56,14 @@ class SingleAgentTrainer(OAITrainer):
             sb3_agent = RecurrentPPO('MultiInputLstmPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1,
                                      n_steps=2048, batch_size=64)
             agent_name = f'{name}_lstm'
+        elif use_maskable_ppo:
+            sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1)
+            agent_name = f'{name}'
         else:
             sb3_agent = PPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1)
             agent_name = f'{name}'
         self.learning_agent = self.wrap_agent(sb3_agent, agent_name)
         self.agents = [self.learning_agent]
-
 
     def _get_constructor_parameters(self):
         return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, hidden_dim=self.hidden_dim, seed=self.seed)
@@ -67,26 +75,35 @@ class SingleAgentTrainer(OAITrainer):
             agent = SB3Wrapper(sb3_agent, name, self.args)
         return agent
 
-    def train_agents(self, total_timesteps=1e8, exp_name=None):
+    def train_agents(self, total_timesteps=2e6, exp_name=None):
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
                          dir=str(self.args.base_dir / 'wandb'),
                          reinit=True, name=exp_name + '_' + self.learning_agent.name, mode=self.args.wandb_mode)
+        best_path, best_tag = None, None
+        best_score = -1
+        eval_tm_idx = 0
         if self.use_subtask_eval:
             self.num_success = 0
         while self.learning_agent.num_timesteps < total_timesteps:
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
-            eval_teammate = self.teammates[np.random.randint(len(self.teammates))]
+            eval_teammate = self.teammates[eval_tm_idx]
             if self.use_subtask_eval:
                 self.eval_env.set_teammate(eval_teammate)
                 all_successes = self.eval_env.evaluate(self.learning_agent)
                 self.num_success = (self.num_success + 1) if all_successes else 0
-                if self.num_success >= 3:
+                if self.num_success >= 5:
                     break
             else:
-                self.evaluate(self.learning_agent, eval_teammate)
+                mean_reward = self.evaluate(self.learning_agent, eval_teammate)
+                if mean_reward >= best_score:
+                    best_path, best_tag = self.save_agents(tag='best')
+                    print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
+                    best_score = mean_reward
+            eval_tm_idx = (eval_tm_idx + 1) % len(self.teammates)
         path, tag = self.save_agents()
+        self.load_agents(best_path, best_tag)
         run.finish()
 
 
@@ -109,9 +126,15 @@ class MultipleAgentsTrainer(OAITrainer):
         self.args = args
         self.fcp_ck_rate = fcp_ck_rate
 
-        env_kwargs = {'shape_rewards': True, 'args': args, 'randomize_start': True}
-        self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, env_kwargs={**env_kwargs})
-        self.eval_env = OvercookedGymEnv(shape_rewards=False, args=args, randomize_start=False)
+        n_layouts = len(self.args.layout_names)
+        env_kwargs = {'shape_rewards': True, 'randomize_start': True, 'args': args}
+        self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, env_kwargs={'call_init': False},
+                                vec_env_cls=VEC_ENV_CLS)
+        for i in range(self.args.n_envs):
+            env.env_method('init', indices=i, kwargs={'index': i % n_layouts, **env_kwargs})
+
+        eval_envs_kwargs = {'shape_rewards': False, 'is_eval_env': True, 'args': args}
+        self.eval_envs = [OvercookedGymEnv(kwargs={'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         policy_kwargs = dict(
             # features_extractor_class=OAISinglePlayerFeatureExtractor,
@@ -176,6 +199,7 @@ class MultipleAgentsTrainer(OAITrainer):
                     self.ck_list.append((mean_reward, path, tag))
             if mean_reward >= best_score:
                 best_path, best_tag = self.save_agents(tag='best')
+                print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
                 best_score = mean_reward
         self.load_agents(best_path, best_tag)
         run.finish()
@@ -229,21 +253,44 @@ class MultipleAgentsTrainer(OAITrainer):
                 mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_lstm=use_lstm, hidden_dim=h_dim,
                                             fcp_ck_rate=ck_rate, seed=seed)
                 mat.train_agents(total_timesteps=training_steps)
-                mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp' / args.layout_name), tag=name)
+                mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp'), tag=name)
                 agents.extend(mat.get_fcp_agents())
         pop = MultipleAgentsTrainer(args, num_agents=0)
         pop.set_agents(agents)
-        pop.save_agents(args.base_dir / 'agent_models' / 'fcp' / args.layout_name / f'{len(agents)}_pop')
+        pop.save_agents(args.base_dir / 'agent_models' / 'fcp' / f'{len(agents)}_pop')
         return pop.get_agents()
 
 
 if __name__ == '__main__':
     from pathlib import Path
     args = get_arguments()
+    sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=5e6)
+    # # sp[0].save(Path('test_data'))
+    # # pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=5e6)
+    # # fcp = SingleAgentTrainer(pop, args, 'fcp')
+    # # fcp.train_agents(1e6)
+    # mat = MultipleAgentsTrainer(args, num_agents=0)
+    # mat.load_agents(path=Path('/projects/star7023/oai/agent_models/fcp/counter_circuit_o_1order/12_pop'), tag='test')
+    # teammates = mat.get_agents()
+    #
+    # rlmt = SingleAgentTrainer(teammates, args, name='fcp_main_agent')
+    # rlmt.train_agents(total_timesteps=5e6, exp_name=args.exp_name + '_fcp')
     # sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=5e6)
     # sp[0].save(Path('test_data'))
-    pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=5e6)
+    # pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=5e6)
     # fcp = SingleAgentTrainer(pop, args, 'fcp')
     # fcp.train_agents(1e6)
+    #mat = MultipleAgentsTrainer(args, num_agents=0)
+    #mat.load_agents(path=Path('/projects/star7023/oai/agent_models/fcp/counter_circuit_o_1order/12_pop'), tag='test')
+    #teammates = mat.get_agents()
+
+    # from oai_agents.agents.il import BehavioralCloningTrainer
+    #
+    # bct = BehavioralCloningTrainer(args.dataset, args)
+    # bct.train_agents(epochs=250)
+    # teammates = bct.get_agents()
+    #
+    # rlmt = SingleAgentTrainer(teammates, args, name='bcp')
+    # rlmt.train_agents(total_timesteps=5e6, exp_name=args.exp_name + '_bcp')
 
 
