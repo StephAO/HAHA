@@ -400,11 +400,12 @@ if __name__ == '__main__':
             Path('/projects/star7023/oai/agent_models/multi_agent_subtask_worker/counter_circuit_o_1order/test/'), args)
 
     rlmt = RLManagerTrainer(worker, teammates, args)
-    rlmt.train_agents(total_timesteps=2e6, exp_name=args.exp_name + '_manager')
+    #rlmt.train_agents(total_timesteps=2e6, exp_name=args.exp_name + '_manager')
+    rlmt.load_agents(path=Path('/projects/star7023/oai/agent_models/rl_manager/counter_circuit_o_1order'), tag='test')
     managers = rlmt.get_agents()
     manager = managers[0]
     hrl = HierarchicalRL(worker, manager, args)
-    hrl.save('/projects/star7023/oai/agent_models/hier_rl/counter_circuit_o_1order/test/')
+    hrl.save(Path('/projects/star7023/oai/agent_models/hier_rl/counter_circuit_o_1order/test/'))
     # hrl.save('test_data/test')
     # del hrl
     # hrl = HierarchicalRL.load('test_data/test', args)

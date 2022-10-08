@@ -57,7 +57,7 @@ class OvercookedGymEnv(Env):
         self.step_count = 0
         self.teammate = None
         self.terrain = self.mdp.terrain_mtx
-        self.n_counters = len(self.mdp.find_free_counters_valid_for_both_players(self.env.state, self.mlam))
+        self.n_counters = 3#len(self.mdp.find_free_counters_valid_for_both_players(self.env.state, self.mlam))
         obs = self.reset()
         self.visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
         self.agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0
