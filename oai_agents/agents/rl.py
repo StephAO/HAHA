@@ -3,7 +3,6 @@ from oai_agents.common.arguments import get_arguments
 from oai_agents.common.networks import OAISinglePlayerFeatureExtractor
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
-from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
 
 import numpy as np
 from stable_baselines3 import PPO
@@ -13,17 +12,18 @@ from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
 EPOCH_TIMESTEPS = 10000
-VEC_ENV_CLS = DummyVecEnv #SubprocVecEnv
+VEC_ENV_CLS = SubprocVecEnv # DummyVecEnv
 
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
-    def __init__(self, teammates, args, name=None, env=None, eval_envs=None, use_lstm=False, use_maskable_ppo=False,
-                 hidden_dim=256, use_subtask_eval=False, seed=None):
+    def __init__(self, teammates, args, name=None, env=None, eval_envs=None, use_lstm=False, use_frame_stack=False,
+                 use_subtask_counts=False, use_maskable_ppo=False, hidden_dim=256, use_subtask_eval=False, seed=None):
         name = name or 'rl_singleagent'
         super(SingleAgentTrainer, self).__init__(name, args, seed=seed)
         self.args = args
         self.device = args.device
         self.use_lstm = use_lstm
+        self.use_frame_stack = use_frame_stack
         self.hidden_dim = hidden_dim
         self.seed = seed
         self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
@@ -31,17 +31,23 @@ class SingleAgentTrainer(OAITrainer):
         self.n_tm = len(teammates)
         if env is None:
             n_layouts = len(self.args.layout_names)
-            env_kwargs = {'shape_rewards': True, 'randomize_start': True, 'args': args}
+            env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts, 'args': args}
             self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, env_kwargs={'full_init': False, 'args': args},
                                     vec_env_cls=VEC_ENV_CLS)
+
             for i in range(self.args.n_envs):
                 self.env.env_method('init', indices=i, **{'index': i % n_layouts, **env_kwargs})
 
-            eval_envs_kwargs = {'is_eval_env': True, 'args': args}
+            eval_envs_kwargs = {'is_eval_env': True, 'ret_completed_subtasks': use_subtask_counts, 'args': args}
             self.eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
         else:
             self.env = env
             self.eval_envs = eval_envs
+
+        if self.use_frame_stack:
+            self.env = VecFrameStack(self.env, args.num_stack, channels_order='first')
+            self.eval_envs = [VecFrameStack(ee, args.num_stack, channels_order='first') for ee in self.eval_envs]
+
         self.use_subtask_eval = use_subtask_eval
 
         policy_kwargs = dict(
@@ -63,7 +69,8 @@ class SingleAgentTrainer(OAITrainer):
         self.agents = [self.learning_agent]
 
     def _get_constructor_parameters(self):
-        return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, hidden_dim=self.hidden_dim, seed=self.seed)
+        return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, use_frame_stack=self.use_frame_stack,
+                    hidden_dim=self.hidden_dim, seed=self.seed)
 
     def wrap_agent(self, sb3_agent, name):
         if self.use_lstm:
@@ -107,7 +114,8 @@ class SingleAgentTrainer(OAITrainer):
 class MultipleAgentsTrainer(OAITrainer):
     ''' Train two independent RL agents to play with each other '''
 
-    def __init__(self, args, name=None, num_agents=1, use_lstm=False, hidden_dim=256, fcp_ck_rate=None, seed=None):
+    def __init__(self, args, name=None, num_agents=1, use_lstm=False, use_frame_stack=False, use_subtask_counts=False,
+                 hidden_dim=256, fcp_ck_rate=None, seed=None):
         '''
         Train multiple agents with each other.
         :param num_agents: Number of agents to train. num_agents=1 mean self-play, num_agents > 1 is population play
@@ -122,20 +130,24 @@ class MultipleAgentsTrainer(OAITrainer):
         self.device = args.device
         self.args = args
         self.fcp_ck_rate = fcp_ck_rate
+        self.use_lstm = use_lstm
+        self.use_frame_stack = use_frame_stack
 
         n_layouts = len(self.args.layout_names)
-        env_kwargs = {'shape_rewards': True, 'args': args}
+        env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts, 'args': args}
         self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, env_kwargs={'full_init': False, 'args': args},
                                 vec_env_cls=VEC_ENV_CLS)
         for i in range(self.args.n_envs):
             self.env.env_method('init', indices=i, **{'index': i % n_layouts, **env_kwargs})
 
-        eval_envs_kwargs = {'shape_rewards': False, 'is_eval_env': True, 'args': args}
+        eval_envs_kwargs = {'shape_rewards': False, 'ret_completed_subtasks': use_subtask_counts, 'is_eval_env': True, 'args': args}
         self.eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
+        if self.use_frame_stack:
+            self.env = VecFrameStack(self.env, args.num_stack, channels_order='first')
+            self.eval_envs = [VecFrameStack(ee, args.num_stack, channels_order='first') for ee in self.eval_envs]
+
         policy_kwargs = dict(
-            # features_extractor_class=OAISinglePlayerFeatureExtractor,
-            # features_extractor_kwargs=dict(features_dim=hidden_dim),
             net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
         )
 
@@ -157,6 +169,10 @@ class MultipleAgentsTrainer(OAITrainer):
         self.teammates = self.agents
         self.agents_in_training = np.ones(len(self.agents))
         self.agents_timesteps = np.zeros(len(self.agents))
+
+    def _get_constructor_parameters(self):
+        return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, use_frame_stack=self.use_frame_stack,
+                    hidden_dim=self.hidden_dim, seed=self.seed)
 
     def set_agents(self, agents):
         self.agents = agents

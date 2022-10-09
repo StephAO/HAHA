@@ -107,5 +107,40 @@ def create_all_agents(args, training_steps=1e7, agents_to_train='all'):
         hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))
     # TODO BCP
 
+
+def create_test_population(args, training_steps=1e7):
+    agents = []
+    h_dim= 64
+    seed = 888
+
+    name = 'frame_stack'
+    print(f'Starting training for: {name}')
+    mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_frame_stack=True, hidden_dim=h_dim, seed=seed)
+    mat.train_agents(total_timesteps=1e6)
+
+    name = 'substasks'
+    print(f'Starting training for: {name}')
+    mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_subtask_counts=True, hidden_dim=h_dim, seed=seed)
+    mat.train_agents(total_timesteps=1e6)
+
+    name = 'frame_stack+substasks'
+    print(f'Starting training for: {name}')
+    mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_subtask_counts=True, use_frame_stack=True,
+                                hidden_dim=h_dim, seed=seed)
+    mat.train_agents(total_timesteps=1e6)
+
+    name = 'nothing'
+    print(f'Starting training for: {name}')
+    mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, seed=seed)
+    mat.train_agents(total_timesteps=1e6)
+
+
+
+
+    return pop.get_agents()
+
+
 if __name__ == '__main__':
-    create_all_agents(['fcp'])
+    args = get_arguments()
+
+    # create_all_agents(args, agents_to_train=['fcp'])

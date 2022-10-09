@@ -72,18 +72,21 @@ class OAIAgent(nn.Module, ABC):
         if hasattr(self, 'manager'):
             obs['subtask_mask'] = \
                 get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
-            if self.prev_state is None:
-                obs['player_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
-                obs['teammate_completed_subtasks'] = Subtasks.SUBTASKS_TO_IDS['unknown']
+            # If this isn't the first step of the game, see if a subtask has been completed
+            if self.prev_state is not None:
+                comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, self.state, i) for i in range(2)]
+                # If a subtask has been completed, update counts
+                if comp_st[p_idx] is not None:
+                    self.player_completed_tasks[comp_st[p_idx]] += 1
+                    self.prev_st = comp_st[p_idx]
+                if comp_st[1 - p_idx] is not None:
+                    self.player_completed_tasks[comp_st[1 - p_idx]] += 1
+            # If this is the first step of the game, reset subtask counts to 0
             else:
-                comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, state, i) for i in range(2)]
-                # If no subtask is completed, set it to one number greater than a possible subtask number
-                p_comp_st = comp_st[self.p_idx] if comp_st[self.p_idx] is not None else Subtasks.NUM_SUBTASKS
-                t_comp_st = comp_st[1 - self.p_idx] if comp_st[1 - self.p_idx] is not None else Subtasks.NUM_SUBTASKS
-                obs['player_completed_subtasks'] = p_comp_st
-                obs['teammate_completed_subtasks'] = t_comp_st
-                if p_comp_st is not None:
-                    self.prev_st = p_comp_st
+                self.player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
+                self.tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
+            obs['player_completed_subtasks'] = self.player_completed_tasks
+            obs['teammate_completed_subtasks'] = self.tm_completed_tasks
             self.prev_state = state
 
         action, _ = self.predict(obs, deterministic=deterministic)
@@ -241,7 +244,15 @@ class OAITrainer(ABC):
 
     def set_new_teammates(self):
         for i in range(self.args.n_envs):
-            self.env.env_method('set_teammate', self.teammates[np.random.randint(len(self.teammates))], indices=i)
+            # Testing to see if this will work with SubprocVecEnv
+            teammate = self.teammates[np.random.randint(len(self.teammates))]
+            copy_dir = self.args.base_dir / 'agent_models' / 'temp' / f'teammate_{i}'
+            try:
+                teammate_policy = type(teammate.policy).load(copy_dir)
+            except FileNotFoundError:
+                teammate.policy.save(copy_dir)
+                teammate_policy = type(teammate.policy).load(copy_dir)
+            self.env.env_method('set_teammate', teammate_policy, indices=i)
 
     def get_agents(self) -> List[OAIAgent]:
         """
