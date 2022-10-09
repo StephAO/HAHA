@@ -134,7 +134,10 @@ def create_test_population(args, training_steps=1e7):
     mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, seed=seed)
     mat.train_agents(total_timesteps=1e6)
 
-    return pop.get_agents()
+    name = 'lstm'
+    print(f'Starting training for: {name}')
+    mat = MultipleAgentsTrainer(args, name=name, num_agents=1, lstm=True, hidden_dim=h_dim, seed=seed)
+    mat.train_agents(total_timesteps=1e6)
 
 
 if __name__ == '__main__':

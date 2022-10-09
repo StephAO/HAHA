@@ -168,7 +168,7 @@ class OvercookedGymEnv(Env):
         if self.main_agent_stack_frames:
             self.stack_frames[self.p_idx] = True
         # TODO Get rid of magic numbers
-        if self.teammate is not None and self.teammate.observation_space['visual_obs'].shape[0] == 18 * self.args.num_stack:
+        if self.teammate is not None and self.teammate.policy.observation_space['visual_obs'].shape[0] == 18 * self.args.num_stack:
             self.stack_frames[self.t_idx] = True
 
         if self.is_eval_env:
