@@ -1,5 +1,5 @@
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
-from oai_agents.common.subtasks import Subtasks, calculate_completed_subtask
+from oai_agents.common.subtasks import Subtasks, calculate_completed_subtask, get_doable_subtasks
 
 from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld, Action, Direction
 from overcooked_ai_py.mdp.overcooked_env import OvercookedEnv
@@ -38,8 +38,8 @@ class OvercookedGymEnv(Env):
             self.stackedobs = StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first')
             self.obs_dict['visual_obs'] = self.stackedobs.stack_observation_space(self.obs_dict['visual_obs'])
         if ret_completed_subtasks:
-            self.obs_dict['player_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS), dtype=np.int)
-            self.obs_dict['teammate_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS), dtype=np.int)
+            self.obs_dict['player_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
+            self.obs_dict['teammate_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
             self.obs_dict['subtask_mask'] = spaces.MultiBinary(Subtasks.NUM_SUBTASKS)
         self.observation_space = spaces.Dict(self.obs_dict)
         self.return_completed_subtasks = ret_completed_subtasks
