@@ -7,6 +7,7 @@ from overcooked_ai_py.mdp.overcooked_mdp import Action
 
 from abc import ABC, abstractmethod
 import argparse
+from copy import deepcopy
 from pathlib import Path
 import numpy as np
 import torch as th
@@ -244,15 +245,9 @@ class OAITrainer(ABC):
 
     def set_new_teammates(self):
         for i in range(self.args.n_envs):
-            # Testing to see if this will work with SubprocVecEnv
             teammate = self.teammates[np.random.randint(len(self.teammates))]
-            copy_dir = self.args.base_dir / 'agent_models' / 'temp'
-            try:
-                teammate_policy = type(teammate.policy).load(copy_dir / f'teammate_{i}')
-            except FileNotFoundError:
-                copy_dir.mkdir(parents=True, exist_ok=True)
-                teammate.policy.save(copy_dir / f'teammate_{i}')
-                teammate_policy = type(teammate.policy).load(copy_dir / f'teammate_{i}')
+            # Deepcopy is required to avoid issues with SubprocVecEnv's multiprocessing
+            teammate_policy = deepcopy(teammate.policy)
             self.env.env_method('set_teammate', teammate_policy, indices=i)
 
     def get_agents(self) -> List[OAIAgent]:

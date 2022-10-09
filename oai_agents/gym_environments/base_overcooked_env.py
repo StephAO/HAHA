@@ -34,16 +34,21 @@ class OvercookedGymEnv(Env):
         # Currently 20 is the default value for recipe time (which I believe is the largest value used
         self.obs_dict = {}
         self.obs_dict['visual_obs'] = spaces.Box(0, 20, (18, *self.grid_shape), dtype=np.int)
+        # Stacked obs for main player (index 0) and teammate (index 1)
+        self.stackedobs = [StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first'),
+                           StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first')]
         if stack_frames:
-            self.stackedobs = StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first')
-            self.obs_dict['visual_obs'] = self.stackedobs.stack_observation_space(self.obs_dict['visual_obs'])
+            self.obs_dict['visual_obs'] = self.stackedobs[0].stack_observation_space(self.obs_dict['visual_obs'])
+
         if ret_completed_subtasks:
             self.obs_dict['player_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
             self.obs_dict['teammate_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
             self.obs_dict['subtask_mask'] = spaces.MultiBinary(Subtasks.NUM_SUBTASKS)
         self.observation_space = spaces.Dict(self.obs_dict)
         self.return_completed_subtasks = ret_completed_subtasks
-        self.stack_frames = stack_frames
+        # Default stack frames to false since we don't currently know who is playing what - properly set in reset
+        self.main_agent_stack_frames = stack_frames
+        self.stack_frames = [False, False]
 
         self.action_space = spaces.Discrete(len(Action.ALL_ACTIONS))
         self.teammate = None
@@ -108,12 +113,12 @@ class OvercookedGymEnv(Env):
 
     def get_obs(self, p_idx=None, done=False):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
-        if self.stack_frames:
+        if self.stack_frames[p_idx]:
             obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
             if self.prev_state is None: # On reset
-                obs['visual_obs'] = self.stackedobs.reset(obs['visual_obs'])
+                obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
             else:
-                obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([False]), [{}])
+                obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([False]), [{}])
             obs['visual_obs'] = obs['visual_obs'].squeeze()
         if self.return_completed_subtasks:
             obs['subtask_mask'] = self.action_masks()
@@ -128,6 +133,7 @@ class OvercookedGymEnv(Env):
                     self.player_completed_tasks[comp_st[1 - p_idx]] += 1
             obs['player_completed_subtasks'] = self.player_completed_tasks
             obs['teammate_completed_subtasks'] = self.tm_completed_tasks
+
         return obs
 
     def step(self, action):
@@ -159,6 +165,11 @@ class OvercookedGymEnv(Env):
     def reset(self):
         self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
+        if self.main_agent_stack_frames:
+            self.stack_frames[self.p_idx] = True
+        # TODO Get rid of magic numbers
+        if self.teammate is not None and self.teammate.observation_space['visual_obs'].shape[0] == 18 * self.args.num_stack:
+            self.stack_frames[self.t_idx] = True
 
         if self.is_eval_env:
             ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}

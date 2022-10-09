@@ -143,7 +143,7 @@ class MultipleAgentsTrainer(OAITrainer):
             self.env.env_method('init', indices=i, **{'index': i % n_layouts, **init_kwargs})
 
         eval_envs_kwargs = {'ret_completed_subtasks': use_subtask_counts, 'stack_frames': use_frame_stack,
-                     'is_eval_env': True, 'args': args}
+                            'is_eval_env': True, 'args': args}
         self.eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         policy_kwargs = dict(
