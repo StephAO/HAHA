@@ -230,7 +230,8 @@ class OAITrainer(ABC):
         timestep = timestep or eval_agent.num_timesteps
         for i, env in enumerate(self.eval_envs):
             env.set_teammate(eval_teammate)
-            mean_reward, std_reward = evaluate_policy(eval_agent, self.env, n_eval_episodes=num_episodes, deterministic=False, warn=False, render=visualize)
+            mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_episodes,
+                                                      deterministic=False, warn=False, render=visualize)
             tot_mean_reward.append(mean_reward)
             print(f'Eval at timestep {timestep} for layout {self.args.layout_names[i]}: {mean_reward}')
             wandb.log({f'eval_mean_reward_{self.args.layout_names[i]}': mean_reward, 'timestep': timestep})
@@ -282,8 +283,8 @@ class OAITrainer(ABC):
         self.agents = agents
         return self.agents
 
-
-# Load any an
+# MOVE TO UTIL FILE
+# Load any agent
 def load_agent(agent_path, args=None):
     args = args or get_arguments()
     agent_path = Path(agent_path)

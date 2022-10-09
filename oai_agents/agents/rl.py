@@ -8,13 +8,12 @@ from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
 import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
 EPOCH_TIMESTEPS = 10000
-VEC_ENV_CLS = DummyVecEnv#SubprocVecEnv
-
+VEC_ENV_CLS = DummyVecEnv #SubprocVecEnv
 
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
@@ -231,32 +230,7 @@ class MultipleAgentsTrainer(OAITrainer):
         del mid
         return agents
 
-    ### BASELINES ###
-    @staticmethod
-    def create_selfplay_agent(args, training_steps=1e8):
-        self_play_trainer = MultipleAgentsTrainer(args, name='selfplay', num_agents=1, use_lstm=False)
-        self_play_trainer.train_agents(total_timesteps=training_steps)
-        return self_play_trainer.get_agents()
 
-    @staticmethod
-    def create_fcp_population(args, training_steps=1e8):
-        agents = []
-        for h_dim in [256, 16]:
-            for use_lstm in [False, True]:
-                seed = 88
-                #     for seed in [1, 20]:#, 300, 4000]:
-                ck_rate = training_steps / 10
-                name = f'lstm_{h_dim}' if use_lstm else f'no_lstm_{h_dim}'
-                print(f'Starting training for: {name}')
-                mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_lstm=use_lstm, hidden_dim=h_dim,
-                                            fcp_ck_rate=ck_rate, seed=seed)
-                mat.train_agents(total_timesteps=training_steps)
-                mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp'), tag=name)
-                agents.extend(mat.get_fcp_agents())
-        pop = MultipleAgentsTrainer(args, num_agents=0)
-        pop.set_agents(agents)
-        pop.save_agents(args.base_dir / 'agent_models' / 'fcp' / f'{len(agents)}_pop')
-        return pop.get_agents()
 
 
 if __name__ == '__main__':

@@ -92,7 +92,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
             tms = bct.get_agents()
         else:
             tsa = MultipleAgentsTrainer(args)
-            tsa.train_agents(total_timesteps=1e8)
+            tsa.train_agents(total_timesteps=1e7)
             tms = tsa.get_agents()
 
         # Train 12 individual agents, each for a respective subtask
@@ -118,8 +118,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         model = cls(agents=agents, args=args)
         path = args.base_dir / 'agent_models' / model.name
         Path(path).mkdir(parents=True, exist_ok=True)
-        tag = args.exp_name
-        model.save(path / tag)
+        model.save(path / args.exp_name)
         return model, tms
 
 
