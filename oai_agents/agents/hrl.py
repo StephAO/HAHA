@@ -84,6 +84,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
 
     @classmethod
     def create_model_from_scratch(cls, args, teammates=None, dataset_file=None) -> Tuple['OAIAgent', List['OAIAgent']]:
+        # Define teammates
         if teammates is not None:
             tms = teammates
         elif dataset_file is not None:
@@ -98,14 +99,17 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Train 12 individual agents, each for a respective subtask
         agents = []
         for i in range(Subtasks.NUM_SUBTASKS):
-            # RL single subtask agents trained with BC partner
+            # RL single subtask agents trained with teammeates
             # Make necessary envs
             n_layouts = len(self.args.layout_names)
-            env_kwargs = {'single_subtask_id': i, 'args': args}
-            env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs={'full_init':False, 'args':args},
+
+            env_kwargs = {'full_init': False, 'stack_frames': use_frame_stack, 'args': args}
+            env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs,
                                vec_env_cls=VEC_ENV_CLS)
+
+            init_kwargs = {'single_subtask_id': i, 'args': args}
             for i in range(self.args.n_envs):
-                env.env_method('init', indices=i, **{'index': i % n_layouts, **env_kwargs})
+                env.env_method('init', indices=i, **{'index': i % n_layouts, **init_kwargs})
 
             eval_envs = [OvercookedSubtaskGymEnv(**{'index': i, 'is_eval_env': True, **env_kwargs})
                          for i in range(n_layouts)]
@@ -134,17 +138,19 @@ class Manager:
 
 class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
-    def __init__(self, worker, teammates, args, name=None):
+    def __init__(self, worker, teammates, args, use_frame_stack=False, name=None):
         name = name or 'rl_manager'
-
         n_layouts = len(self.args.layout_names)
-        env_kwargs = {'worker': worker, 'shape_rewards': False, 'randomize_start': True, 'args': args}
-        env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs={'full_init': False, 'args': args},
-                           vec_env_cls=VEC_ENV_CLS)
-        for i in range(self.args.n_envs):
-            env.env_method('init', indices=i, **{'index': i % n_layouts, **env_kwargs})
+        env_kwargs = {'full_init': False, 'ret_completed_subtasks': use_subtask_counts,
+                      'stack_frames': use_frame_stack, 'args': args}
+        env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs, vec_env_cls=VEC_ENV_CLS)
 
-        eval_envs_kwargs = {'worker': worker, 'shape_rewards': False, 'is_eval_env': True, 'args': args}
+        init_kwargs = {'worker': worker, 'shape_rewards': False, 'args': args}
+        for i in range(self.args.n_envs):
+            env.env_method('init', indices=i, **{'index': i % n_layouts, **init_kwargs})
+
+        eval_envs_kwargs = {'worker': worker, 'shape_rewards': False, 'stack_frames': use_frame_stack,
+                            'is_eval_env': True, 'args': args}
         eval_envs = [OvercookedManagerGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         self.worker = worker

@@ -7,12 +7,12 @@ from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
 import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecFrameStack
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
 EPOCH_TIMESTEPS = 10000
-VEC_ENV_CLS = SubprocVecEnv # DummyVecEnv
+VEC_ENV_CLS = SubprocVecEnv #DummyVecEnv #  #
 
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
@@ -31,22 +31,21 @@ class SingleAgentTrainer(OAITrainer):
         self.n_tm = len(teammates)
         if env is None:
             n_layouts = len(self.args.layout_names)
-            env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts, 'args': args}
-            self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, env_kwargs={'full_init': False, 'args': args},
-                                    vec_env_cls=VEC_ENV_CLS)
+            env_kwargs = {'full_init': False, 'ret_completed_subtasks': use_subtask_counts,
+                          'stack_frames': use_frame_stack, 'args': args}
+            self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, vec_env_cls=VEC_ENV_CLS,
+                                    env_kwargs=env_kwargs)
 
+            init_args = {'shape_rewards': True, 'args': args}
             for i in range(self.args.n_envs):
-                self.env.env_method('init', indices=i, **{'index': i % n_layouts, **env_kwargs})
+                self.env.env_method('init', indices=i, **{'index': i % n_layouts, **init_args})
 
-            eval_envs_kwargs = {'is_eval_env': True, 'ret_completed_subtasks': use_subtask_counts, 'args': args}
+            eval_envs_kwargs = {'is_eval_env': True, 'ret_completed_subtasks': use_subtask_counts,
+                                'stack_frames': use_frame_stack, 'args': args}
             self.eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
         else:
             self.env = env
             self.eval_envs = eval_envs
-
-        if self.use_frame_stack:
-            self.env = VecFrameStack(self.env, args.num_stack, channels_order='first')
-            self.eval_envs = [VecFrameStack(ee, args.num_stack, channels_order='first') for ee in self.eval_envs]
 
         self.use_subtask_eval = use_subtask_eval
 
@@ -134,21 +133,18 @@ class MultipleAgentsTrainer(OAITrainer):
         self.use_frame_stack = use_frame_stack
 
         n_layouts = len(self.args.layout_names)
-        env_kwargs = {'shape_rewards': True, 'args': args}
-        self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, vec_env_cls=VEC_ENV_CLS, 
-                                env_kwargs={'full_init': False, 'ret_completed_subtasks': use_subtask_counts, 'args': args})
+        env_kwargs = {'full_init': False, 'ret_completed_subtasks': use_subtask_counts,
+                      'stack_frames': use_frame_stack, 'args': args}
+        self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, vec_env_cls=VEC_ENV_CLS,
+                                env_kwargs=env_kwargs)
 
+        init_kwargs = {'shape_rewards': True, 'args': args}
         for i in range(self.args.n_envs):
-            self.env.env_method('init', indices=i, **{'index': i % n_layouts, **env_kwargs})
+            self.env.env_method('init', indices=i, **{'index': i % n_layouts, **init_kwargs})
 
-        eval_envs_kwargs = {'shape_rewards': False, 'ret_completed_subtasks': use_subtask_counts, 'is_eval_env': True, 'args': args}
-        self.eval_envs = [
-            make_vec_env(OvercookedGymEnv, n_envs=1, vec_env_cls=VEC_ENV_CLS, env_kwargs={'index': i, **eval_envs_kwargs})
-            for i in range(n_layouts)]
-
-        if self.use_frame_stack:
-            self.env = VecFrameStack(self.env, args.num_stack, channels_order='first')
-            self.eval_envs = [VecFrameStack(ee, args.num_stack, channels_order='first') for ee in self.eval_envs]
+        eval_envs_kwargs = {'ret_completed_subtasks': use_subtask_counts, 'stack_frames': use_frame_stack,
+                     'is_eval_env': True, 'args': args}
+        self.eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         policy_kwargs = dict(
             net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]

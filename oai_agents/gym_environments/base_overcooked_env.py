@@ -13,13 +13,14 @@ import numpy as np
 import pygame
 from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE
 from stable_baselines3.common.env_checker import check_env
+from stable_baselines3.common.vec_env.stacked_observations import StackedObservations
 
 USEABLE_COUNTERS = 5
 
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, full_init=True, ret_completed_subtasks=False, grid_shape=None, args=None, **kwargs):
+    def __init__(self, full_init=True, ret_completed_subtasks=False, stack_frames=False, grid_shape=None, args=None, **kwargs):
         if args.encoding_fn == 'OAI_egocentric':
             # Override grid shape to make it egocentric
             assert grid_shape is None, 'Grid shape cannot be used when egocentric encodings are used!'
@@ -33,12 +34,16 @@ class OvercookedGymEnv(Env):
         # Currently 20 is the default value for recipe time (which I believe is the largest value used
         self.obs_dict = {}
         self.obs_dict['visual_obs'] = spaces.Box(0, 20, (18, *self.grid_shape), dtype=np.int)
+        if stack_frames:
+            self.stackedobs = StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first')
+            self.obs_dict['visual_obs'] = self.stackedobs.stack_observation_space(self.obs_dict['visual_obs'])
         if ret_completed_subtasks:
             self.obs_dict['player_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS), dtype=np.int)
             self.obs_dict['teammate_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS), dtype=np.int)
             self.obs_dict['subtask_mask'] = spaces.MultiBinary(Subtasks.NUM_SUBTASKS)
         self.observation_space = spaces.Dict(self.obs_dict)
         self.return_completed_subtasks = ret_completed_subtasks
+        self.stack_frames = stack_frames
 
         self.action_space = spaces.Discrete(len(Action.ALL_ACTIONS))
         self.teammate = None
@@ -101,8 +106,15 @@ class OvercookedGymEnv(Env):
     def action_masks(self):
         return get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
 
-    def get_obs(self, p_idx=None):
+    def get_obs(self, p_idx=None, done=False):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
+        if self.stack_frames:
+            obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
+            if self.prev_state is None: # On reset
+                obs['visual_obs'] = self.stackedobs.reset(obs['visual_obs'])
+            else:
+                obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([False]), [{}])
+            obs['visual_obs'] = obs['visual_obs'].squeeze()
         if self.return_completed_subtasks:
             obs['subtask_mask'] = self.action_masks()
             # If this isn't the first step of the game, see if a subtask has been completed
@@ -142,7 +154,7 @@ class OvercookedGymEnv(Env):
             shaped_r = info['shaped_r_by_agent'][self.p_idx] if self.p_idx else sum(info['shaped_r_by_agent'])
             reward = sparse_r * ratio + shaped_r * (1 - ratio)
         self.step_count += 1
-        return self.get_obs(self.p_idx), reward, done, info
+        return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self):
         self.p_idx = np.random.randint(2)

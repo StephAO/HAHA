@@ -78,8 +78,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                     print(f'Worker Failure! -> goal: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask]}, completed: {completed_subtask_str}', flush=True)
                 ready_for_next_subtask = (completed_subtask is not None)
 
-        obs = self.get_obs(self.p_idx)
-        return obs, reward, done, info
+        return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self):
         if self.evaluation_mode:
