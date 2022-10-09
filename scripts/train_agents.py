@@ -142,5 +142,5 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
-
+    create_test_population(args)
     # create_all_agents(args, agents_to_train=['fcp'])

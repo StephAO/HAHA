@@ -246,12 +246,13 @@ class OAITrainer(ABC):
         for i in range(self.args.n_envs):
             # Testing to see if this will work with SubprocVecEnv
             teammate = self.teammates[np.random.randint(len(self.teammates))]
-            copy_dir = self.args.base_dir / 'agent_models' / 'temp' / f'teammate_{i}'
+            copy_dir = self.args.base_dir / 'agent_models' / 'temp'
             try:
-                teammate_policy = type(teammate.policy).load(copy_dir)
+                teammate_policy = type(teammate.policy).load(copy_dir / f'teammate_{i}')
             except FileNotFoundError:
-                teammate.policy.save(copy_dir)
-                teammate_policy = type(teammate.policy).load(copy_dir)
+                copy_dir.mkdir(parents=True, exist_ok=True)
+                teammate.policy.save(copy_dir / f'teammate_{i}')
+                teammate_policy = type(teammate.policy).load(copy_dir / f'teammate_{i}')
             self.env.env_method('set_teammate', teammate_policy, indices=i)
 
     def get_agents(self) -> List[OAIAgent]:
