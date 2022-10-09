@@ -12,7 +12,7 @@ def calculate_agent_pairing_score_matrix(agents, args):
     for eval_env in eval_envs:
         for i, p1 in enumerate(agents):
             for j, p2 in enumerate(agents):
-                env.set_teammate(p2)
+                env.set_teammate(p2.policy)
                 mean_reward, std_reward = evaluate_policy(p1, eval_env, n_eval_episodes=1,
                                                           deterministic=True, warn=False, render=False)
                 score_matrix[i][j] = mean_reward

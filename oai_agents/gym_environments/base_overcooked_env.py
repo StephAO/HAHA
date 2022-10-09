@@ -12,6 +12,7 @@ from gym import Env, spaces, register
 import numpy as np
 import pygame
 from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE
+from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env.stacked_observations import StackedObservations
 
@@ -98,6 +99,7 @@ class OvercookedGymEnv(Env):
         self.tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
 
     def set_teammate(self, teammate):
+        assert isinstance(teammate, BaseAlgorithm) or isinstance(teammate, BehaviouralCloningPolicy)
         self.teammate = teammate
 
     def setup_visualization(self):

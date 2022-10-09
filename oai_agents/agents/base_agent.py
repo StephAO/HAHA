@@ -233,7 +233,7 @@ class OAITrainer(ABC):
         tot_mean_reward = []
         timestep = timestep or eval_agent.num_timesteps
         for i, env in enumerate(self.eval_envs):
-            env.set_teammate(eval_teammate)
+            env.set_teammate(eval_teammate.policy)
             mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_episodes,
                                                       deterministic=False, warn=False, render=visualize)
             tot_mean_reward.append(mean_reward)

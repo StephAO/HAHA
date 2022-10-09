@@ -92,7 +92,7 @@ class App:
             agents = ['human', tm]
         else:
             self.env = OvercookedGymEnv(args=args, ret_completed_subtasks=True)
-            self.env.set_teammate(teammate)
+            self.env.set_teammate(teammate.policy)
 
         self.grid_shape = self.env.grid_shape
         if traj_file is not None:

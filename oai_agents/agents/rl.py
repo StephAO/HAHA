@@ -93,7 +93,7 @@ class SingleAgentTrainer(OAITrainer):
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
             eval_teammate = self.teammates[eval_tm_idx]
             if self.use_subtask_eval:
-                self.eval_env.set_teammate(eval_teammate)
+                self.eval_env.set_teammate(eval_teammate.policy)
                 all_successes = self.eval_env.evaluate(self.learning_agent)
                 self.num_success = (self.num_success + 1) if all_successes else 0
                 if self.num_success >= 5:
