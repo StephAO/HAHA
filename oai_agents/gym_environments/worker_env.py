@@ -69,7 +69,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
     def step(self, action):
         if self.teammate is None:
-            raise ValueError('set_teammate must be set called before starting game unless play_both_players is True')
+            raise ValueError('set_teammate must be set called before starting game.')
         joint_action = [None, None]
         joint_action[self.p_idx] = action
         joint_action[self.t_idx] = self.teammate.predict(self.get_obs(p_idx=self.t_idx))[0]

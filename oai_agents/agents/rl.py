@@ -33,21 +33,19 @@ class SingleAgentTrainer(OAITrainer):
         if env is None:
             n_layouts = len(self.args.layout_names)
             env_kwargs = {'shape_rewards': True, 'randomize_start': True, 'args': args}
-            self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, env_kwargs={'call_init': False},
+            self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, env_kwargs={'full_init': False, 'args': args},
                                     vec_env_cls=VEC_ENV_CLS)
             for i in range(self.args.n_envs):
-                self.env.env_method('init', indices=i, kwargs={'index': i % n_layouts, **env_kwargs})
+                self.env.env_method('init', indices=i, **{'index': i % n_layouts, **env_kwargs})
 
             eval_envs_kwargs = {'is_eval_env': True, 'args': args}
-            self.eval_envs = [OvercookedGymEnv(kwargs={'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
+            self.eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
         else:
             self.env = env
             self.eval_envs = eval_envs
         self.use_subtask_eval = use_subtask_eval
 
         policy_kwargs = dict(
-            # features_extractor_class=OAISinglePlayerFeatureExtractor,
-            # features_extractor_kwargs=dict(features_dim=hidden_dim),
             net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
         )
         if use_lstm:
@@ -127,14 +125,14 @@ class MultipleAgentsTrainer(OAITrainer):
         self.fcp_ck_rate = fcp_ck_rate
 
         n_layouts = len(self.args.layout_names)
-        env_kwargs = {'shape_rewards': True, 'randomize_start': True, 'args': args}
-        self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, env_kwargs={'call_init': False},
+        env_kwargs = {'shape_rewards': True, 'args': args}
+        self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, env_kwargs={'full_init': False, 'args': args},
                                 vec_env_cls=VEC_ENV_CLS)
         for i in range(self.args.n_envs):
-            env.env_method('init', indices=i, kwargs={'index': i % n_layouts, **env_kwargs})
+            self.env.env_method('init', indices=i, **{'index': i % n_layouts, **env_kwargs})
 
         eval_envs_kwargs = {'shape_rewards': False, 'is_eval_env': True, 'args': args}
-        self.eval_envs = [OvercookedGymEnv(kwargs={'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
+        self.eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         policy_kwargs = dict(
             # features_extractor_class=OAISinglePlayerFeatureExtractor,

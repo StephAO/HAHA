@@ -4,6 +4,7 @@ from oai_agents.common.subtasks import Subtasks, calculate_completed_subtask
 from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld, Action, Direction
 from overcooked_ai_py.mdp.overcooked_env import OvercookedEnv
 from overcooked_ai_py.planning.planners import MediumLevelActionManager
+from overcooked_ai_py.utils import read_layout_dict
 from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
 
 from copy import deepcopy
@@ -18,15 +19,34 @@ USEABLE_COUNTERS = 5
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, call_init=True, **kwargs):
-        if call_init:
-            self.init(**kwargs)
+    def __init__(self, full_init=True, ret_completed_subtasks=False, grid_shape=None, args=None, **kwargs):
+        if args.encoding_fn == 'OAI_egocentric':
+            # Override grid shape to make it egocentric
+            assert grid_shape is None, 'Grid shape cannot be used when egocentric encodings are used!'
+            self.grid_shape = (7, 7)
+        elif grid_shape is None:
+            base_layout_params = read_layout_dict(layout_name)
+            grid = [layout_row.strip() for layout_row in base_layout_params['grid'].split("\n")]
+            self.grid_shape = (len(grid[0]), len(grid))
 
-    def init(self, index=None, play_both_players=False, base_env=None, horizon=None, grid_shape=None, is_eval_env=False,
-                   shape_rewards=False, ret_completed_subtasks=False, args=None):
+        # TODO improve bounds for each dimension
+        # Currently 20 is the default value for recipe time (which I believe is the largest value used
+        self.obs_dict = {}
+        self.obs_dict['visual_obs'] = spaces.Box(0, 20, (18, *self.grid_shape), dtype=np.int)
+        if ret_completed_subtasks:
+            self.obs_dict['player_completed_subtasks'] = spaces.Discrete(Subtasks.NUM_SUBTASKS + 1)
+            self.obs_dict['teammate_completed_subtasks'] = spaces.Discrete(Subtasks.NUM_SUBTASKS + 1)
+            self.obs_dict['subtask_mask'] = spaces.MultiBinary(Subtasks.NUM_SUBTASKS)
+        self.observation_space = spaces.Dict(self.obs_dict)
+        self.return_completed_subtasks = ret_completed_subtasks
+
+        self.action_space = spaces.Discrete(len(Action.ALL_ACTIONS))
+        self.teammate = None
+        if full_init:
+            self.init(args=args, **kwargs)
+
+    def init(self, index=None, base_env=None, horizon=None, is_eval_env=False, shape_rewards=False, args=None):
         '''
-        :param play_both_players: If true, play actions of both players. Step requires tuple(int, int) instead of int
-        :param grid_shape: Shape over
         :param shape_rewards: Shape rewards for RL
         :param base_env: Base overcooked environment. If None, create env from layout name. Useful if special parameters
                          are required when creating the environment
@@ -35,7 +55,6 @@ class OvercookedGymEnv(Env):
         '''
         assert index is not None
         self.layout_name = args.layout_names[index]
-        self.play_both_players = play_both_players
         if base_env is None:
             self.mdp = OvercookedGridworld.from_layout_name(self.layout_name)
             horizon = horizon or args.horizon
@@ -54,17 +73,11 @@ class OvercookedGymEnv(Env):
             self.env = OvercookedEnv.from_mdp(self.mdp, horizon=horizon, start_state_fn=ss_fn)
         else:
             self.env = base_env
-        self.grid_shape = grid_shape or self.env.mdp.shape
         self.is_eval_env = is_eval_env
         self.shape_rewards = shape_rewards
-        self.return_completed_subtasks = ret_completed_subtasks
         self.args = args
         self.device = args.device
         self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
-        if args.encoding_fn == 'OAI_egocentric':
-            # Override grid shape to make it egocentric
-            assert grid_shape is None, 'Grid shape cannot be used when egocentric encodings are used!'
-            self.grid_shape = (7, 7)
         self.visualization_enabled = False
         self.step_count = 0
         self.teammate = None
@@ -73,24 +86,6 @@ class OvercookedGymEnv(Env):
         obs = self.reset()
         self.visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
         self.agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0
-        # TODO improve bounds for each dimension
-        # Currently 20 is the default value for recipe time (which I believe is the largest value used
-        self.obs_dict = {}
-        if np.prod(self.visual_obs_shape) > 0:
-            self.obs_dict['visual_obs'] = spaces.Box(0, 20, self.visual_obs_shape, dtype=np.int)
-        if np.prod(self.agent_obs_shape) > 0:
-            self.obs_dict['agent_obs'] = spaces.Box(0, self.args.horizon, self.agent_obs_shape, dtype=np.float32)
-        if ret_completed_subtasks:
-            self.obs_dict['player_completed_subtasks'] = spaces.Discrete(Subtasks.NUM_SUBTASKS + 1)
-            self.obs_dict['teammate_completed_subtasks'] = spaces.Discrete(Subtasks.NUM_SUBTASKS + 1)
-            self.obs_dict['subtask_mask'] = spaces.MultiBinary(Subtasks.NUM_SUBTASKS)
-        self.observation_space = spaces.Dict(self.obs_dict)
-
-        if play_both_players:  # We control both agents
-            self.action_space = spaces.MultiDiscrete([len(Action.ALL_ACTIONS), len(Action.ALL_ACTIONS)])
-        else:  # We control 1 agent
-            self.action_space = spaces.Discrete(len(Action.ALL_ACTIONS))
-            self.teammate = None
 
     def set_teammate(self, teammate):
         self.teammate = teammate
@@ -125,15 +120,12 @@ class OvercookedGymEnv(Env):
         return obs
 
     def step(self, action):
-        if not self.play_both_players and self.teammate is None:
-            raise ValueError('set_teammate must be set called before starting game unless play_both_players is True')
-        if self.play_both_players: # We control both agents
-            joint_action = action
-        else: # We control 1 agent
-            joint_action = [None, None]
-            joint_action[self.p_idx] = action
-            joint_action[self.t_idx] = self.teammate.predict(self.get_obs(p_idx=self.t_idx))[0]
+        if self.teammate is None:
+            raise ValueError('set_teammate must be set called before starting game.')
 
+        joint_action = [None, None]
+        joint_action[self.p_idx] = action
+        joint_action[self.t_idx] = self.teammate.predict(self.get_obs(p_idx=self.t_idx))[0]
         joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
@@ -154,9 +146,8 @@ class OvercookedGymEnv(Env):
         return self.get_obs(self.p_idx), reward, done, info
 
     def reset(self):
-        if not self.play_both_players:
-            self.p_idx = np.random.randint(2)
-            self.t_idx = 1 - self.p_idx
+        self.p_idx = np.random.randint(2)
+        self.t_idx = 1 - self.p_idx
 
         if self.is_eval_env:
             ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}

@@ -141,7 +141,7 @@ def OAI_BC_featurize_state(mdp: OvercookedGridworld, state: OvercookedState, gri
 
 def OAI_RL_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int, p_idx=None):
     """
-    Uses Overcooked-ai's RL lossless encoding by stacking 20 binary masks (20xNxM). Only returns visual_obs.
+    Uses Overcooked-ai's RL lossless encoding by stacking 26 binary masks (26xNxM). Only returns visual_obs.
     """
     visual_obs = mdp.lossless_state_encoding(state, horizon=horizon)
     visual_obs = np.stack(visual_obs, axis=0)
@@ -175,7 +175,7 @@ def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState
     # Remove orientation features since they are now irrelevant.
     # There are num_players * num_directions features.
     num_layers_to_skip = num_players*len(Direction.ALL_DIRECTIONS)
-    idx_slice =list(range(num_players)) + list(range(num_players+num_layers_to_skip, num_features))
+    idx_slice = list(range(num_players)) + list(range(num_players+num_layers_to_skip, num_features))
     visual_obs = visual_obs[:, idx_slice, :, :]
     assert visual_obs.shape[1] == num_features - num_layers_to_skip
     num_features = num_features - num_layers_to_skip
@@ -189,7 +189,6 @@ def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState
         ego_visual_obs = np.stack([get_egocentric_grid(visual_obs[idx], grid_shape, player)
                                    for idx, player in enumerate(state.players)])
         assert ego_visual_obs.shape == (num_players, num_features, *grid_shape)
-
     return {'visual_obs': ego_visual_obs}
 
 

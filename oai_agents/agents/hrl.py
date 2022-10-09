@@ -102,12 +102,12 @@ class MultiAgentSubtaskWorker(OAIAgent):
             # Make necessary envs
             n_layouts = len(self.args.layout_names)
             env_kwargs = {'single_subtask_id': i, 'args': args}
-            env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs={'call_init': False},
+            env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs={'full_init':False, 'args':args},
                                vec_env_cls=VEC_ENV_CLS)
             for i in range(self.args.n_envs):
-                env.env_method('init', indices=i, kwargs={'index': i % n_layouts, **env_kwargs})
+                env.env_method('init', indices=i, **{'index': i % n_layouts, **env_kwargs})
 
-            eval_envs = [OvercookedSubtaskGymEnv(kwargs={'index': i, 'is_eval_env': True, **env_kwargs})
+            eval_envs = [OvercookedSubtaskGymEnv(**{'index': i, 'is_eval_env': True, **env_kwargs})
                          for i in range(n_layouts)]
             # Create trainer
             rl_sat = SingleAgentTrainer(tms, args, env=env, eval_envs=eval_envs)
@@ -140,13 +140,13 @@ class RLManagerTrainer(SingleAgentTrainer):
 
         n_layouts = len(self.args.layout_names)
         env_kwargs = {'worker': worker, 'shape_rewards': False, 'randomize_start': True, 'args': args}
-        env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs={'call_init': False},
+        env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs={'full_init': False, 'args': args},
                            vec_env_cls=VEC_ENV_CLS)
         for i in range(self.args.n_envs):
-            env.env_method('init', indices=i, kwargs={'index': i % n_layouts, **env_kwargs})
+            env.env_method('init', indices=i, **{'index': i % n_layouts, **env_kwargs})
 
         eval_envs_kwargs = {'worker': worker, 'shape_rewards': False, 'is_eval_env': True, 'args': args}
-        eval_envs = [OvercookedManagerGymEnv(kwargs={'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
+        eval_envs = [OvercookedManagerGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         self.worker = worker
         super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env, eval_envs=eval_envs,

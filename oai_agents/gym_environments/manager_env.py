@@ -10,9 +10,13 @@ import torch as th
 
 
 class OvercookedManagerGymEnv(OvercookedGymEnv):
+    def __init__(self, **kwargs):
+        kwargs['ret_completed_subtasks'] = True
+        super(OvercookedManagerGymEnv, self).__init__(**kwargs)
+
     def init(self, worker=None, ret_completed_subtasks=True, **kwargs):
         self.worker = worker
-        super(OvercookedManagerGymEnv, self).init(ret_completed_subtasks=True, **kwargs)
+        super(OvercookedManagerGymEnv, self).init(**kwargs)
         self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
 
     def get_low_level_obs(self, p_idx=None):
@@ -25,8 +29,6 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
 
     def step(self, action):
-        # if self.teammate is None:
-        #     raise ValueError('set_teammate must be set called before starting game unless play_both_players is True')
         # Action is the subtask for subtask agent to perform
         self.curr_subtask = action.cpu() if type(action) == th.tensor else action
         # Manager can only choose the unknown subtask if no other subtask is possible. If this is the case, the manager
