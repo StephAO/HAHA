@@ -92,7 +92,7 @@ class App:
             agents = ['human', tm]
         else:
             self.env = OvercookedGymEnv(args=args, ret_completed_subtasks=True)
-            self.env.set_teammate(teammate.policy)
+            self.env.set_teammate(teammate)
 
         self.grid_shape = self.env.grid_shape
         if traj_file is not None:
@@ -389,7 +389,6 @@ if __name__ == "__main__":
 
     worker = MultiAgentSubtaskWorker.load(
             Path('./agent_models/multi_agent_subtask_worker/counter_circuit_o_1order/test/'), args)
-
 
     hm_hrl = HumanManagerHRL(worker, args)
 

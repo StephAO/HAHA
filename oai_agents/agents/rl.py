@@ -12,7 +12,7 @@ from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
 EPOCH_TIMESTEPS = 10000
-VEC_ENV_CLS = SubprocVecEnv #DummyVecEnv #  #
+VEC_ENV_CLS = DummyVecEnv #SubprocVecEnv
 
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
@@ -93,7 +93,7 @@ class SingleAgentTrainer(OAITrainer):
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
             eval_teammate = self.teammates[eval_tm_idx]
             if self.use_subtask_eval:
-                self.eval_env.set_teammate(eval_teammate.policy)
+                self.eval_env.set_teammate(eval_teammate)
                 all_successes = self.eval_env.evaluate(self.learning_agent)
                 self.num_success = (self.num_success + 1) if all_successes else 0
                 if self.num_success >= 5:
@@ -147,6 +147,8 @@ class MultipleAgentsTrainer(OAITrainer):
         self.eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         policy_kwargs = dict(
+            features_extractor_class=OAISinglePlayerFeatureExtractor,
+            features_extractor_kwargs=dict(features_dim=hidden_dim),
             net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
         )
 
@@ -248,40 +250,4 @@ class MultipleAgentsTrainer(OAITrainer):
         agents.extend(mid)
         del mid
         return agents
-
-
-
-
-if __name__ == '__main__':
-    from pathlib import Path
-    args = get_arguments()
-    sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=5e6)
-    # # sp[0].save(Path('test_data'))
-    # # pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=5e6)
-    # # fcp = SingleAgentTrainer(pop, args, 'fcp')
-    # # fcp.train_agents(1e6)
-    # mat = MultipleAgentsTrainer(args, num_agents=0)
-    # mat.load_agents(path=Path('/projects/star7023/oai/agent_models/fcp/counter_circuit_o_1order/12_pop'), tag='test')
-    # teammates = mat.get_agents()
-    #
-    # rlmt = SingleAgentTrainer(teammates, args, name='fcp_main_agent')
-    # rlmt.train_agents(total_timesteps=5e6, exp_name=args.exp_name + '_fcp')
-    # sp = MultipleAgentsTrainer.create_selfplay_agent(args, training_steps=5e6)
-    # sp[0].save(Path('test_data'))
-    # pop = MultipleAgentsTrainer.create_fcp_population(args, training_steps=5e6)
-    # fcp = SingleAgentTrainer(pop, args, 'fcp')
-    # fcp.train_agents(1e6)
-    #mat = MultipleAgentsTrainer(args, num_agents=0)
-    #mat.load_agents(path=Path('/projects/star7023/oai/agent_models/fcp/counter_circuit_o_1order/12_pop'), tag='test')
-    #teammates = mat.get_agents()
-
-    # from oai_agents.agents.il import BehavioralCloningTrainer
-    #
-    # bct = BehavioralCloningTrainer(args.dataset, args)
-    # bct.train_agents(epochs=250)
-    # teammates = bct.get_agents()
-    #
-    # rlmt = SingleAgentTrainer(teammates, args, name='bcp')
-    # rlmt.train_agents(total_timesteps=5e6, exp_name=args.exp_name + '_bcp')
-
 

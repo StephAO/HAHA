@@ -233,7 +233,7 @@ class OAITrainer(ABC):
         tot_mean_reward = []
         timestep = timestep or eval_agent.num_timesteps
         for i, env in enumerate(self.eval_envs):
-            env.set_teammate(eval_teammate.policy)
+            env.set_teammate(eval_teammate)
             mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_episodes,
                                                       deterministic=False, warn=False, render=visualize)
             tot_mean_reward.append(mean_reward)
@@ -246,9 +246,7 @@ class OAITrainer(ABC):
     def set_new_teammates(self):
         for i in range(self.args.n_envs):
             teammate = self.teammates[np.random.randint(len(self.teammates))]
-            # Deepcopy is required to avoid issues with SubprocVecEnv's multiprocessing
-            teammate_policy = deepcopy(teammate.policy)
-            self.env.env_method('set_teammate', teammate_policy, indices=i)
+            self.env.env_method('set_teammate', teammate, indices=i)
 
     def get_agents(self) -> List[OAIAgent]:
         """
