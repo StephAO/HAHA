@@ -113,10 +113,10 @@ def create_test_population(args, training_steps=1e7):
     h_dim= 64
     seed = 888
 
-    name = 'frame_stack'
-    print(f'Starting training for: {name}')
-    mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_frame_stack=True, hidden_dim=h_dim, seed=seed)
-    mat.train_agents(total_timesteps=1e6)
+    # name = 'frame_stack'
+    # print(f'Starting training for: {name}')
+    # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_frame_stack=True, hidden_dim=h_dim, seed=seed)
+    # mat.train_agents(total_timesteps=1e6)
 
     name = 'substasks'
     print(f'Starting training for: {name}')

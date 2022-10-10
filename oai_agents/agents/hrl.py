@@ -141,8 +141,7 @@ class RLManagerTrainer(SingleAgentTrainer):
     def __init__(self, worker, teammates, args, use_frame_stack=False, name=None):
         name = name or 'rl_manager'
         n_layouts = len(self.args.layout_names)
-        env_kwargs = {'full_init': False, 'ret_completed_subtasks': use_subtask_counts,
-                      'stack_frames': use_frame_stack, 'args': args}
+        env_kwargs = {'full_init': False, 'stack_frames': use_frame_stack, 'args': args}
         env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs, vec_env_cls=VEC_ENV_CLS)
 
         init_kwargs = {'worker': worker, 'shape_rewards': False, 'args': args}

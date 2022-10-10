@@ -95,11 +95,10 @@ class OvercookedGymEnv(Env):
         self.terrain = self.mdp.terrain_mtx
         self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
         obs = self.reset()
-        self.player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
-        self.tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
+
 
     def set_teammate(self, teammate):
-        assert isinstance(teammate, BaseAlgorithm) or isinstance(teammate, BehaviouralCloningPolicy)
+        # TODO asser has attribute observation space
         self.teammate = teammate
 
     def setup_visualization(self):
@@ -126,15 +125,15 @@ class OvercookedGymEnv(Env):
             obs['subtask_mask'] = self.action_masks()
             # If this isn't the first step of the game, see if a subtask has been completed
             if self.prev_state is not None:
-                comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, self.state, i) for i in range(2)]
+                comp_st = calculate_completed_subtask(self.terrain, self.prev_state, self.state, p_idx)
                 # If a subtask has been completed, update counts
-                if comp_st[p_idx] is not None:
-                    self.player_completed_tasks[comp_st[p_idx]] += 1
-                    self.prev_st = comp_st[p_idx]
-                if comp_st[1 - p_idx] is not None:
-                    self.player_completed_tasks[comp_st[1 - p_idx]] += 1
-            obs['player_completed_subtasks'] = self.player_completed_tasks
-            obs['teammate_completed_subtasks'] = self.tm_completed_tasks
+                if comp_st is not None:
+                    self.completed_tasks[p_idx][comp_st] += 1
+                    if p_idx == self.p_idx:
+                        self.prev_st = comp_st
+            obs['player_completed_subtasks'] = self.completed_tasks[p_idx]
+            obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
+            # print(f"p{p_idx + 1}: {obs['player_completed_subtasks']}, {obs['teammate_completed_subtasks']}")
 
         return obs
 
@@ -182,8 +181,7 @@ class OvercookedGymEnv(Env):
         self.prev_state = None
         self.state = self.env.state
         # Reset subtask counts
-        self.player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
-        self.tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
+        self.completed_tasks = [np.zeros(Subtasks.NUM_SUBTASKS), np.zeros(Subtasks.NUM_SUBTASKS)]
         return self.get_obs(self.p_idx)
 
     def render(self, mode='human', close=False):
