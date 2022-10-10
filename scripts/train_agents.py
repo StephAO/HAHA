@@ -39,13 +39,13 @@ def create_population_play_agent(args, pop_size=8, training_steps=1e7):
 # FCP
 def create_fcp_population(args, training_steps=1e7):
     agents = []
-    for h_dim in [16, 64, 256]:
-        for use_lstm in [False, True]:
-            seed = 88
+    for h_dim in [16, 256]:
+        for use_mem in [False, True]:
+            seed = 1997
             ck_rate = training_steps / 10
-            name = f'lstm_{h_dim}' if use_lstm else f'no_lstm_{h_dim}'
+            name = f'mem_{h_dim}' if use_mem else f'no_mem_{h_dim}'
             print(f'Starting training for: {name}')
-            mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_lstm=use_lstm, hidden_dim=h_dim,
+            mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim,  use_subtask_counts=use_mem, use_frame_stack=use_mem,
                                         fcp_ck_rate=ck_rate, seed=seed)
             mat.train_agents(total_timesteps=training_steps)
             mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp'), tag=name)
@@ -77,7 +77,7 @@ def create_all_agents(args, training_steps=1e7, agents_to_train='all'):
                 fcp_pop = mat.load_agents()
             except FileNotFoundError as e:
                 print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
-                fcp_pop = create_fcp_population(args, 4e6)
+                fcp_pop = create_fcp_population(args, 5e6)
         # Create FCP agent
         fcp = create_fcp_agent(fcp_pop, args, training_steps)
         agents['fcp'] = fcp
@@ -87,7 +87,7 @@ def create_all_agents(args, training_steps=1e7, agents_to_train='all'):
             try:
                 mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
                 fcp_pop = mat.load_agents()
-            except FileNotFoundError:
+            except FileNotFoundError as e:
                 print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
                 fcp_pop = create_fcp_population(args, training_steps)
 
@@ -95,7 +95,7 @@ def create_all_agents(args, training_steps=1e7, agents_to_train='all'):
         try:
             name = 'multi_agent_subtask_worker'
             worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
             worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=fcp_pop)
 
@@ -134,13 +134,13 @@ def create_test_population(args, training_steps=1e7):
     mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, seed=seed)
     mat.train_agents(total_timesteps=1e6)
 
-    name = 'lstm'
-    print(f'Starting training for: {name}')
-    mat = MultipleAgentsTrainer(args, name=name, num_agents=1, lstm=True, hidden_dim=h_dim, seed=seed)
-    mat.train_agents(total_timesteps=1e6)
+    # name = 'lstm'
+    # print(f'Starting training for: {name}')
+    # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_lstm=True, hidden_dim=h_dim, seed=seed)
+    # mat.train_agents(total_timesteps=1e6)
 
 
 if __name__ == '__main__':
     args = get_arguments()
-    create_test_population(args)
-    # create_all_agents(args, agents_to_train=['fcp'])
+    # create_test_population(args)
+    create_all_agents(args, agents_to_train=['fcp'])

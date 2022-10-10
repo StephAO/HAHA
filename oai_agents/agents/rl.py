@@ -190,6 +190,7 @@ class MultipleAgentsTrainer(OAITrainer):
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
                          dir=str(self.args.base_dir / 'wandb'),
                          reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
+        train_counter = 0
         # Each agent should learn for `total_timesteps` steps. Keep training until all agents hit this threshold
         while any(self.agents_in_training):
             # Randomly select new teammates from population (can include learner)
@@ -202,17 +203,20 @@ class MultipleAgentsTrainer(OAITrainer):
             if self.agents_timesteps[learner_idx] > total_timesteps:
                 self.agents_in_training[learner_idx] = 0
             # Evaluate
-            eval_tm = self.teammates[np.random.randint(len(self.teammates))]
-            mean_reward = self.evaluate(self.agents[learner_idx], eval_tm, timestep=np.sum(self.agents_timesteps))
-
-            if self.fcp_ck_rate and len(self.agents) == 1:
-                if self.agents_timesteps[0] // self.fcp_ck_rate > (len(self.ck_list) - 1):
-                    path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
-                    self.ck_list.append((mean_reward, path, tag))
-            if mean_reward >= best_score:
-                best_path, best_tag = self.save_agents(tag='best')
-                print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
-                best_score = mean_reward
+            if train_counter % 2 == 0:
+                eval_tm = self.teammates[np.random.randint(len(self.teammates))]
+                mean_reward = self.evaluate(self.agents[learner_idx], eval_tm, timestep=np.sum(self.agents_timesteps))
+                # FCP checkpoint saving
+                if self.fcp_ck_rate and len(self.agents) == 1:
+                    if self.agents_timesteps[0] // self.fcp_ck_rate > (len(self.ck_list) - 1):
+                        path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
+                        self.ck_list.append((mean_reward, path, tag))
+                # Saving best model
+                if mean_reward >= best_score:
+                    best_path, best_tag = self.save_agents(tag='best')
+                    print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
+                    best_score = mean_reward
+            train_counter += 1
         self.load_agents(best_path, best_tag)
         run.finish()
 
