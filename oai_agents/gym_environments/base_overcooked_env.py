@@ -17,6 +17,7 @@ from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env.stacked_observations import StackedObservations
 
 USEABLE_COUNTERS = 5
+ENC_C = 26
 
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
@@ -34,8 +35,7 @@ class OvercookedGymEnv(Env):
         # TODO improve bounds for each dimension
         # Currently 20 is the default value for recipe time (which I believe is the largest value used
         self.obs_dict = {}
-        # self.obs_dict['visual_obs'] = spaces.Box(0, 255, (18, *self.grid_shape), dtype=np.uint8)
-        self.obs_dict['visual_obs'] = spaces.Box(0, 20, (18, *self.grid_shape), dtype=np.int)
+        self.obs_dict['visual_obs'] = spaces.Box(0, 20, (ENC_C, *self.grid_shape), dtype=np.int)
         # Stacked obs for main player (index 0) and teammate (index 1)
         self.stackedobs = [StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first'),
                            StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first')]
@@ -169,11 +169,12 @@ class OvercookedGymEnv(Env):
     def reset(self):
         self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
-        if self.main_agent_stack_frames:
-            self.stack_frames[self.p_idx] = True
+        self.stack_frames[self.p_idx] = self.main_agent_stack_frames
         # TODO Get rid of magic numbers
-        if self.teammate is not None and self.teammate.policy.observation_space['visual_obs'].shape[0] == 18 * self.args.num_stack:
-            self.stack_frames[self.t_idx] = True
+        if self.teammate is not None:
+            self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == ENC_C * self.args.num_stack
+            print(self.teammate.name, self.stack_frames[self.t_idx])
+
         self.stack_frames_need_reset = [True, True]
 
         if self.is_eval_env:

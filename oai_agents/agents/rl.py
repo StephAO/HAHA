@@ -41,7 +41,7 @@ class SingleAgentTrainer(OAITrainer):
                 self.env.env_method('init', indices=i, **{'index': i % n_layouts, **init_args})
 
             eval_envs_kwargs = {'is_eval_env': True, 'ret_completed_subtasks': use_subtask_counts,
-                                'stack_frames': use_frame_stack, 'args': args}
+                                'stack_frames': use_frame_stack, 'horizon': 400, 'args': args}
             self.eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
         else:
             self.env = env
@@ -96,7 +96,7 @@ class SingleAgentTrainer(OAITrainer):
                 self.eval_env.set_teammate(eval_teammate)
                 all_successes = self.eval_env.evaluate(self.learning_agent)
                 self.num_success = (self.num_success + 1) if all_successes else 0
-                if self.num_success >= 5:
+                if self.num_success >= 3:
                     break
             else:
                 mean_reward = self.evaluate(self.learning_agent, eval_teammate)
@@ -143,12 +143,12 @@ class MultipleAgentsTrainer(OAITrainer):
             self.env.env_method('init', indices=i, **{'index': i % n_layouts, **init_kwargs})
 
         eval_envs_kwargs = {'ret_completed_subtasks': use_subtask_counts, 'stack_frames': use_frame_stack,
-                            'is_eval_env': True, 'args': args}
+                            'is_eval_env': True, 'horizon': 400, 'args': args}
         self.eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         policy_kwargs = dict(
-            features_extractor_class=OAISinglePlayerFeatureExtractor,
-            features_extractor_kwargs=dict(features_dim=hidden_dim),
+            # features_extractor_class=OAISinglePlayerFeatureExtractor,
+            # features_extractor_kwargs=dict(features_dim=hidden_dim),
             net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
         )
 

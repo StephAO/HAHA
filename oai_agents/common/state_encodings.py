@@ -174,11 +174,11 @@ def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState
 
     # Remove orientation features since they are now irrelevant.
     # There are num_players * num_directions features.
-    num_layers_to_skip = num_players*len(Direction.ALL_DIRECTIONS)
-    idx_slice = list(range(num_players)) + list(range(num_players+num_layers_to_skip, num_features))
-    visual_obs = visual_obs[:, idx_slice, :, :]
-    assert visual_obs.shape[1] == num_features - num_layers_to_skip
-    num_features = num_features - num_layers_to_skip
+    #num_layers_to_skip = num_players*len(Direction.ALL_DIRECTIONS)
+    #idx_slice = list(range(num_players)) + list(range(num_players+num_layers_to_skip, num_features))
+    #visual_obs = visual_obs[:, idx_slice, :, :]
+    #assert visual_obs.shape[1] == num_features - num_layers_to_skip
+    #num_features = num_features - num_layers_to_skip
 
     # Now we mask out the egocentric view
     assert len(state.players) == num_players

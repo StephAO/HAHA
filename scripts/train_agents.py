@@ -39,14 +39,14 @@ def create_population_play_agent(args, pop_size=8, training_steps=1e7):
 # FCP
 def create_fcp_population(args, training_steps=1e7):
     agents = []
-    for h_dim in [16, 256]:
-        for use_mem in [False, True]:
-            seed = 1997
-            ck_rate = training_steps / 10
-            name = f'mem_{h_dim}' if use_mem else f'no_mem_{h_dim}'
+    for use_fs in [False, True]:
+        for h_dim in [32]:
+            # seed = 1997
+            ck_rate = training_steps / 20
+            name = f'fs_{h_dim}' if use_fs else f'no_fs_{h_dim}'
             print(f'Starting training for: {name}')
-            mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim,  use_subtask_counts=use_mem, use_frame_stack=use_mem,
-                                        fcp_ck_rate=ck_rate, seed=seed)
+            mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, use_frame_stack=use_fs,
+                                        fcp_ck_rate=ck_rate)
             mat.train_agents(total_timesteps=training_steps)
             mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp'), tag=name)
             agents.extend(mat.get_fcp_agents())
@@ -81,7 +81,7 @@ def create_all_agents(args, training_steps=1e7, agents_to_train='all'):
         # Create FCP agent
         fcp = create_fcp_agent(fcp_pop, args, training_steps)
         agents['fcp'] = fcp
-    if agents_to_train == 'all' or 'pp' in agents_to_train:
+    if agents_to_train == 'all' or 'hrl' in agents_to_train:
         # Get teammates
         if fcp_pop is None:
             try:
@@ -144,3 +144,9 @@ if __name__ == '__main__':
     args = get_arguments()
     # create_test_population(args)
     create_all_agents(args, agents_to_train=['fcp'])
+
+    from oai_agents.agents.base_agent import SB3Wrapper
+    pop_agents = []
+
+
+

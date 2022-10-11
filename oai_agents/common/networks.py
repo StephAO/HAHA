@@ -20,15 +20,15 @@ def weights_init_(m):
 class GridEncoder(nn.Module):
     def __init__(self, grid_shape, act=nn.ReLU):
         super(GridEncoder, self).__init__()
-        self.kernels = (4, 3, 2)
+        self.kernels = (5, 3, 3)
         self.strides = (1, 1, 1)
-        self.channels = (32, 64, 64)
+        self.channels = (32, 32, 32)
         self.padding = (1, 1)
 
         layers = []
         current_channels = grid_shape[0]
         for i, (k, s, c) in enumerate(zip(self.kernels, self.strides, self.channels)):
-            layers.append(nn.Conv2d(current_channels, c, k, stride=s, padding=0))
+            layers.append(nn.Conv2d(current_channels, c, k, stride=s, padding=1))#self.padding))
             # layers.append(nn.GroupNorm(1, depth))
             layers.append(act())
             current_channels = c
@@ -78,15 +78,15 @@ class OAISinglePlayerFeatureExtractor(BaseFeaturesExtractor):
             input_dim += get_output_shape(self.vis_encoder, test_shape)[0]
         if self.use_vector_obs:
             input_dim += np.prod(observation_space['agent_obs'].shape)
-        if self.use_subtask_obs:
-            input_dim += observation_space['curr_subtask'].n
-        if self.use_pl_comp_st:
-            input_dim += np.prod(observation_space['player_completed_subtasks'].shape)
+        #if self.use_subtask_obs:
+        #    input_dim += observation_space['curr_subtask'].n
+        #if self.use_pl_comp_st:
+        #    input_dim += np.prod(observation_space['player_completed_subtasks'].shape)
         if self.use_tm_comp_st:
             input_dim += np.prod(observation_space['teammate_completed_subtasks'].shape)
 
         # Define MLP for vector/feature based observations
-        self.vector_encoder = MLP(input_dim=input_dim, output_dim=features_dim)
+        self.vector_encoder = MLP(input_dim=input_dim, output_dim=features_dim, num_layers=1)
         self.apply(weights_init_)
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
@@ -97,10 +97,10 @@ class OAISinglePlayerFeatureExtractor(BaseFeaturesExtractor):
             latent_state.append(self.vis_encoder.forward(observations['visual_obs']))
         if self.use_vector_obs:
             latent_state.append(th.flatten(observations['agent_obs'], start_dim=1))
-        if self.use_subtask_obs:
-            latent_state.append(th.flatten(observations['curr_subtask'], start_dim=1))
-        if self.use_pl_comp_st:
-            latent_state.append(th.flatten(observations['player_completed_subtasks'], start_dim=1))
+        #if self.use_subtask_obs:
+        #    latent_state.append(th.flatten(observations['curr_subtask'], start_dim=1))
+        #if self.use_pl_comp_st:
+        #    latent_state.append(th.flatten(observations['player_completed_subtasks'], start_dim=1))
         if self.use_tm_comp_st:
             latent_state.append(th.flatten(observations['teammate_completed_subtasks'], start_dim=1))
 
