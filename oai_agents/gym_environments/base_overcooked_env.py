@@ -17,7 +17,6 @@ from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env.stacked_observations import StackedObservations
 
 USEABLE_COUNTERS = 5 # Max number of counters the agents should use
-ENC_C = 26 # Number of channels in oai lossless encoding
 
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
@@ -34,8 +33,9 @@ class OvercookedGymEnv(Env):
 
         # TODO improve bounds for each dimension
         # Currently 20 is the default value for recipe time (which I believe is the largest value used
+        self.enc_num_channels = 26 # Default channels of OAI_Lossless encoding
         self.obs_dict = {}
-        self.obs_dict['visual_obs'] = spaces.Box(0, 20, (ENC_C, *self.grid_shape), dtype=np.int)
+        self.obs_dict['visual_obs'] = spaces.Box(0, 20, (self.enc_num_channels, *self.grid_shape), dtype=np.int)
         # Stacked obs for main player (index 0) and teammate (index 1)
         self.stackedobs = [StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first'),
                            StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first')]
@@ -106,7 +106,8 @@ class OvercookedGymEnv(Env):
         self.teammate = teammate
         self.stack_frames[self.p_idx] = self.main_agent_stack_frames
         # TODO Get rid of magic numbers
-        self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == ENC_C * self.args.num_stack
+        self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == \
+                                        (self.enc_num_channels * self.args.num_stack)
         self.stack_frames_need_reset = [True, True]
 
     def setup_visualization(self):
@@ -173,11 +174,12 @@ class OvercookedGymEnv(Env):
     def reset(self):
         self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
+        # Setup correct agent observation stacking for agents that need it
         self.stack_frames[self.p_idx] = self.main_agent_stack_frames
         # TODO Get rid of magic numbers
         if self.teammate is not None:
-            self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == ENC_C * self.args.num_stack
-
+            self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == \
+                                            (self.enc_num_channels * self.args.num_stack)
         self.stack_frames_need_reset = [True, True]
 
         if self.is_eval_env:

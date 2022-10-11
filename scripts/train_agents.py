@@ -1,4 +1,5 @@
 from oai_agents.agents.rl import SingleAgentTrainer, MultipleAgentsTrainer
+from oai_agents.agents.hrl import MultiAgentSubtaskWorker, RLManagerTrainer, HierarchicalRL
 from oai_agents.common.arguments import get_arguments
 
 from pathlib import Path
@@ -143,5 +144,5 @@ def create_test_population(args, training_steps=1e7):
 if __name__ == '__main__':
     args = get_arguments()
     # create_test_population(args)
-    create_all_agents(args, agents_to_train=['fcp'])
+    create_all_agents(args, agents_to_train=['hrl'])
 

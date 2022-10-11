@@ -101,14 +101,14 @@ class MultiAgentSubtaskWorker(OAIAgent):
         for i in range(Subtasks.NUM_SUBTASKS):
             # RL single subtask agents trained with teammeates
             # Make necessary envs
-            n_layouts = len(self.args.layout_names)
+            n_layouts = len(args.layout_names)
 
-            env_kwargs = {'full_init': False, 'stack_frames': use_frame_stack, 'args': args}
+            env_kwargs = {'full_init': False, 'stack_frames': False, 'args': args}
             env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs,
                                vec_env_cls=VEC_ENV_CLS)
 
             init_kwargs = {'single_subtask_id': i, 'args': args}
-            for i in range(self.args.n_envs):
+            for i in range(args.n_envs):
                 env.env_method('init', indices=i, **{'index': i % n_layouts, **init_kwargs})
 
             eval_envs = [OvercookedSubtaskGymEnv(**{'index': i, 'is_eval_env': True, **env_kwargs})

@@ -23,7 +23,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         elif self.use_curriculum:
             self.curr_lvl = 0
 
-        self.mdp = OvercookedGridworld.from_layout_name(args.layout_names[index])
+        self.mdp = OvercookedGridworld.from_layout_name(kwargs['args'].layout_names[index])
         all_counters = self.mdp.get_counter_locations()
         COUNTERS_PARAMS = {
             'start_orientations': False,
@@ -34,17 +34,24 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             'same_motion_goals': True
         }
         self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
-        ss_fn = self.mdp.get_subtask_start_state_fn(self.mlam, random_start_pos=True, random_orientation=True,
-                                                    max_objects=USEABLE_COUNTERS)
+        ss_fn = self.mdp.get_subtask_start_state_fn(self.mlam)
         env = OvercookedEnv.from_mdp(self.mdp, horizon=100, start_state_fn=ss_fn)
         super(OvercookedSubtaskGymEnv, self).init(index=index, base_env=env, **kwargs)
         self.obs_dict['curr_subtask'] = spaces.Discrete(Subtasks.NUM_SUBTASKS)
         self.observation_space = spaces.Dict(self.obs_dict)
 
-    def get_obs(self, p_idx=None):
+    def get_obs(self, p_idx=None, done=False):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
         if p_idx == self.p_idx:
             obs['curr_subtask'] = self.goal_subtask_id
+        if self.stack_frames[p_idx]:
+            obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
+            if self.stack_frames_need_reset[p_idx]: # On reset
+                obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
+                self.stack_frames_need_reset[p_idx] = False
+            else:
+                obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
+            obs['visual_obs'] = obs['visual_obs'].squeeze()
         return obs
 
     def get_proximity_reward(self, feature_locations):
@@ -99,11 +106,18 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 serving_locations = self.mdp.get_serving_locations()
                 reward += self.get_proximity_reward(serving_locations)
 
-        return self.get_obs(self.p_idx), reward, done, info
+        return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self, evaluation_trial_num=-1):
         self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
+        # Setup correct agent observation stacking for agents that need it
+        self.stack_frames[self.p_idx] = self.main_agent_stack_frames
+        # TODO Get rid of magic numbers
+        if self.teammate is not None:
+            self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == \
+                                            (self.enc_num_channels * self.args.num_stack)
+        self.stack_frames_need_reset = [True, True]
         # TODO randomly set p_idx
         if self.use_single_subtask:
             self.goal_subtask = self.single_subtask
