@@ -145,8 +145,3 @@ if __name__ == '__main__':
     # create_test_population(args)
     create_all_agents(args, agents_to_train=['fcp'])
 
-    from oai_agents.agents.base_agent import SB3Wrapper
-    pop_agents = []
-
-
-

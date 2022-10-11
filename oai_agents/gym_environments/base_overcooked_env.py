@@ -16,8 +16,8 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env.stacked_observations import StackedObservations
 
-USEABLE_COUNTERS = 5
-ENC_C = 26
+USEABLE_COUNTERS = 5 # Max number of counters the agents should use
+ENC_C = 26 # Number of channels in oai lossless encoding
 
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
@@ -40,6 +40,9 @@ class OvercookedGymEnv(Env):
         self.stackedobs = [StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first'),
                            StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first')]
         if stack_frames:
+            # Needed to change value error to print in
+            #   File "/projects/star7023/software/anaconda/envs/oai/lib/python3.9/site-packages/stable_baselines3/common/utils.py", line 245, in is_vectorized_box_observation
+            # To return differetn obs for different agents
             self.obs_dict['visual_obs'] = self.stackedobs[0].stack_observation_space(self.obs_dict['visual_obs'])
 
         if ret_completed_subtasks:
@@ -98,10 +101,13 @@ class OvercookedGymEnv(Env):
         self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
         obs = self.reset()
 
-
     def set_teammate(self, teammate):
         # TODO asser has attribute observation space
         self.teammate = teammate
+        self.stack_frames[self.p_idx] = self.main_agent_stack_frames
+        # TODO Get rid of magic numbers
+        self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == ENC_C * self.args.num_stack
+        self.stack_frames_need_reset = [True, True]
 
     def setup_visualization(self):
         self.visualization_enabled = True
@@ -136,8 +142,6 @@ class OvercookedGymEnv(Env):
                         self.prev_st = comp_st
             obs['player_completed_subtasks'] = self.completed_tasks[p_idx]
             obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
-            # print(f"p{p_idx + 1}: {obs['player_completed_subtasks']}, {obs['teammate_completed_subtasks']}")
-
         return obs
 
     def step(self, action):
@@ -173,7 +177,6 @@ class OvercookedGymEnv(Env):
         # TODO Get rid of magic numbers
         if self.teammate is not None:
             self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == ENC_C * self.args.num_stack
-            print(self.teammate.name, self.stack_frames[self.t_idx])
 
         self.stack_frames_need_reset = [True, True]
 
