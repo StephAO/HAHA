@@ -108,16 +108,17 @@ class MultiAgentSubtaskWorker(OAIAgent):
                                vec_env_cls=VEC_ENV_CLS)
 
             init_kwargs = {'single_subtask_id': i, 'args': args}
-            for i in range(args.n_envs):
-                env.env_method('init', indices=i, **{'index': i % n_layouts, **init_kwargs})
+            for n in range(args.n_envs):
+                env.env_method('init', indices=n, **{'index': n % n_layouts, **init_kwargs})
 
-            eval_envs = [OvercookedSubtaskGymEnv(**{'index': i, 'is_eval_env': True, **env_kwargs})
-                         for i in range(n_layouts)]
+            eval_envs = [OvercookedSubtaskGymEnv(**{'index': n, 'is_eval_env': True, **env_kwargs})
+                         for n in range(n_layouts)]
             # Create trainer
-            rl_sat = SingleAgentTrainer(tms, args, env=env, eval_envs=eval_envs)
+            name = f'subtask_worker_{i}'
+            rl_sat = SingleAgentTrainer(tms, args, name=name, env=env, eval_envs=eval_envs)
             # Train if it makes sense to (can't train on an unknown task)
             if i != Subtasks.SUBTASKS_TO_IDS['unknown']:
-                rl_sat.train_agents(total_timesteps=1e7, exp_name=args.exp_name + f'_subtask_{i}')
+                rl_sat.train_agents(total_timesteps=1e7)
             agents.extend(rl_sat.get_agents())
         model = cls(agents=agents, args=args)
         path = args.base_dir / 'agent_models' / model.name

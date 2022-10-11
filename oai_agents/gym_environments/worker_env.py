@@ -110,6 +110,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
     def reset(self, evaluation_trial_num=-1):
         self.p_idx = np.random.randint(2)
+        print("P IDX SET TO: ", self.p_idx)
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it
         self.stack_frames[self.p_idx] = self.main_agent_stack_frames
