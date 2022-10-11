@@ -111,11 +111,14 @@ class MultiAgentSubtaskWorker(OAIAgent):
             for n in range(args.n_envs):
                 env.env_method('init', indices=n, **{'index': n % n_layouts, **init_kwargs})
 
+            eval_envs_kwargs = env_kwargs
+            eval_envs_kwargs.update(init_kwargs)
+            eval_envs_kwargs['full_init'] = True
             eval_envs = [OvercookedSubtaskGymEnv(**{'index': n, 'is_eval_env': True, **env_kwargs})
                          for n in range(n_layouts)]
             # Create trainer
             name = f'subtask_worker_{i}'
-            rl_sat = SingleAgentTrainer(tms, args, name=name, env=env, eval_envs=eval_envs)
+            rl_sat = SingleAgentTrainer(tms, args, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
             # Train if it makes sense to (can't train on an unknown task)
             if i != Subtasks.SUBTASKS_TO_IDS['unknown']:
                 rl_sat.train_agents(total_timesteps=1e7)

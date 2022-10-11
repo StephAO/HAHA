@@ -13,6 +13,11 @@ import wandb
 
 
 class OvercookedSubtaskGymEnv(OvercookedGymEnv):
+    def __init__(self, *args, **kwargs):
+        super(OvercookedSubtaskGymEnv, self).__init__(*args, **kwargs)
+        self.obs_dict['curr_subtask'] = spaces.Discrete(Subtasks.NUM_SUBTASKS)
+        self.observation_space = spaces.Dict(self.obs_dict)
+
     def init(self, index=None, single_subtask_id=None, use_curriculum=False, **kwargs):
         assert index is not None
         self.use_curriculum = use_curriculum
@@ -37,8 +42,6 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         ss_fn = self.mdp.get_subtask_start_state_fn(self.mlam)
         env = OvercookedEnv.from_mdp(self.mdp, horizon=100, start_state_fn=ss_fn)
         super(OvercookedSubtaskGymEnv, self).init(index=index, base_env=env, **kwargs)
-        self.obs_dict['curr_subtask'] = spaces.Discrete(Subtasks.NUM_SUBTASKS)
-        self.observation_space = spaces.Dict(self.obs_dict)
 
     def get_obs(self, p_idx=None, done=False):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
@@ -110,7 +113,6 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
     def reset(self, evaluation_trial_num=-1):
         self.p_idx = np.random.randint(2)
-        print("P IDX SET TO: ", self.p_idx)
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it
         self.stack_frames[self.p_idx] = self.main_agent_stack_frames
@@ -128,6 +130,8 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             if self.use_curriculum:
                 # nothing past curr level can be selected
                 subtask_probs[self.curr_lvl + 1:] = 0
+            subtask_mask = get_doable_subtasks(self.env.state, Subtasks.SUBTASKS_TO_IDS['unknown'],
+                                               self.terrain, self.p_idx, USEABLE_COUNTERS)
             subtask_probs = subtask_mask / np.sum(subtask_mask)
             self.goal_subtask = np.random.choice(Subtasks.SUBTASKS, p=subtask_probs)
         self.goal_subtask_id = Subtasks.SUBTASKS_TO_IDS[self.goal_subtask]

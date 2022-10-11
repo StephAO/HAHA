@@ -61,6 +61,7 @@ class OvercookedGymEnv(Env):
         if full_init:
             self.init(args=args, **kwargs)
 
+    # TODO rename
     def init(self, index=None, base_env=None, horizon=None, is_eval_env=False, shape_rewards=False, args=None):
         '''
         :param shape_rewards: Shape rewards for RL
