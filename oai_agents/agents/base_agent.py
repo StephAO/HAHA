@@ -61,7 +61,7 @@ class OAIAgent(nn.Module, ABC):
         self.p_idx = p_idx
         self.prev_state = None
         self.stack_frames = self.policy.observation_space['visual_obs'].shape[0] == (26 * self.args.num_stack)
-        self.stackedobs = StackedObservations(1, self.args.num_stack, self.obs_dict['visual_obs'], 'first')
+        self.stackedobs = StackedObservations(1, self.args.num_stack, self.policy.observation_space['visual_obs'], 'first')
 
     def set_encoding_params(self, mdp, horizon):
         self.mdp = mdp
