@@ -72,11 +72,8 @@ class OAIAgent(nn.Module, ABC):
         if self.p_idx is None or self.mdp is None or self.horizon is None:
             raise ValueError('Please call set_idx() and set_encoding_params() before action. '
                              'Or, call predict with agent specific obs')
-        grid_shape = self.mdp.shape
-        obs = self.encoding_fn(self.mdp, state, grid_shape, self.horizon, p_idx=self.p_idx)
 
-        # NEW
-        obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
+        obs = self.encoding_fn(self.mdp, state, None, self.horizon, p_idx=self.p_idx)
         if self.stack_frames:
             obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
             if self.prev_state is not None:
