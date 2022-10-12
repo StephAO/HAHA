@@ -57,7 +57,7 @@ def create_fcp_population(args, training_steps=1e7):
     return pop.get_agents()
 
 def create_fcp_agent(teammates, args, training_steps=1e7):
-    fcp_trainer = SingleAgentTrainer(teammates, args, name='fcp')
+    fcp_trainer = SingleAgentTrainer(teammates, args, name='fcp_w_stc', use_subtask_counts=True)
     fcp_trainer.train_agents(total_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 

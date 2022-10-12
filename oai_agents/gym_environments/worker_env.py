@@ -77,6 +77,24 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         # Reward proportional to how much time is saved from using the pass
         return (curr_dist - smallest_dist) * 0.1
 
+    def get_fuller_pot_reward(self, state, terrain):
+        """
+        Returns a reward proportional to the difference in number of onions in each pot (incentivizes putting onions
+        in the fuller pot to complete soups faster)
+        Assumes 2 pots
+        """
+        chosen_pot_loc = np.array(state.players[self.p_idx].position) + np.array(state.players[self.p_idx].orientation)
+        chosen_pot_num_onions, other_pot_num_onions = 0, 0
+        for obj in state.objects.values():
+            x, y = obj.position
+            if obj.name == 'soup' and terrain[y][x] == 'P':
+                if (obj.position == chosen_pot_loc).all(): # this is the pot the worker put the onion in
+                    # -1 since one onion was just added to this pot, and we want the number before it was added
+                    chosen_pot_num_onions = len(obj.ingredients) - 1
+                else: # this is the other pot
+                    other_pot_num_onions = len(obj.ingredients)
+        return (chosen_pot_num_onions - other_pot_num_onions) * 0.1
+
     def step(self, action):
         if self.teammate is None:
             raise ValueError('set_teammate must be set called before starting game.')
@@ -99,15 +117,20 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             subtask = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx)
             done = True
             reward = 1 if subtask == self.goal_subtask_id else -1
-            if self.goal_subtask == 'put_onion_closer':
-                pot_locations = self.mdp.get_pot_locations()
-                reward += self.get_proximity_reward(pot_locations)
-            elif self.goal_subtask == 'put_plate_closer':
-                pot_locations = self.mdp.get_pot_locations()
-                reward += self.get_proximity_reward(pot_locations)
-            elif self.goal_subtask == 'put_soup_closer':
-                serving_locations = self.mdp.get_serving_locations()
-                reward += self.get_proximity_reward(serving_locations)
+            if reward == 1:
+                # Extra rewards to incentivize petter placements
+                if self.goal_subtask == 'put_onion_closer':
+                    pot_locations = self.mdp.get_pot_locations()
+                    reward += self.get_proximity_reward(pot_locations)
+                elif self.goal_subtask == 'put_plate_closer':
+                    pot_locations = self.mdp.get_pot_locations()
+                    reward += self.get_proximity_reward(pot_locations)
+                elif self.goal_subtask == 'put_soup_closer':
+                    serving_locations = self.mdp.get_serving_locations()
+                    reward += self.get_proximity_reward(serving_locations)
+                elif self.goal_subtask == 'put_onion_in_pot':
+                    reward += self.get_fuller_pot_reward(self.state, self.mdp.terrain_mtx)
+
 
         return self.get_obs(self.p_idx, done=done), reward, done, info
 

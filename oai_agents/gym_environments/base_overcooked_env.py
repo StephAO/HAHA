@@ -144,6 +144,9 @@ class OvercookedGymEnv(Env):
                         self.prev_st = comp_st
             obs['player_completed_subtasks'] = self.completed_tasks[p_idx]
             obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
+            if p_idx == self.t_idx:
+                obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}
+
         return obs
 
     def step(self, action):
