@@ -101,8 +101,8 @@ class OAIAgent(nn.Module, ABC):
             obs['player_completed_subtasks'] = self.player_completed_tasks
             obs['teammate_completed_subtasks'] = self.tm_completed_tasks
             self.prev_state = state
-        if p_idx == self.t_idx:
-            obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
+
+        obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
 
         try:
             agent_msg = self.get_agent_output()
