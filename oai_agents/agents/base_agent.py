@@ -108,7 +108,10 @@ class OAIAgent(nn.Module, ABC):
         try:
             agent_msg = self.get_agent_output()
         except AttributeError as e:
+            print(e, flush=True)
             agent_msg = ' '
+
+        print('AM:', agent_msg, flush=True)
 
         action, _ = self.predict(obs, deterministic=deterministic)
         return Action.INDEX_TO_ACTION[action], agent_msg

@@ -190,6 +190,7 @@ class HierarchicalRL(OAIAgent):
         return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
 
     def get_agent_output(self):
+        print('gao:', Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)], flush=True)
         return Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)]
 
     def save(self, path: Path) -> None:
