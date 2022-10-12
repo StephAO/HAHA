@@ -184,6 +184,9 @@ class HierarchicalRL(OAIAgent):
         obs['curr_subtask'] = self.curr_subtask_id
         return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
 
+    def get_agent_output(self):
+        return Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id]
+
     def save(self, path: Path) -> None:
         """
         Save model to a given location.
