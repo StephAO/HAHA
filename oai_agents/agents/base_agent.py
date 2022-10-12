@@ -75,6 +75,7 @@ class OAIAgent(nn.Module, ABC):
                              'Or, call predict with agent specific obs')
 
         obs = self.encoding_fn(self.mdp, state, self.grid_shape, self.horizon, p_idx=self.p_idx)
+        print(self.policy.observation_space.keys(), flush=True)
         if self.stack_frames:
             obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
             if self.prev_state is not None:
@@ -83,6 +84,7 @@ class OAIAgent(nn.Module, ABC):
                 obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([False]), [{}])
             obs['visual_obs'] = obs['visual_obs'].squeeze()
         if 'subtask_mask' in self.policy.observation_space.keys():
+            print("????????????", flush=True)
             obs['subtask_mask'] = \
                 get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS - 1).astype(bool)
         if 'player_completed_subtasks' in self.policy.observation_space.keys():
@@ -90,11 +92,11 @@ class OAIAgent(nn.Module, ABC):
             if self.prev_state is not None:
                 comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, state, i) for i in range(2)]
                 # If a subtask has been completed, update counts
-                if comp_st[p_idx] is not None:
-                    self.player_completed_tasks[comp_st[p_idx]] += 1
-                    self.prev_st = comp_st[p_idx]
-                if comp_st[1 - p_idx] is not None:
-                    self.player_completed_tasks[comp_st[1 - p_idx]] += 1
+                if comp_st[self.p_idx] is not None:
+                    self.player_completed_tasks[comp_st[self.p_idx]] += 1
+                    self.prev_st = comp_st[self.p_idx]
+                if comp_st[1 - self.p_idx] is not None:
+                    self.player_completed_tasks[comp_st[1 - self.p_idx]] += 1
                 # If this is the first step of the game, reset subtask counts to 0
             else:
                 self.player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
