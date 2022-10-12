@@ -15,6 +15,7 @@ import torch.nn as nn
 from typing import List, Tuple, Union
 import stable_baselines3.common.distributions as sb3_distributions
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.vec_env.stacked_observations import StackedObservations
 import wandb
 
 
@@ -85,7 +86,7 @@ class OAIAgent(nn.Module, ABC):
             obs['visual_obs'] = obs['visual_obs'].squeeze()
         if 'subtask_mask' in self.policy.observation_space.keys():
             obs['subtask_mask'] = \
-                get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
+                get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS - 1).astype(bool)
         if 'player_completed_subtasks' in self.policy.observation_space.keys():
             # If this isn't the first step of the game, see if a subtask has been completed
             comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, self.state, i) for i in range(2)]
@@ -111,7 +112,6 @@ class OAIAgent(nn.Module, ABC):
             agent_msg = ' '
 
         action, _ = self.predict(obs, deterministic=deterministic)
-        agent_msg = str(action)
         return Action.INDEX_TO_ACTION[action], agent_msg
 
     def _get_constructor_parameters(self):
