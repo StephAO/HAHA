@@ -145,4 +145,28 @@ if __name__ == '__main__':
     args = get_arguments()
     # create_test_population(args)
     create_all_agents(args, agents_to_train=['hrl'])
-
+    # from oai_agents.agents.base_agent import SB3Wrapper
+    # from oai_agents.agents.hrl import MultiAgentSubtaskWorker
+    # from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
+    # agents = []
+    # for i in range(11):
+    #     agents.append(SB3Wrapper.load(Path(f'./agent_models/subtask_worker_{i}/ego_pop/agents_dir/agent_0/'), args))
+    #
+    # # All this logic is to get an unknown agent
+    # n_layouts = len(args.layout_names)
+    # env_kwargs = {'full_init': True, 'stack_frames': False, 'args': args}
+    # init_kwargs = {'single_subtask_id': 11, 'index': 0}
+    # env = OvercookedSubtaskGymEnv(**env_kwargs, **init_kwargs)
+    #
+    # eval_envs = OvercookedSubtaskGymEnv(**{'is_eval_env': True, **env_kwargs, **init_kwargs})
+    # # Create trainer
+    # name = f'subtask_worker_11'
+    # rl_sat = SingleAgentTrainer(agents, args, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
+    # agents.extend(rl_sat.get_agents())
+    #
+    # print(len(agents))
+    #
+    # model = MultiAgentSubtaskWorker(agents=agents, args=args)
+    # path = args.base_dir / 'agent_models' / model.name
+    # Path(path).mkdir(parents=True, exist_ok=True)
+    # model.save(path / args.exp_name)

@@ -10,7 +10,7 @@ def get_arguments(additional_args=[]):
     :return:
     """
     parser = argparse.ArgumentParser(description='PyTorch Soft Actor-Critic Args')
-    parser.add_argument('--layout-names', default='counter_circuit_o_1order,forced_coordination',  help='Overcooked maps to use')
+    parser.add_argument('--layout-names', default='counter_circuit_o_1order',  help='Overcooked maps to use')
     parser.add_argument('--use-subtasks', action='store_true', help='Condition IL agents on subtasks (default: False)')
     parser.add_argument('--policy-selection', type=str, default='CEM',
                         help='Which policy selection algorithm to use. Options: "CEM", "PLASTIC". Default: "CEM"')

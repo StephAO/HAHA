@@ -24,6 +24,7 @@ class OAIAgent(nn.Module, ABC):
     https://stable-baselines3.readthedocs.io/en/master/modules/base.html#stable_baselines3.common.base_class.BaseAlgorithm
     Ensures that all agents play nicely with the environment
     """
+
     def __init__(self, name, args):
         super(OAIAgent, self).__init__()
         self.name = name
@@ -39,7 +40,8 @@ class OAIAgent(nn.Module, ABC):
         self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
 
     @abstractmethod
-    def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False) -> Tuple[int, Union[th.Tensor, None]]:
+    def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool = False) -> Tuple[
+        int, Union[th.Tensor, None]]:
         """
         Given an observation return the index of the action and the agent state if the agent is recurrent.
         Structure should be the same as agents created using stable baselines:
@@ -69,7 +71,9 @@ class OAIAgent(nn.Module, ABC):
                              'Or, call predict with agent specific obs')
         grid_shape = self.mdp.shape
         obs = self.encoding_fn(self.mdp, state, grid_shape, self.horizon, p_idx=self.p_idx)
+        agent_msg = ''
 
+        # OLD
         if hasattr(self, 'manager'):
             obs['subtask_mask'] = \
                 get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
@@ -89,9 +93,36 @@ class OAIAgent(nn.Module, ABC):
             obs['player_completed_subtasks'] = self.player_completed_tasks
             obs['teammate_completed_subtasks'] = self.tm_completed_tasks
             self.prev_state = state
+            agent_msg = self.manager.get_current_subtask()
+
+        # NEW
+        obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
+        if self.stack_frames[p_idx]:
+            obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
+            if self.stack_frames_need_reset[p_idx]:  # On reset
+                obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
+                self.stack_frames_need_reset[p_idx] = False
+            else:
+                obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
+            obs['visual_obs'] = obs['visual_obs'].squeeze()
+        if self.return_completed_subtasks:
+            obs['subtask_mask'] = self.action_masks()
+            # If this isn't the first step of the game, see if a subtask has been completed
+            if self.prev_state is not None:
+                comp_st = calculate_completed_subtask(self.terrain, self.prev_state, self.state, p_idx)
+                # If a subtask has been completed, update counts
+                if comp_st is not None:
+                    self.completed_tasks[p_idx][comp_st] += 1
+                    if p_idx == self.p_idx:
+                        self.prev_st = comp_st
+            obs['player_completed_subtasks'] = self.completed_tasks[p_idx]
+            obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
+            if p_idx == self.t_idx:
+                obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}
 
         action, _ = self.predict(obs, deterministic=deterministic)
-        return Action.INDEX_TO_ACTION[action], None
+        agent_msg = str(action)
+        return Action.INDEX_TO_ACTION[action], agent_msg
 
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
@@ -129,6 +160,7 @@ class OAIAgent(nn.Module, ABC):
         model.load_state_dict(saved_variables['state_dict'])
         model.to(device)
         return model
+
 
 class SB3Wrapper(OAIAgent):
     def __init__(self, agent, name, args):
@@ -189,14 +221,16 @@ class SB3Wrapper(OAIAgent):
         set_args_from_load(saved_variables['args'], args)
         saved_variables['const_params']['args'] = args
         # Create agent object
-        agent = saved_variables['sb3_model_type'].load(str(load_path) + '_sb3_agent' )
+        agent = saved_variables['sb3_model_type'].load(str(load_path) + '_sb3_agent')
         # Create wrapper object
         model = cls(agent=agent, **saved_variables['const_params'], **kwargs)  # pytype: disable=not-instantiable
         model.to(device)
         return model
 
+
 class SB3LSTMWrapper(SB3Wrapper):
     ''' A wrapper for a stable baselines 3 agents that uses an lstm and controls a single player '''
+
     def __init__(self, agent, name, args):
         super(SB3LSTMWrapper, self).__init__(agent, name, args)
         self.lstm_states = None
@@ -218,6 +252,7 @@ class OAITrainer(ABC):
     An abstract base class for trainer classes.
     Trainer classes must have two agents that they can train using some paradigm
     """
+
     def __init__(self, name, args, seed=None):
         super(OAITrainer, self).__init__()
         self.name = name
@@ -270,7 +305,7 @@ class OAITrainer(ABC):
         th.save(save_dict, save_path)
         return path, tag
 
-    def load_agents(self, path: Union[Path, None]=None, tag: Union[str, None]=None):
+    def load_agents(self, path: Union[Path, None] = None, tag: Union[str, None] = None):
         ''' Loads each agent that the trainer is training '''
         path = path or self.args.base_dir / 'agent_models' / self.name
         tag = tag or self.args.exp_name
@@ -288,6 +323,7 @@ class OAITrainer(ABC):
         self.agents = agents
         return self.agents
 
+
 # MOVE TO UTIL FILE
 # Load any agent
 def load_agent(agent_path, args=None):
@@ -296,7 +332,7 @@ def load_agent(agent_path, args=None):
     try:
         load_dict = th.load(agent_path / 'agent_file')
     except FileNotFoundError as e:
-        raise ValueError(f'Could not find file:{e}') # TODO print options
+        raise ValueError(f'Could not find file:{e}')  # TODO print options
     agent = load_dict['agent_type'].load(agent_path, args)
     assert isinstance(agent, OAIAgent)
     return agent

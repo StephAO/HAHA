@@ -13,27 +13,35 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
     def __init__(self, **kwargs):
         kwargs['ret_completed_subtasks'] = True
         super(OvercookedManagerGymEnv, self).__init__(**kwargs)
+        self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
 
     def init(self, worker=None, ret_completed_subtasks=True, **kwargs):
         self.worker = worker
         super(OvercookedManagerGymEnv, self).init(**kwargs)
-        self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
 
-    def get_low_level_obs(self, p_idx=None):
+    def get_low_level_obs(self, p_idx=None, done=False):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
         if p_idx == self.p_idx:
             obs['curr_subtask'] = self.curr_subtask
+        if self.stack_frames[p_idx]:
+            obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
+            if self.stack_frames_need_reset[p_idx]: # On reset
+                obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
+                self.stack_frames_need_reset[p_idx] = False
+            else:
+                obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
+            obs['visual_obs'] = obs['visual_obs'].squeeze()
         return obs
 
     def action_masks(self):
-        return get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS - 1).astype(bool)
 
     def step(self, action):
         # Action is the subtask for subtask agent to perform
         self.curr_subtask = action.cpu() if type(action) == th.tensor else action
         # Manager can only choose the unknown subtask if no other subtask is possible. If this is the case, the manager
         # put itself in a bad position, penalize with -1 and end current episode
-        if self.curr_subtask == Subtasks.SUBTASKS_TO_IDS['unknown']:
+        if self.curr_subtask == Subtasks.SUBTASKS_TO_IDS['unknown'] and not self.is_eval_env:
             obs = self.get_obs(self.p_idx)
             reward = -1
             return obs, reward, True, {}
@@ -54,7 +62,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
 
             self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
             next_state, r, done, info = self.env.step(joint_action)
-            if self.shape_rewards:
+            if self.shape_rewards and not self.is_eval_env:
                 ratio = min(self.step_count * self.args.n_envs / 2.5e6, 1)
                 sparse_r = sum(info['sparse_r_by_agent'])
                 shaped_r = info['shaped_r_by_agent'][self.p_idx] if self.p_idx else sum(info['shaped_r_by_agent'])
@@ -73,7 +81,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
 
             if joint_action[self.p_idx] == Action.INTERACT:
                 completed_subtask = calculate_completed_subtask(self.terrain, self.prev_state, self.state, self.p_idx)
-                if False and completed_subtask != self.curr_subtask:
+                if completed_subtask != self.curr_subtask:
                     completed_subtask_str = Subtasks.IDS_TO_SUBTASKS[completed_subtask] if (completed_subtask is not None) else 'None'
                     print(f'Worker Failure! -> goal: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask]}, completed: {completed_subtask_str}', flush=True)
                 ready_for_next_subtask = (completed_subtask is not None)
@@ -81,7 +89,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self):
-        if self.evaluation_mode:
+        if self.is_eval_env:
             ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
         else:
             random_pos = (self.layout_name != 'forced_coordination')
@@ -91,6 +99,13 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.prev_state = None
         self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
+        # Setup correct agent observation stacking for agents that need it
+        self.stack_frames[self.p_idx] = self.main_agent_stack_frames
+        if self.teammate is not None:
+            self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == \
+                                            (self.enc_num_channels * self.args.num_stack)
+        self.stack_frames_need_reset = [True, True]
         self.curr_subtask = 0
-        obs = self.get_obs(self.p_idx)
-        return obs
+        # Reset subtask counts
+        self.completed_tasks = [np.zeros(Subtasks.NUM_SUBTASKS), np.zeros(Subtasks.NUM_SUBTASKS)]
+        return self.get_obs(self.p_idx)

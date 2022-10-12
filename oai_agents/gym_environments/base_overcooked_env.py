@@ -180,7 +180,6 @@ class OvercookedGymEnv(Env):
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it
         self.stack_frames[self.p_idx] = self.main_agent_stack_frames
-        # TODO Get rid of magic numbers
         if self.teammate is not None:
             self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == \
                                             (self.enc_num_channels * self.args.num_stack)

@@ -98,7 +98,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
 
         # Train 12 individual agents, each for a respective subtask
         agents = []
-        for i in range(4, 5):#, Subtasks.NUM_SUBTASKS):
+        for i in range(Subtasks.NUM_SUBTASKS):
             # RL single subtask agents trained with teammeates
             # Make necessary envs
             n_layouts = len(args.layout_names)
@@ -129,7 +129,6 @@ class MultiAgentSubtaskWorker(OAIAgent):
         model.save(path / args.exp_name)
         return model, tms
 
-
 # Mix-in class, currently unused
 class Manager:
     def update_subtasks(self, completed_subtasks):
@@ -149,11 +148,11 @@ class RLManagerTrainer(SingleAgentTrainer):
         env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs, vec_env_cls=VEC_ENV_CLS)
 
         init_kwargs = {'worker': worker, 'shape_rewards': False, 'args': args}
-        for i in range(self.args.n_envs):
+        for i in range(args.n_envs):
             env.env_method('init', indices=i, **{'index': i % n_layouts, **init_kwargs})
 
         eval_envs_kwargs = {'worker': worker, 'shape_rewards': False, 'stack_frames': use_frame_stack,
-                            'is_eval_env': True, 'args': args}
+                            'is_eval_env': True, 'horizon': 400, 'args': args}
         eval_envs = [OvercookedManagerGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         self.worker = worker
