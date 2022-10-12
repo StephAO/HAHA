@@ -91,6 +91,7 @@ class OAIAgent(nn.Module, ABC):
                 comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, state, i) for i in range(2)]
                 # If a subtask has been completed, update counts
                 if comp_st[self.p_idx] is not None:
+                    print("PLAYER SUBTASK COMPLETED", flush=True)
                     self.player_completed_tasks[comp_st[self.p_idx]] += 1
                     self.prev_st = comp_st[self.p_idx]
                 if comp_st[1 - self.p_idx] is not None:
@@ -101,8 +102,8 @@ class OAIAgent(nn.Module, ABC):
                 self.tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
             obs['player_completed_subtasks'] = self.player_completed_tasks
             obs['teammate_completed_subtasks'] = self.tm_completed_tasks
-            self.prev_state = state
 
+        self.prev_state = state
         obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
 
         try:
@@ -110,8 +111,6 @@ class OAIAgent(nn.Module, ABC):
         except AttributeError as e:
             print(e, flush=True)
             agent_msg = ' '
-
-        print('AM:', agent_msg, flush=True)
 
         action, _ = self.predict(obs, deterministic=deterministic)
         return Action.INDEX_TO_ACTION[action], agent_msg
