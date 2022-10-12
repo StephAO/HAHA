@@ -87,7 +87,7 @@ class OAIAgent(nn.Module, ABC):
                 get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS - 1).astype(bool)
         if 'player_completed_subtasks' in self.policy.observation_space.keys():
             # If this isn't the first step of the game, see if a subtask has been completed
-            comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, self.state, i) for i in range(2)]
+            comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, state, i) for i in range(2)]
             # If a subtask has been completed, update counts
             if comp_st[p_idx] is not None:
                 self.player_completed_tasks[comp_st[p_idx]] += 1
