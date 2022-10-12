@@ -166,6 +166,7 @@ class HierarchicalRL(OAIAgent):
         self.manager = manager
         self.prev_player_comp_st = None
         self.policy = self.worker.policy
+        print('HRL POLICY', self.policy, flush=True)
 
     def get_distribution(self, obs, sample=True):
         if obs['player_completed_subtasks'] != self.prev_player_comp_st:
