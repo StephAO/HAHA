@@ -98,7 +98,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
 
         # Train 12 individual agents, each for a respective subtask
         agents = []
-        for i in range(2, 5):#Subtasks.NUM_SUBTASKS):
+        for i in range(4, 5):#, Subtasks.NUM_SUBTASKS):
             # RL single subtask agents trained with teammeates
             # Make necessary envs
             n_layouts = len(args.layout_names)
@@ -144,7 +144,7 @@ class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, worker, teammates, args, use_frame_stack=False, name=None):
         name = name or 'rl_manager'
-        n_layouts = len(self.args.layout_names)
+        n_layouts = len(args.layout_names)
         env_kwargs = {'full_init': False, 'stack_frames': use_frame_stack, 'args': args}
         env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs, vec_env_cls=VEC_ENV_CLS)
 

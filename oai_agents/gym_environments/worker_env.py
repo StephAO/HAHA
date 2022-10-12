@@ -93,7 +93,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                     chosen_pot_num_onions = len(obj.ingredients) - 1
                 else: # this is the other pot
                     other_pot_num_onions = len(obj.ingredients)
-        return (chosen_pot_num_onions - other_pot_num_onions) * 0.1
+        return max(0, (chosen_pot_num_onions - other_pot_num_onions) * 0.2)
 
     def step(self, action):
         if self.teammate is None:
@@ -154,7 +154,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 # nothing past curr level can be selected
                 subtask_probs[self.curr_lvl + 1:] = 0
             subtask_mask = get_doable_subtasks(self.env.state, Subtasks.SUBTASKS_TO_IDS['unknown'],
-                                               self.terrain, self.p_idx, USEABLE_COUNTERS)
+                                               self.terrain, self.p_idx, USEABLE_COUNTERS + 1)
             subtask_probs = subtask_mask / np.sum(subtask_mask)
             self.goal_subtask = np.random.choice(Subtasks.SUBTASKS, p=subtask_probs)
         self.goal_subtask_id = Subtasks.SUBTASKS_TO_IDS[self.goal_subtask]
@@ -168,7 +168,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         self.prev_state = None
         if self.goal_subtask != 'unknown':
             unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-            assert get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS)[self.goal_subtask_id]
+            assert get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS + 1)[self.goal_subtask_id]
         return self.get_obs(self.p_idx)
 
     def evaluate(self, agent):
@@ -183,7 +183,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 # If the subtask is no longer possible (e.g. other agent picked the only onion up from the counter)
                 # then stop the trial and don't count it
                 unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-                if not get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS)[self.goal_subtask_id]:
+                if not get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS + 1)[self.goal_subtask_id]:
                     invalid_trial = True
                     break
                 
