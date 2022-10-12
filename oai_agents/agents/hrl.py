@@ -171,7 +171,7 @@ class HierarchicalRL(OAIAgent):
     def get_distribution(self, obs, sample=True):
         if obs['player_completed_subtasks'] != self.prev_player_comp_st:
             # Completed previous subtask, set new subtask
-            self.curr_subtask_id = self.manager.predict(obs, sample=sample)[0]
+            self.curr_subtask_id, _ = self.manager.predict(obs, sample=sample)[0]
             self.prev_player_comp_st = obs['player_completed_subtasks']
         obs['curr_subtask'] = self.curr_subtask_id
         return self.worker.get_distribution(obs, sample=sample)
@@ -180,8 +180,9 @@ class HierarchicalRL(OAIAgent):
         # TODO consider forcing new subtask if none has been completed in x timesteps
         if (obs['player_completed_subtasks'] != self.prev_player_comp_st).any() or self.num_steps_since_new_subtask > 25:
             # Completed previous subtask, set new subtask
-            self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
-                                                        deterministic=deterministic)[0]
+            self.curr_subtask_id, _ = self.manager.predict(obs, state=state, episode_start=episode_start,
+                                                           deterministic=deterministic)[0]
+            print(self.curr_subtask_id)
             self.prev_player_comp_st = obs['player_completed_subtasks']
             self.num_steps_since_new_subtask = 0
         obs['curr_subtask'] = self.curr_subtask_id
@@ -189,7 +190,7 @@ class HierarchicalRL(OAIAgent):
         return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
 
     def get_agent_output(self):
-        return Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id]
+        return Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)]
 
     def save(self, path: Path) -> None:
         """

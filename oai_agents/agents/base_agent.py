@@ -75,7 +75,6 @@ class OAIAgent(nn.Module, ABC):
                              'Or, call predict with agent specific obs')
 
         obs = self.encoding_fn(self.mdp, state, self.grid_shape, self.horizon, p_idx=self.p_idx)
-        print(self.policy.observation_space.keys(), flush=True)
         if self.stack_frames:
             obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
             if self.prev_state is not None:
@@ -84,7 +83,6 @@ class OAIAgent(nn.Module, ABC):
                 obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([False]), [{}])
             obs['visual_obs'] = obs['visual_obs'].squeeze()
         if 'subtask_mask' in self.policy.observation_space.keys():
-            print("????????????", flush=True)
             obs['subtask_mask'] = \
                 get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS - 1).astype(bool)
         if 'player_completed_subtasks' in self.policy.observation_space.keys():
