@@ -60,9 +60,7 @@ class OAIAgent(nn.Module, ABC):
     def set_idx(self, p_idx):
         self.p_idx = p_idx
         self.prev_state = None
-        print('1?', flush=True)
         self.stack_frames = self.policy.observation_space['visual_obs'].shape[0] == (26 * self.args.num_stack)
-        print('2?', flush=True)
         self.stackedobs = StackedObservations(1, self.args.num_stack, self.policy.observation_space['visual_obs'], 'first')
 
     def set_encoding_params(self, mdp, horizon):
@@ -84,11 +82,9 @@ class OAIAgent(nn.Module, ABC):
             else:
                 obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([False]), [{}])
             obs['visual_obs'] = obs['visual_obs'].squeeze()
-        print('3?', flush=True)
         if 'subtask_mask' in self.policy.observation_space.keys():
             obs['subtask_mask'] = \
                 get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS - 1).astype(bool)
-        print('4?', flush=True)
         if 'player_completed_subtasks' in self.policy.observation_space.keys():
             # If this isn't the first step of the game, see if a subtask has been completed
             comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, self.state, i) for i in range(2)]
@@ -105,7 +101,7 @@ class OAIAgent(nn.Module, ABC):
             obs['player_completed_subtasks'] = self.player_completed_tasks
             obs['teammate_completed_subtasks'] = self.tm_completed_tasks
             self.prev_state = state
-        print('5?', flush=True)
+
         obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
 
         try:
