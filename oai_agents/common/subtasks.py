@@ -6,7 +6,7 @@ class Subtasks:
                 'get_soup_from_counter', 'put_soup_closer', 'serve_soup', 'unknown']
     HUMAN_READABLE_ST = ['I am grabbing an onion from the dispenser', 'I am grabbing an onion from the counter',
                          'I am putting my onion in the pot', 'I am placing my onion closer to the pot',
-                         'I am grabbing a dish from the dispenser', 'I am grabbing an onion from the counter',
+                         'I am grabbing a dish from the dispenser', 'I am grabbing dish from the counter',
                          'I am placing my dish closer to the pot', 'I am getting the soup',
                          'I am grabbing the soup from the counter', 'I am placing the soup closer',
                          'I am serving the soup', 'unknown']
