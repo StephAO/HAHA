@@ -141,7 +141,7 @@ class Manager:
 
 class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
-    def __init__(self, worker, teammates, args, use_frame_stack=False, name=None):
+    def __init__(self, worker, teammates, args, use_frame_stack=False, use_subtask_counts=False, name=None):
         name = name or 'rl_manager'
         n_layouts = len(args.layout_names)
         env_kwargs = {'full_init': False, 'stack_frames': use_frame_stack, 'args': args}
@@ -157,7 +157,7 @@ class RLManagerTrainer(SingleAgentTrainer):
 
         self.worker = worker
         super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env, eval_envs=eval_envs,
-                                               use_maskable_ppo=True)
+                                               use_subtask_counts=use_subtask_counts, use_maskable_ppo=True)
 
 class HierarchicalRL(OAIAgent):
     def __init__(self, worker, manager, args):

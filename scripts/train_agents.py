@@ -101,7 +101,7 @@ def create_all_agents(args, training_steps=1e7, agents_to_train='all'):
             worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=fcp_pop)
 
         # Create manager
-        rlmt = RLManagerTrainer(worker, fcp_pop, args)
+        rlmt = RLManagerTrainer(worker, fcp_pop, args, use_subtask_counts=True, name='rl_manager_sbt_c')
         rlmt.train_agents(total_timesteps=training_steps)
         manager = rlmt.get_agents()[0]
         hrl = HierarchicalRL(worker, manager, args)
