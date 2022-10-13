@@ -144,9 +144,17 @@ def create_test_population(args, training_steps=1e7):
 if __name__ == '__main__':
     args = get_arguments()
     # create_test_population(args)
-    create_all_agents(args, agents_to_train=['hrl'])
-    # from oai_agents.agents.base_agent import SB3Wrapper
-    # from oai_agents.agents.hrl import MultiAgentSubtaskWorker
+    # create_all_agents(args, agents_to_train=['hrl'])
+
+    from oai_agents.agents.base_agent import SB3Wrapper
+    from oai_agents.agents.hrl import MultiAgentSubtaskWorker, HierarchicalRL
+    worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / 'multi_agent_subtask_worker' / args.exp_name), args)
+    manager = SB3Wrapper.load(Path(args.base_dir / 'agent_models' / 'rl_manager' / 'best' / 'agents_dir' / 'agent_0'), args)
+    hrl = HierarchicalRL(worker, manager, args)
+    hrl.save(Path(args.base_dir / 'agent_models' / 'hrl' / args.exp_name))
+
+
+
     # from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
     # agents = []
     # for i in range(11):

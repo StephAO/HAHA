@@ -40,9 +40,6 @@ class OvercookedGymEnv(Env):
         self.stackedobs = [StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first'),
                            StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first')]
         if stack_frames:
-            # Needed to change value error to print in
-            #   File "/projects/star7023/software/anaconda/envs/oai/lib/python3.9/site-packages/stable_baselines3/common/utils.py", line 245, in is_vectorized_box_observation
-            # To return differetn obs for different agents
             self.obs_dict['visual_obs'] = self.stackedobs[0].stack_observation_space(self.obs_dict['visual_obs'])
 
         if ret_completed_subtasks:

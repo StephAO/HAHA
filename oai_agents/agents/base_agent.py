@@ -15,6 +15,7 @@ import torch.nn as nn
 from typing import List, Tuple, Union
 import stable_baselines3.common.distributions as sb3_distributions
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.vec_env.stacked_observations import StackedObservations
 import wandb
 
 
@@ -59,69 +60,58 @@ class OAIAgent(nn.Module, ABC):
     def set_idx(self, p_idx):
         self.p_idx = p_idx
         self.prev_state = None
+        self.stack_frames = self.policy.observation_space['visual_obs'].shape[0] == (26 * self.args.num_stack)
+        self.stackedobs = StackedObservations(1, self.args.num_stack, self.policy.observation_space['visual_obs'], 'first')
 
     def set_encoding_params(self, mdp, horizon):
         self.mdp = mdp
         self.horizon = horizon
         self.terrain = self.mdp.terrain_mtx
+        self.grid_shape = (7, 7)
 
     def action(self, state, deterministic=False):
         if self.p_idx is None or self.mdp is None or self.horizon is None:
             raise ValueError('Please call set_idx() and set_encoding_params() before action. '
                              'Or, call predict with agent specific obs')
-        grid_shape = self.mdp.shape
-        obs = self.encoding_fn(self.mdp, state, grid_shape, self.horizon, p_idx=self.p_idx)
-        agent_msg = ''
 
-        # OLD
-        if hasattr(self, 'manager'):
+        obs = self.encoding_fn(self.mdp, state, self.grid_shape, self.horizon, p_idx=self.p_idx)
+        if self.stack_frames:
+            obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
+            if self.prev_state is not None:
+                obs['visual_obs'] = self.stackedobs.reset(obs['visual_obs'])
+            else:
+                obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([False]), [{}])
+            obs['visual_obs'] = obs['visual_obs'].squeeze()
+        if 'subtask_mask' in self.policy.observation_space.keys():
             obs['subtask_mask'] = \
-                get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
+                get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS - 1).astype(bool)
+        if 'player_completed_subtasks' in self.policy.observation_space.keys():
             # If this isn't the first step of the game, see if a subtask has been completed
             if self.prev_state is not None:
-                comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, self.state, i) for i in range(2)]
+                comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, state, i) for i in range(2)]
                 # If a subtask has been completed, update counts
-                if comp_st[p_idx] is not None:
-                    self.player_completed_tasks[comp_st[p_idx]] += 1
-                    self.prev_st = comp_st[p_idx]
-                if comp_st[1 - p_idx] is not None:
-                    self.player_completed_tasks[comp_st[1 - p_idx]] += 1
-            # If this is the first step of the game, reset subtask counts to 0
+                if comp_st[self.p_idx] is not None:
+                    self.player_completed_tasks[comp_st[self.p_idx]] += 1
+                    self.prev_st = comp_st[self.p_idx]
+                if comp_st[1 - self.p_idx] is not None:
+                    self.player_completed_tasks[comp_st[1 - self.p_idx]] += 1
+                # If this is the first step of the game, reset subtask counts to 0
             else:
                 self.player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
                 self.tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
             obs['player_completed_subtasks'] = self.player_completed_tasks
             obs['teammate_completed_subtasks'] = self.tm_completed_tasks
-            self.prev_state = state
-            agent_msg = self.manager.get_current_subtask()
 
-        # NEW
-        obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
-        if self.stack_frames[p_idx]:
-            obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
-            if self.stack_frames_need_reset[p_idx]:  # On reset
-                obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
-                self.stack_frames_need_reset[p_idx] = False
-            else:
-                obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
-            obs['visual_obs'] = obs['visual_obs'].squeeze()
-        if self.return_completed_subtasks:
-            obs['subtask_mask'] = self.action_masks()
-            # If this isn't the first step of the game, see if a subtask has been completed
-            if self.prev_state is not None:
-                comp_st = calculate_completed_subtask(self.terrain, self.prev_state, self.state, p_idx)
-                # If a subtask has been completed, update counts
-                if comp_st is not None:
-                    self.completed_tasks[p_idx][comp_st] += 1
-                    if p_idx == self.p_idx:
-                        self.prev_st = comp_st
-            obs['player_completed_subtasks'] = self.completed_tasks[p_idx]
-            obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
-            if p_idx == self.t_idx:
-                obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}
+        self.prev_state = state
+        obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
+
+        try:
+            agent_msg = self.get_agent_output()
+        except AttributeError as e:
+            print(e, flush=True)
+            agent_msg = ' '
 
         action, _ = self.predict(obs, deterministic=deterministic)
-        agent_msg = str(action)
         return Action.INDEX_TO_ACTION[action], agent_msg
 
     def _get_constructor_parameters(self):

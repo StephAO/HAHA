@@ -4,12 +4,22 @@ class Subtasks:
     SUBTASKS = ['get_onion_from_dispenser', 'get_onion_from_counter', 'put_onion_in_pot', 'put_onion_closer',
                 'get_plate_from_dish_rack', 'get_plate_from_counter', 'put_plate_closer', 'get_soup',
                 'get_soup_from_counter', 'put_soup_closer', 'serve_soup', 'unknown']
+    HUMAN_READABLE_ST = ['I am grabbing an onion from the dispenser', 'I am grabbing an onion from the counter',
+                         'I am putting my onion in the pot', 'I am placing my onion closer to the pot',
+                         'I am grabbing a dish from the dispenser', 'I am grabbing dish from the counter',
+                         'I am placing my dish closer to the pot', 'I am getting the soup',
+                         'I am grabbing the soup from the counter', 'I am placing the soup closer',
+                         'I am serving the soup', 'unknown']
     NUM_SUBTASKS = len(SUBTASKS)
     SUBTASKS_TO_IDS = {s: i for i, s in enumerate(SUBTASKS)}
     IDS_TO_SUBTASKS = {v: k for k, v in SUBTASKS_TO_IDS.items()}
+    HR_SUBTASKS_TO_IDS = {s: i for i, s in enumerate(HUMAN_READABLE_ST)}
+    IDS_TO_HR_SUBTASKS = {v: k for k, v in HR_SUBTASKS_TO_IDS.items()}
     BASE_STS = ['get_onion_from_dispenser', 'put_onion_in_pot', 'get_plate_from_dish_rack', 'get_soup', 'serve_soup']
     SUPP_STS = ['put_onion_closer', 'put_plate_closer', 'put_soup_closer']
     COMP_STS = ['get_onion_from_counter', 'get_plate_from_counter', 'get_soup_from_counter']
+
+
 
 def facing(layout, player):
     '''Returns terrain type that the agent is facing'''
@@ -104,7 +114,7 @@ def calculate_completed_subtask(layout, prev_state, curr_state, p_idx):
 
 def non_full_pot_exists(state, terrain):
     """
-    Returns true if there is currenlty an empty soup
+    Returns true if there is currently an empty soup
     NOTE: Assumes there are 2 pots
     """
     n_full_soups = 0
