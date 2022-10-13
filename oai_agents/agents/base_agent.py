@@ -91,7 +91,6 @@ class OAIAgent(nn.Module, ABC):
                 comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, state, i) for i in range(2)]
                 # If a subtask has been completed, update counts
                 if comp_st[self.p_idx] is not None:
-                    print("PLAYER SUBTASK COMPLETED", flush=True)
                     self.player_completed_tasks[comp_st[self.p_idx]] += 1
                     self.prev_st = comp_st[self.p_idx]
                 if comp_st[1 - self.p_idx] is not None:
