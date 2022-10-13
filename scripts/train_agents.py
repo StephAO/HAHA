@@ -112,28 +112,23 @@ def create_all_agents(args, training_steps=1e7, agents_to_train='all'):
 def create_test_population(args, training_steps=1e7):
     agents = []
     h_dim= 64
-    seed = 888
+    seed = 88
 
     # name = 'frame_stack'
     # print(f'Starting training for: {name}')
     # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_frame_stack=True, hidden_dim=h_dim, seed=seed)
     # mat.train_agents(total_timesteps=1e6)
 
-    name = 'substasks'
+    name = 'w/_cloning'
     print(f'Starting training for: {name}')
-    mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_subtask_counts=True, hidden_dim=h_dim, seed=seed)
-    mat.train_agents(total_timesteps=1e6)
+    mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, use_policy_clone=True, seed=seed)
+    mat.train_agents(total_timesteps=3e6)
 
-    name = 'frame_stack+substasks'
-    print(f'Starting training for: {name}')
-    mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_subtask_counts=True, use_frame_stack=True,
-                                hidden_dim=h_dim, seed=seed)
-    mat.train_agents(total_timesteps=1e6)
-
-    name = 'nothing'
+    name = 'no_cloning'
     print(f'Starting training for: {name}')
     mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, seed=seed)
-    mat.train_agents(total_timesteps=1e6)
+    mat.train_agents(total_timesteps=3e6)
+
 
     # name = 'lstm'
     # print(f'Starting training for: {name}')
@@ -143,15 +138,15 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
-    # create_test_population(args)
+    create_test_population(args)
     # create_all_agents(args, agents_to_train=['hrl'])
 
-    from oai_agents.agents.base_agent import SB3Wrapper
-    from oai_agents.agents.hrl import MultiAgentSubtaskWorker, HierarchicalRL
-    worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / 'multi_agent_subtask_worker' / args.exp_name), args)
-    manager = SB3Wrapper.load(Path(args.base_dir / 'agent_models' / 'rl_manager' / 'best' / 'agents_dir' / 'agent_0'), args)
-    hrl = HierarchicalRL(worker, manager, args)
-    hrl.save(Path(args.base_dir / 'agent_models' / 'hrl' / args.exp_name))
+    # from oai_agents.agents.base_agent import SB3Wrapper
+    # from oai_agents.agents.hrl import MultiAgentSubtaskWorker, HierarchicalRL
+    # worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / 'multi_agent_subtask_worker' / args.exp_name), args)
+    # manager = SB3Wrapper.load(Path(args.base_dir / 'agent_models' / 'rl_manager' / 'best' / 'agents_dir' / 'agent_0'), args)
+    # hrl = HierarchicalRL(worker, manager, args)
+    # hrl.save(Path(args.base_dir / 'agent_models' / 'hrl' / args.exp_name))
 
 
 

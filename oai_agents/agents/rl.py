@@ -1,4 +1,4 @@
-from oai_agents.agents.base_agent import SB3Wrapper, SB3LSTMWrapper, OAITrainer
+from oai_agents.agents.base_agent import SB3Wrapper, SB3LSTMWrapper, OAITrainer, PolicyClone
 from oai_agents.common.arguments import get_arguments
 from oai_agents.common.networks import OAISinglePlayerFeatureExtractor
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
@@ -117,7 +117,7 @@ class MultipleAgentsTrainer(OAITrainer):
     ''' Train two independent RL agents to play with each other '''
 
     def __init__(self, args, name=None, num_agents=1, use_lstm=False, use_frame_stack=False, use_subtask_counts=False,
-                 hidden_dim=256, fcp_ck_rate=None, seed=None):
+                 hidden_dim=256, use_policy_clone=False, fcp_ck_rate=None, seed=None):
         '''
         Train multiple agents with each other.
         :param num_agents: Number of agents to train. num_agents=1 mean self-play, num_agents > 1 is population play
@@ -134,6 +134,7 @@ class MultipleAgentsTrainer(OAITrainer):
         self.fcp_ck_rate = fcp_ck_rate
         self.use_lstm = use_lstm
         self.use_frame_stack = use_frame_stack
+        self.use_policy_clones = use_policy_clone
 
         n_layouts = len(self.args.layout_names)
         env_kwargs = {'full_init': False, 'ret_completed_subtasks': use_subtask_counts,
@@ -170,7 +171,7 @@ class MultipleAgentsTrainer(OAITrainer):
                 agent_name = f'{name}_{i + 1}'
                 self.agents.append(SB3Wrapper(sb3_agent, agent_name, args))
 
-        self.teammates = self.agents
+        self.teammates = [PolicyClone(agent, args) for agent in self.agents] if self.use_policy_clones else self.agents
         self.agents_in_training = np.ones(len(self.agents))
         self.agents_timesteps = np.zeros(len(self.agents))
 
@@ -180,7 +181,7 @@ class MultipleAgentsTrainer(OAITrainer):
 
     def set_agents(self, agents):
         self.agents = agents
-        self.teammates = self.agents
+        self.teammates = [PolicyClone(agent, args) for agent in self.agents] if self.use_policy_clones else self.agents
         self.agents_in_training = np.ones(len(self.agents))
         self.agents_timesteps = np.zeros(len(self.agents))
 
@@ -207,6 +208,8 @@ class MultipleAgentsTrainer(OAITrainer):
             self.agents_timesteps[learner_idx] = self.agents[learner_idx].num_timesteps
             if self.agents_timesteps[learner_idx] > total_timesteps:
                 self.agents_in_training[learner_idx] = 0
+            if self.use_policy_clones:
+                self.teammates[learner_idx].update_policy(self.agents[learner_idx])
             # Evaluate
             if train_counter % 2 == 0:
                 eval_tm = self.teammates[np.random.randint(len(self.teammates))]

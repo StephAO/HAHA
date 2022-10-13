@@ -179,7 +179,14 @@ class SB3Wrapper(OAIAgent):
         return actions, state
 
     def get_distribution(self, obs: th.Tensor):
-        return self.policy.get_distribution(obs)
+        self.policy.set_training_mode(False)
+        obs, vectorized_env = self.policy.obs_to_tensor(obs)
+        with th.no_grad():
+            if 'subtask_mask' in obs and np.prod(obs['subtask_mask'].shape) == np.prod(self.policy.action_space.n):
+                dist = self.policy.get_distribution(obs, obs['subtask_mask'])
+            else:
+                dist = self.policy.get_distribution(obs)
+        return dist
 
     def learn(self, total_timesteps):
         self.agent.learn(total_timesteps=total_timesteps, reset_num_timesteps=False)
@@ -236,6 +243,72 @@ class SB3LSTMWrapper(SB3Wrapper):
         episode_start = episode_start or np.ones((1,), dtype=bool)
         return self.agent.get_distribution(obs, lstm_states=state, episode_start=episode_start)
 
+class PolicyClone(OAIAgent):
+    """
+    Policy Clones are copies of other agents policies (and nothing else). They can only play the game.
+    They do not support training, saving, or loading, just playing.
+    """
+    def __init__(self, source_agent, args, device=None):
+        """
+        Given a source agent, create a new agent that plays identically.
+        WARNING: This just copies the replica's policy, not all the necessary training code
+        """
+        super(PolicyClone, self).__init__('policy_clone', args)
+        device = device or th.device('cpu')
+        # Create policy object
+        policy_cls = type(source_agent.policy)
+        const_params = deepcopy(source_agent.policy._get_constructor_parameters())
+        self.policy = policy_cls(**const_params)  # pytype: disable=not-instantiable
+        # Load weights
+        state_dict = deepcopy(source_agent.policy.state_dict())
+        self.policy.load_state_dict(state_dict)
+        self.policy.to(device)
+
+    def predict(self, obs, state=None, episode_start=None, deterministic=False):
+        # Based on https://github.com/DLR-RM/stable-baselines3/blob/master/stable_baselines3/common/policies.py#L305
+        # Updated to include action masking
+        self.policy.set_training_mode(False)
+        obs, vectorized_env = self.policy.obs_to_tensor(obs)
+        with th.no_grad():
+            if 'subtask_mask' in obs and np.prod(obs['subtask_mask'].shape) == np.prod(self.policy.action_space.n):
+                dist = self.policy.get_distribution(obs, obs['subtask_mask'])
+            else:
+                dist = self.policy.get_distribution(obs)
+
+            actions = dist.get_actions(deterministic=deterministic)
+        # Convert to numpy, and reshape to the original action shape
+        actions = actions.cpu().numpy().reshape((-1,) + self.policy.action_space.shape)
+        # Remove batch dimension if needed
+        if not vectorized_env:
+            actions = actions.squeeze(axis=0)
+        return actions, state
+
+    def get_distribution(self, obs: th.Tensor):
+        self.policy.set_training_mode(False)
+        obs, vectorized_env = self.policy.obs_to_tensor(obs)
+        with th.no_grad():
+            if 'subtask_mask' in obs and np.prod(obs['subtask_mask'].shape) == np.prod(self.policy.action_space.n):
+                dist = self.policy.get_distribution(obs, obs['subtask_mask'])
+            else:
+                dist = self.policy.get_distribution(obs)
+        return dist
+
+    def update_policy(self, source_agent):
+        """
+        Update the current agents policy using the source agents weights
+        WARNING: This just copies the replica's policy fully, not all the necessary training code
+        """
+        state_dict = deepcopy(source_agent.policy.state_dict())
+        self.policy.load_state_dict(state_dict)
+
+    def learn(self):
+        raise NotImplementedError('Learning is not supported for cloned policies')
+
+    def save(self, path):
+        raise NotImplementedError('Saving is not supported for cloned policies')
+
+    def load(self, path, args):
+        raise NotImplementedError('Loading is not supported for cloned policies')
 
 class OAITrainer(ABC):
     """
@@ -250,6 +323,7 @@ class OAITrainer(ABC):
         self.ck_list = []
         if seed is not None:
             th.manual_seed(seed)
+            np.random.seed(seed)
 
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
@@ -260,7 +334,7 @@ class OAITrainer(ABC):
         for i, env in enumerate(self.eval_envs):
             env.set_teammate(eval_teammate)
             mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_episodes,
-                                                      deterministic=False, warn=False, render=visualize)
+                                                      deterministic=True, warn=False, render=visualize)
             tot_mean_reward.append(mean_reward)
             print(f'Eval at timestep {timestep} for layout {self.args.layout_names[i]}: {mean_reward}')
             wandb.log({f'eval_mean_reward_{self.args.layout_names[i]}': mean_reward, 'timestep': timestep})
