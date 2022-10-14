@@ -13,22 +13,21 @@ import wandb
 
 
 class OvercookedSubtaskGymEnv(OvercookedGymEnv):
-    def __init__(self, *args, **kwargs):
-        super(OvercookedSubtaskGymEnv, self).__init__(*args, **kwargs)
+    def __init__(self, single_subtask_id=None, use_curriculum=False, **kwargs):
+        super(OvercookedSubtaskGymEnv, self).__init__(**kwargs)
         self.obs_dict['curr_subtask'] = spaces.Discrete(Subtasks.NUM_SUBTASKS)
         self.observation_space = spaces.Dict(self.obs_dict)
-
-    def init(self, index=None, single_subtask_id=None, use_curriculum=False, **kwargs):
-        assert index is not None
+        assert not (use_curriculum and self.use_single_subtask)  # only one of them can be true
         self.use_curriculum = use_curriculum
         self.use_single_subtask = single_subtask_id is not None
-        assert not (use_curriculum and self.use_single_subtask)  # only one of them can be true
         if self.use_single_subtask:
             self.single_subtask, self.single_subtask_id = Subtasks.IDS_TO_SUBTASKS[single_subtask_id], single_subtask_id
         elif self.use_curriculum:
             self.curr_lvl = 0
 
-        self.mdp = OvercookedGridworld.from_layout_name(kwargs['args'].layout_names[index])
+    def init_base_env(self, env_index=None, **kwargs):
+        assert env_index is not None
+        self.mdp = OvercookedGridworld.from_layout_name(kwargs['args'].layout_names[env_index])
         all_counters = self.mdp.get_counter_locations()
         COUNTERS_PARAMS = {
             'start_orientations': False,
@@ -41,7 +40,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
         ss_fn = self.mdp.get_subtask_start_state_fn(self.mlam)
         env = OvercookedEnv.from_mdp(self.mdp, horizon=100, start_state_fn=ss_fn)
-        super(OvercookedSubtaskGymEnv, self).init(index=index, base_env=env, **kwargs)
+        super(OvercookedSubtaskGymEnv, self).init_base_env(env_index=env_index, base_env=env, **kwargs)
 
     def get_obs(self, p_idx=None, done=False):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
@@ -49,7 +48,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             obs['curr_subtask'] = self.goal_subtask_id
         if self.stack_frames[p_idx]:
             obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
-            if self.stack_frames_need_reset[p_idx]: # On reset
+            if self.stack_frames_need_reset[p_idx]:  # On reset
                 obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
                 self.stack_frames_need_reset[p_idx] = False
             else:
@@ -61,7 +60,8 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         # Calculate reward for using the pass.
         # Reward should be proportional to how much time is saved from using the pass
         smallest_dist = float('inf')
-        object_location = np.array(self.state.players[self.p_idx].position) + np.array(self.state.players[self.p_idx].orientation)
+        object_location = np.array(self.state.players[self.p_idx].position) + np.array(
+            self.state.players[self.p_idx].orientation)
         for direction in [np.array([0, 1]), np.array([0, -1]), np.array([1, 0]), np.array([-1, 0])]:
             adj_tile = tuple(np.array(object_location) + direction)
             # Can't pick up from a terrain location that is not walkable
@@ -88,10 +88,10 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         for obj in state.objects.values():
             x, y = obj.position
             if obj.name == 'soup' and terrain[y][x] == 'P':
-                if (obj.position == chosen_pot_loc).all(): # this is the pot the worker put the onion in
+                if (obj.position == chosen_pot_loc).all():  # this is the pot the worker put the onion in
                     # -1 since one onion was just added to this pot, and we want the number before it was added
                     chosen_pot_num_onions = len(obj.ingredients) - 1
-                else: # this is the other pot
+                else:  # this is the other pot
                     other_pot_num_onions = len(obj.ingredients)
         return max(0, (chosen_pot_num_onions - other_pot_num_onions) * 0.2)
 
@@ -105,14 +105,15 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
-        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
+        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(
+                joint_action) == self.prev_actions:
             joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
 
         self.prev_state, self.prev_actions = deepcopy(self.state), joint_action
         next_state, _, done, info = self.env.step(joint_action)
         self.state = self.env.state
 
-        reward = -0.01 # existence penalty
+        reward = -0.01  # existence penalty
         if joint_action[self.p_idx] == Action.INTERACT:
             subtask = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx)
             done = True
@@ -131,20 +132,9 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 elif self.goal_subtask == 'put_onion_in_pot':
                     reward += self.get_fuller_pot_reward(self.state, self.mdp.terrain_mtx)
 
-
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self, evaluation_trial_num=-1):
-        self.p_idx = np.random.randint(2)
-        self.t_idx = 1 - self.p_idx
-        # Setup correct agent observation stacking for agents that need it
-        self.stack_frames[self.p_idx] = self.main_agent_stack_frames
-        # TODO Get rid of magic numbers
-        if self.teammate is not None:
-            self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == \
-                                            (self.enc_num_channels * self.args.num_stack)
-        self.stack_frames_need_reset = [True, True]
-        # TODO randomly set p_idx
         if self.use_single_subtask:
             self.goal_subtask = self.single_subtask
         else:
@@ -158,17 +148,51 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             subtask_probs = subtask_mask / np.sum(subtask_mask)
             self.goal_subtask = np.random.choice(Subtasks.SUBTASKS, p=subtask_probs)
         self.goal_subtask_id = Subtasks.SUBTASKS_TO_IDS[self.goal_subtask]
+
+        # For layouts where there are restrictions on what player can do each subtask, set the right player for the
+        # goal subtask. If certain subtasks are useless for certain layouts, raise errors if trying to learn on them
+        if self.layout_name == 'force_coordination':
+            if self.goal_subtask_id in ['get_onion_from_dispenser', 'put_onion_closer', 'get_plate_from_dish_rack',
+                                        'put_plate_closer']:
+                self.p_idx = 1
+            elif self.goal_subtask_id in ['get_onion_from_counter', 'put_onion_in_pot', 'get_plate_from_counter',
+                                          'get_soup', 'serve_soup']:
+                self.p_idx = 0
+            else:
+                useless_subtasks = ['get_soup_from_counter', 'put_soup_closer']
+                raise ValueError(f"{useless_subtasks} are not valid subtasks for forced_coordination")
+        elif self.layout_name == 'asymmetric_advantages':
+            self.p_idx = np.random.randint(2)
+            useless_subtasks = ['put_soup_closer', 'put_onion_closer', 'put_plate_closer',
+                                'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']
+            if self.goal_subtask_id in useless_subtasks:
+                raise ValueError(f"{useless_subtasks} are not valid subtasks for asymmetric_advantages")
+        else:
+            self.p_idx = np.random.randint(2)
+
+        self.t_idx = 1 - self.p_idx
+        # Setup correct agent observation stacking for agents that need it
+        self.stack_frames[self.p_idx] = self.main_agent_stack_frames
+        if self.teammate is not None:
+            self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == \
+                                            (self.enc_num_channels * self.args.num_stack)
+        self.stack_frames_need_reset = [True, True]
+
         if evaluation_trial_num >= 0:
             counters = evaluation_trial_num % USEABLE_COUNTERS
-            ss_kwargs = {'p_idx': self.p_idx, 'curr_subtask': self.goal_subtask, 'num_random_objects': counters}
+            ss_kwargs = {'p_idx': self.p_idx, 'random_pos': False, 'random_dir': False,
+                         'curr_subtask': self.goal_subtask, 'num_random_objects': counters}
         else:
-            ss_kwargs = {'p_idx': self.p_idx, 'curr_subtask': self.goal_subtask, 'max_random_objs': USEABLE_COUNTERS}
+            random_pos = (self.layout_name == 'counter_circuit_o_1order')
+            ss_kwargs = {'p_idx': self.p_idx, 'random_pos': random_pos, 'random_dir': False,
+                         'curr_subtask': self.goal_subtask, 'max_random_objs': USEABLE_COUNTERS}
         self.env.reset(start_state_kwargs=ss_kwargs)
         self.state = self.env.state
         self.prev_state = None
         if self.goal_subtask != 'unknown':
             unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-            assert get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS + 1)[self.goal_subtask_id]
+            assert get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS + 1)[
+                self.goal_subtask_id]
         return self.get_obs(self.p_idx)
 
     def evaluate(self, agent):
@@ -183,18 +207,19 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 # If the subtask is no longer possible (e.g. other agent picked the only onion up from the counter)
                 # then stop the trial and don't count it
                 unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-                if not get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS + 1)[self.goal_subtask_id]:
+                if not get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS + 1)[
+                    self.goal_subtask_id]:
                     invalid_trial = True
                     break
-                
+
                 action = agent.predict(obs)[0]
                 obs, reward, done, info = self.step(action)
                 cum_reward += reward
-            
+
             if invalid_trial:
                 tot_trials -= 1
                 continue
-            
+
             if reward >= 1:
                 results[self.goal_subtask_id][0] += 1
             else:
@@ -213,5 +238,3 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             self.curr_lvl += 1
         wandb.log({'subtask_reward': mean_reward, 'subtask_success': num_succ, 'timestep': agent.num_timesteps})
         return num_succ == tot_trials and num_succ > 10
-
-

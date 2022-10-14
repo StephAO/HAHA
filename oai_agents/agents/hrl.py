@@ -99,22 +99,26 @@ class MultiAgentSubtaskWorker(OAIAgent):
 
         # Train 12 individual agents, each for a respective subtask
         agents = []
+        original_layout_names = deepcopy(args.layout_names)
         for i in range(Subtasks.NUM_SUBTASKS):
             # RL single subtask agents trained with teammeates
             # Make necessary envs
+
+            # Don't bother training an agent on a subtask if that subtask is useless for that layout
+            layouts_to_use = deepcopy(original_layout_names)
+            if Subtasks.IDS_TO_SUBTASKS[i] in ['get_soup_from_counter', 'put_soup_closer']:
+                layouts_to_use.remove('forced_coordination')
+            if Subtasks.IDS_TO_SUBTASKS[i] in ['put_soup_closer', 'put_onion_closer', 'put_plate_closer',
+                                               'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']:
+                layouts_to_use.remove('asymmetric_advantages')
+            args.layout_names = layouts_to_use
             n_layouts = len(args.layout_names)
 
-            env_kwargs = {'full_init': False, 'stack_frames': False, 'args': args}
+            env_kwargs = {'single_subtask_id': i, 'stack_frames': False, 'full_init': False, 'args': args}
             env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs,
                                vec_env_cls=VEC_ENV_CLS)
 
-            init_kwargs = {'single_subtask_id': i, 'args': args}
-            for n in range(args.n_envs):
-                env.env_method('init', indices=n, **{'index': n % n_layouts, **init_kwargs})
-
-            eval_envs_kwargs = env_kwargs
-            eval_envs_kwargs.update(init_kwargs)
-            eval_envs_kwargs['full_init'] = True
+            env_kwargs['full_init'] = True
             eval_envs = [OvercookedSubtaskGymEnv(**{'index': n, 'is_eval_env': True, **env_kwargs})
                          for n in range(n_layouts)]
             # Create trainer

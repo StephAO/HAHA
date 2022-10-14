@@ -11,7 +11,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
-EPOCH_TIMESTEPS = 10000
+EPOCH_TIMESTEPS = 1000
 VEC_ENV_CLS = DummyVecEnv #SubprocVecEnv
 
 class SingleAgentTrainer(OAITrainer):
@@ -31,21 +31,19 @@ class SingleAgentTrainer(OAITrainer):
         self.n_tm = len(teammates)
         if env is None:
             n_layouts = len(self.args.layout_names)
-            env_kwargs = {'full_init': False, 'ret_completed_subtasks': use_subtask_counts,
-                          'stack_frames': use_frame_stack, 'args': args}
+            env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts,
+                          'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
             self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, vec_env_cls=VEC_ENV_CLS,
                                     env_kwargs=env_kwargs)
 
-            init_args = {'shape_rewards': True, 'args': args}
-            for i in range(self.args.n_envs):
-                self.env.env_method('init', indices=i, **{'index': i % n_layouts, **init_args})
-
             eval_envs_kwargs = {'is_eval_env': True, 'ret_completed_subtasks': use_subtask_counts,
                                 'stack_frames': use_frame_stack, 'horizon': 400, 'args': args}
-            self.eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
+            self.eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
         else:
             self.env = env
             self.eval_envs = eval_envs
+
+        self.set_new_envs()
 
         self.use_subtask_eval = use_subtask_eval
 
@@ -81,14 +79,17 @@ class SingleAgentTrainer(OAITrainer):
     def train_agents(self, total_timesteps=2e6, exp_name=None):
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
-                         dir=str(self.args.base_dir / 'wandb'),
-                         reinit=True, name=exp_name + '_' + self.learning_agent.name, mode=self.args.wandb_mode)
+                                  dir=str(self.args.base_dir / 'wandb'),
+                                  reinit=True, name=exp_name + '_' + self.learning_agent.name, mode=self.args.wandb_mode)
         best_path, best_tag = None, None
         best_score = -1
         eval_tm_idx = 0
         if self.use_subtask_eval:
             self.num_success = 0
         while self.learning_agent.num_timesteps < total_timesteps:
+            # Set new env distribution if training on multiple envs
+            if len(self.n_layouts) > 1 and self.args.multi_env_mode != 'uniform':
+                self.set_new_envs()
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
             eval_teammate = self.teammates[eval_tm_idx]
@@ -137,18 +138,15 @@ class MultipleAgentsTrainer(OAITrainer):
         self.use_policy_clones = use_policy_clone
 
         n_layouts = len(self.args.layout_names)
-        env_kwargs = {'full_init': False, 'ret_completed_subtasks': use_subtask_counts,
-                      'stack_frames': use_frame_stack, 'args': args}
+        env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts,
+                      'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
         self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, vec_env_cls=VEC_ENV_CLS,
                                 env_kwargs=env_kwargs)
-
-        init_kwargs = {'shape_rewards': True, 'args': args}
-        for i in range(self.args.n_envs):
-            self.env.env_method('init', indices=i, **{'index': i % n_layouts, **init_kwargs})
+        self.set_new_envs()
 
         eval_envs_kwargs = {'ret_completed_subtasks': use_subtask_counts, 'stack_frames': use_frame_stack,
                             'is_eval_env': True, 'horizon': 400, 'args': args}
-        self.eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
+        self.eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         policy_kwargs = dict(
             # features_extractor_class=OAISinglePlayerFeatureExtractor,
@@ -194,11 +192,14 @@ class MultipleAgentsTrainer(OAITrainer):
         best_score = -1
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
-                         dir=str(self.args.base_dir / 'wandb'),
-                         reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
+                                  dir=str(self.args.base_dir / 'wandb'),
+                                  reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
         train_counter = 0
         # Each agent should learn for `total_timesteps` steps. Keep training until all agents hit this threshold
         while any(self.agents_in_training):
+            # Set new env distribution if training on multiple envs
+            if self.n_layouts > 1 and self.args.multi_env_mode != 'uniform':
+                self.set_new_envs()
             # Randomly select new teammates from population (can include learner)
             self.set_new_teammates()
             # Randomly choose agent that will learn this time

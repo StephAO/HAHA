@@ -21,7 +21,13 @@ USEABLE_COUNTERS = 5 # Max number of counters the agents should use
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, full_init=True, ret_completed_subtasks=False, stack_frames=False, grid_shape=None, args=None, **kwargs):
+    def __init__(self, grid_shape=None, ret_completed_subtasks=False, stack_frames=False, is_eval_env=False,
+                 shape_rewards=False, full_init=True, args=None, **kwargs):
+        self.is_eval_env = is_eval_env
+        self.args = args
+        self.device = args.device
+        # Observation encoding setup
+        self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
         if args.encoding_fn == 'OAI_egocentric':
             # Override grid shape to make it egocentric
             assert grid_shape is None, 'Grid shape cannot be used when egocentric encodings are used!'
@@ -31,8 +37,8 @@ class OvercookedGymEnv(Env):
             grid = [layout_row.strip() for layout_row in base_layout_params['grid'].split("\n")]
             self.grid_shape = (len(grid[0]), len(grid))
 
-        # TODO improve bounds for each dimension
-        # Currently 20 is the default value for recipe time (which I believe is the largest value used
+        # Set Sp Observation Space
+        # Currently 20 is the default value for recipe time (which I believe is the largest value used in encoding)
         self.enc_num_channels = 26 # Default channels of OAI_Lossless encoding
         self.obs_dict = {}
         self.obs_dict['visual_obs'] = spaces.Box(0, 20, (self.enc_num_channels, *self.grid_shape), dtype=np.int)
@@ -52,14 +58,18 @@ class OvercookedGymEnv(Env):
         self.main_agent_stack_frames = stack_frames
         self.stack_frames = [False, False]
         self.stack_frames_need_reset = [True, True]
-
+        # Set up Action Space
         self.action_space = spaces.Discrete(len(Action.ALL_ACTIONS))
+
+        self.shape_rewards = shape_rewards
+        self.visualization_enabled = False
+        self.step_count = 0
         self.teammate = None
         if full_init:
-            self.init(args=args, **kwargs)
+            self.init_base_env(**kwargs)
 
     # TODO rename
-    def init(self, index=None, base_env=None, horizon=None, is_eval_env=False, shape_rewards=False, args=None):
+    def init_base_env(self, env_index=None, base_env=None, horizon=None):
         '''
         :param shape_rewards: Shape rewards for RL
         :param base_env: Base overcooked environment. If None, create env from layout name. Useful if special parameters
@@ -67,11 +77,11 @@ class OvercookedGymEnv(Env):
         :param horizon: How many steps to run the env for. If None, default to args.horizon value
         :param args: Experiment arguments (see arguments.py)
         '''
-        assert index is not None
-        self.layout_name = args.layout_names[index]
+        assert env_index is not None
+        self.layout_name = self.args.layout_names[env_index]
         if base_env is None:
             self.mdp = OvercookedGridworld.from_layout_name(self.layout_name)
-            horizon = horizon or args.horizon
+            horizon = horizon or self.args.horizon
             all_counters = self.mdp.get_counter_locations()
             COUNTERS_PARAMS = {
                 'start_orientations': False,
@@ -87,14 +97,7 @@ class OvercookedGymEnv(Env):
             self.env = OvercookedEnv.from_mdp(self.mdp, horizon=horizon, start_state_fn=ss_fn)
         else:
             self.env = base_env
-        self.is_eval_env = is_eval_env
-        self.shape_rewards = shape_rewards
-        self.args = args
-        self.device = args.device
-        self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
-        self.visualization_enabled = False
-        self.step_count = 0
-        self.teammate = None
+
         self.terrain = self.mdp.terrain_mtx
         self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
         obs = self.reset()
@@ -185,7 +188,7 @@ class OvercookedGymEnv(Env):
         if self.is_eval_env:
             ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
         else:
-            random_pos = (self.layout_name != 'forced_coordination')
+            random_pos = (self.layout_name == 'counter_circuit_o_1order')
             ss_kwargs = {'random_pos': random_pos, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS}
         self.env.reset(start_state_kwargs=ss_kwargs)
         self.prev_state = None
@@ -211,12 +214,17 @@ register(
     entry_point='OvercookedGymEnv'
 )
 
+class DummyPolicy:
+    def __init__(self, obs_space):
+        self.observation_space = obs_space
+
 class DummyAgent:
     def __init__(self, action=Action.STAY):
         self.action = Action.ACTION_TO_INDEX[action]
+        self.policy = DummyPolicy(spaces.Dict({'visual_obs': spaces.Box(0,1,(1,))}))
 
     def predict(self, x, state=None, episode_start=None, deterministic=False):
-        return self.action, None
+        return np.array(self.action), None
 
 if __name__ == '__main__':
     from oai_agents.common.arguments import get_arguments

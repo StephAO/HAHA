@@ -8,7 +8,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 
 def calculate_agent_pairing_score_matrix(agents, args):
     eval_envs_kwargs = {'is_eval_env': True, 'args': args}
-    eval_envs = [OvercookedGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(len(args.layout_names))]
+    eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(len(args.layout_names))]
     score_matrix = np.zeros((len(agents), len(agents)))
     for eval_env in eval_envs:
         for i, p1 in enumerate(agents):
@@ -112,23 +112,41 @@ def create_all_agents(args, training_steps=1e7, agents_to_train='all'):
 def create_test_population(args, training_steps=1e7):
     agents = []
     h_dim= 64
-    seed = 88
+    seed = 8
 
     # name = 'frame_stack'
     # print(f'Starting training for: {name}')
     # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_frame_stack=True, hidden_dim=h_dim, seed=seed)
     # mat.train_agents(total_timesteps=1e6)
 
-    name = 'w/_cloning'
-    print(f'Starting training for: {name}')
-    mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, use_policy_clone=True, seed=seed)
-    mat.train_agents(total_timesteps=3e6)
+    if False:
+        name = 'multi_env_uniform'
+        print(f'Starting training for: {name}')
+        args.layout_names = ['counter_circuit_o_1order','forced_coordination','asymmetric_advantages']
+        args.multi_env_mode = 'uniform'
+        mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, seed=seed)
+        mat.train_agents(total_timesteps=3e6)
 
-    name = 'no_cloning'
-    print(f'Starting training for: {name}')
-    mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, seed=seed)
-    mat.train_agents(total_timesteps=3e6)
+        name = 'multi_env_random'
+        print(f'Starting training for: {name}')
+        args.multi_env_mode = 'random'
+        mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, seed=seed)
+        mat.train_agents(total_timesteps=3e6)
 
+    else:
+        name = 'multi_env_splits'
+        print(f'Starting training for: {name}')
+        args.layout_names = ['counter_circuit_o_1order', 'forced_coordination', 'asymmetric_advantages']
+        args.multi_env_mode = 'splits'
+        mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, seed=seed)
+        mat.train_agents(total_timesteps=3e6)
+
+        name = 'single_env'
+        print(f'Starting training for: {name}')
+        args.layout_names = ['counter_circuit_o_1order']
+        args.multi_env_mode = 'uniform'
+        mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, seed=seed)
+        mat.train_agents(total_timesteps=3e6)
 
     # name = 'lstm'
     # print(f'Starting training for: {name}')

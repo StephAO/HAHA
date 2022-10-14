@@ -10,14 +10,14 @@ from os import listdir
 from os.path import isfile, join
 import re
 
-from oai_agents.agents import OAIAgent
+from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
 from oai_agents.agents.rl import MultipleAgentsTrainer
 from oai_agents.agents.hrl import MultiAgentSubtaskWorker
 # from oai_agents.agents import Manager
 from oai_agents.common.arguments import get_arguments
 from oai_agents.common.subtasks import Subtasks
-from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
+from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv, DummyAgent
 # from oai_agents.gym_environments import OvercookedSubtaskGymEnv
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
 from overcooked_ai_py.mdp.overcooked_mdp import Direction, Action, OvercookedState
@@ -79,7 +79,7 @@ class App:
         self._running = True
         self._display_surf = None
         self.args = args
-        self.layout_name = args.layout_name
+        self.layout_name = args.layout_names[0]
 
         self.use_subtask_env = False
         if self.use_subtask_env:
@@ -91,8 +91,9 @@ class App:
             self.env = OvercookedSubtaskGymEnv(**p_kwargs, **kwargs)
             agents = ['human', tm]
         else:
-            self.env = OvercookedGymEnv(args=args, ret_completed_subtasks=True)
-            self.env.set_teammate(teammate)
+            self.env = OvercookedGymEnv(index=0, args=args, ret_completed_subtasks=True)
+            # teammate if teammate is not None else agent
+            self.env.set_teammate(teammate or agent)
 
         self.grid_shape = self.env.grid_shape
         if traj_file is not None:
@@ -379,24 +380,25 @@ if __name__ == "__main__":
     # parser.add_argument('--agent-file', type=str, default=None, help='trajectory file to run')
 
 
+
     args = get_arguments(additional_args)
 
-    data_path = args.base_dir / args.data_path
+    args.layout_names = ['tf_test_4', 'tf_test_4']
+    #
+    # data_path = args.base_dir / args.data_path
+    #
+    # mat = MultipleAgentsTrainer(args, num_agents=0)
+    # mat.load_agents(path=Path('./agent_models/fcp_pop/ego_pop'), tag='test')
+    # teammates = mat.get_agents()
+    #
+    # worker = MultiAgentSubtaskWorker.load(
+    #         Path('./agent_models/multi_agent_subtask_worker/ego_pop/'), args)
+    #
+    # hm_hrl = HumanManagerHRL(worker, args)
+    #
+    # tm = teammates[1]
 
-    mat = MultipleAgentsTrainer(args, num_agents=0)
-    mat.load_agents(path=Path('./agent_models/fcp/counter_circuit_o_1order/12_pop'), tag='test')
-    teammates = mat.get_agents()
-
-    worker = MultiAgentSubtaskWorker.load(
-            Path('./agent_models/multi_agent_subtask_worker/counter_circuit_o_1order/test/'), args)
-
-    hm_hrl = HumanManagerHRL(worker, args)
-
-    tm = teammates[1]
-
-    agents = [hm_hrl, tm]
-
-    dc = App(args, agent=hm_hrl, teammate=tm, slowmo_rate=8, )
+    dc = App(args, agent=DummyAgent(), teammate=None, slowmo_rate=8, )
     dc.on_execute()
 
 
