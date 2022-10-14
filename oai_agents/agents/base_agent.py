@@ -366,7 +366,7 @@ class OAITrainer(ABC):
             for i, env_idx in enumerate(curr_split):
                 indices = list(range(n_envs_per_layout * i, n_envs_per_layout * (i + 1)))
                 self.env.env_method('init_base_env', indices=indices, env_index=env_idx)
-            self.curr_split += 1
+            self.curr_split = (self.curr_split + 1) % len(self.splits)
         elif self.args.multi_env_mode == 'random':
             for i in range(self.args.n_envs):
                 env_idx = np.random.randint(self.n_layouts)
