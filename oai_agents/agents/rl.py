@@ -11,24 +11,25 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
-EPOCH_TIMESTEPS = 1000
+EPOCH_TIMESTEPS = 10000
 VEC_ENV_CLS = DummyVecEnv #SubprocVecEnv
 
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, teammates, args, name=None, env=None, eval_envs=None, use_lstm=False, use_frame_stack=False,
-                 use_subtask_counts=False, use_maskable_ppo=False, hidden_dim=256, use_subtask_eval=False, seed=None):
+                 use_subtask_counts=False, use_maskable_ppo=False, inc_sp=False, hidden_dim=256, use_subtask_eval=False,
+                 seed=None):
         name = name or 'rl_singleagent'
         super(SingleAgentTrainer, self).__init__(name, args, seed=seed)
         self.args = args
         self.device = args.device
         self.use_lstm = use_lstm
         self.use_frame_stack = use_frame_stack
+        self.use_subtask_eval = use_subtask_eval
         self.hidden_dim = hidden_dim
         self.seed = seed
         self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
         self.teammates = teammates
-        self.n_tm = len(teammates)
         if env is None:
             env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts,
                           'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
@@ -41,10 +42,7 @@ class SingleAgentTrainer(OAITrainer):
         else:
             self.env = env
             self.eval_envs = eval_envs
-
         self.set_new_envs()
-
-        self.use_subtask_eval = use_subtask_eval
 
         policy_kwargs = dict(
             net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
@@ -64,6 +62,9 @@ class SingleAgentTrainer(OAITrainer):
         self.learning_agent = self.wrap_agent(sb3_agent, agent_name)
         self.agents = [self.learning_agent]
 
+        if inc_sp:
+            self.teammates.append(self.learning_agent)
+
     def _get_constructor_parameters(self):
         return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, use_frame_stack=self.use_frame_stack,
                     hidden_dim=self.hidden_dim, seed=self.seed)
@@ -82,7 +83,6 @@ class SingleAgentTrainer(OAITrainer):
                                   reinit=True, name=exp_name + '_' + self.learning_agent.name, mode=self.args.wandb_mode)
         best_path, best_tag = None, None
         best_score = -1
-        eval_tm_idx = 0
         if self.use_subtask_eval:
             self.num_success = 0
         while self.learning_agent.num_timesteps < total_timesteps:
@@ -91,23 +91,24 @@ class SingleAgentTrainer(OAITrainer):
                 self.set_new_envs()
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
-            eval_teammate = self.teammates[eval_tm_idx]
             if self.use_subtask_eval:
                 env_success = []
+                use_specific_tms = type(self.teammates) == dict
                 for env in self.eval_envs:
-                    env.set_teammate(eval_teammate)
+                    tm = self.teammates[env.get_layout_name()] if use_specific_tms else self.teammates[self.eval_tm_idx]
+                    env.set_teammate(tm)
                     all_successes = env.evaluate(self.learning_agent)
                     env_success.append(all_successes)
+                self.eval_tm_idx = (self.eval_tm_idx + 1) % len(self.teammates)
                 self.num_success = (self.num_success + 1) if all(env_success) else 0
                 if self.num_success >= 3:
                     break
             else:
-                mean_reward = self.evaluate(self.learning_agent, eval_teammate)
+                mean_reward = self.evaluate(self.learning_agent)
                 if mean_reward >= best_score:
                     best_path, best_tag = self.save_agents(tag='best')
                     print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
                     best_score = mean_reward
-            eval_tm_idx = (eval_tm_idx + 1) % len(self.teammates)
         path, tag = self.save_agents()
         self.load_agents(best_path, best_tag)
         run.finish()
@@ -192,14 +193,13 @@ class MultipleAgentsTrainer(OAITrainer):
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
                                   dir=str(self.args.base_dir / 'wandb'),
                                   reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
-        train_counter = 0
         # Each agent should learn for `total_timesteps` steps. Keep training until all agents hit this threshold
         while any(self.agents_in_training):
             # Set new env distribution if training on multiple envs
             if self.n_layouts > 1 and self.args.multi_env_mode != 'uniform':
                 self.set_new_envs()
             # Randomly select new teammates from population (can include learner)
-            self.set_new_teammates()
+            self.set_random_teammates()
             # Randomly choose agent that will learn this time
             learner_idx = np.random.choice(len(self.agents), p=self.agents_in_training)
             # Learn and update recoded timesteps for that agent
@@ -210,20 +210,17 @@ class MultipleAgentsTrainer(OAITrainer):
             if self.use_policy_clones:
                 self.teammates[learner_idx].update_policy(self.agents[learner_idx])
             # Evaluate
-            if train_counter % 2 == 0:
-                eval_tm = self.teammates[np.random.randint(len(self.teammates))]
-                mean_reward = self.evaluate(self.agents[learner_idx], eval_tm, timestep=np.sum(self.agents_timesteps))
-                # FCP checkpoint saving
-                if self.fcp_ck_rate and len(self.agents) == 1:
-                    if self.agents_timesteps[0] // self.fcp_ck_rate > (len(self.ck_list) - 1):
-                        path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
-                        self.ck_list.append((mean_reward, path, tag))
-                # Saving best model
-                if mean_reward >= best_score:
-                    best_path, best_tag = self.save_agents(tag='best')
-                    print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
-                    best_score = mean_reward
-            train_counter += 1
+            mean_reward = self.evaluate(self.agents[learner_idx], timestep=np.sum(self.agents_timesteps))
+            # FCP checkpoint saving
+            if self.fcp_ck_rate and len(self.agents) == 1:
+                if self.agents_timesteps[0] // self.fcp_ck_rate > (len(self.ck_list) - 1):
+                    path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
+                    self.ck_list.append((mean_reward, path, tag))
+            # Saving best model
+            if mean_reward >= best_score:
+                best_path, best_tag = self.save_agents(tag='best')
+                print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
+                best_score = mean_reward
         self.load_agents(best_path, best_tag)
         run.finish()
 

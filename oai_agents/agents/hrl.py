@@ -146,32 +146,34 @@ class Manager:
 
 class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
-    def __init__(self, worker, teammates, args, use_frame_stack=False, use_subtask_counts=False, name=None):
+    def __init__(self, worker, teammates, args, use_frame_stack=False, use_subtask_counts=False, inc_sp=False, name=None):
         name = name or 'rl_manager'
         n_layouts = len(args.layout_names)
-        env_kwargs = {'full_init': False, 'stack_frames': use_frame_stack, 'args': args}
+        env_kwargs = {'worker': worker, 'shape_rewards': False, 'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
         env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs, vec_env_cls=VEC_ENV_CLS)
-
-        init_kwargs = {'worker': worker, 'shape_rewards': False, 'args': args}
-        for i in range(args.n_envs):
-            env.env_method('init', indices=i, **{'index': i % n_layouts, **init_kwargs})
 
         eval_envs_kwargs = {'worker': worker, 'shape_rewards': False, 'stack_frames': use_frame_stack,
                             'is_eval_env': True, 'horizon': 400, 'args': args}
-        eval_envs = [OvercookedManagerGymEnv(**{'index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
+        eval_envs = [OvercookedManagerGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         self.worker = worker
-        super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env, eval_envs=eval_envs,
+        super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env, eval_envs=eval_envs, inc_sp=False,
                                                use_subtask_counts=use_subtask_counts, use_maskable_ppo=True)
+        if inc_sp:
+            playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
+            self.teammates.append(playable_self)
+
 
 class HierarchicalRL(OAIAgent):
-    def __init__(self, worker, manager, args):
-        super(HierarchicalRL, self).__init__('hierarchical_rl', args)
+    def __init__(self, worker, manager, args, name=None):
+        name = name or 'hierarchical_rl'
+        super(HierarchicalRL, self).__init__(name, args)
         self.worker = worker
         self.manager = manager
         self.prev_player_comp_st = None
         self.policy = self.manager.policy
         self.num_steps_since_new_subtask = 0
+        self.use_hrl_obs = True
 
     def get_distribution(self, obs, sample=True):
         if obs['player_completed_subtasks'] != self.prev_player_comp_st:
@@ -183,7 +185,7 @@ class HierarchicalRL(OAIAgent):
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         # TODO consider forcing new subtask if none has been completed in x timesteps
-        print(obs['player_completed_subtasks'],  self.prev_player_comp_st, (obs['player_completed_subtasks'] != self.prev_player_comp_st).any(), flush=True)
+        # print(obs['player_completed_subtasks'],  self.prev_player_comp_st, (obs['player_completed_subtasks'] != self.prev_player_comp_st).any(), flush=True)
         if (obs['player_completed_subtasks'] != self.prev_player_comp_st).any() or self.num_steps_since_new_subtask > 25:
             # Completed previous subtask, set new subtask
             self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,

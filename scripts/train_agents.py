@@ -1,5 +1,5 @@
 from oai_agents.agents.il import BehavioralCloningTrainer
-from oai_agents.agents.rl import SingleAgentTrainer, MultipleAgentsTrainer
+from oai_agents.agents.rl import SingleAgentTrainer, MultipleAgentsTrainer, SB3Wrapper
 from oai_agents.agents.hrl import MultiAgentSubtaskWorker, RLManagerTrainer, HierarchicalRL
 from oai_agents.common.arguments import get_arguments
 
@@ -30,11 +30,13 @@ def create_selfplay_agent(args, training_steps=1e7):
 
 # BCP
 def create_behavioral_cloning_play_agent(args, training_steps=1e7):
-    bct = BehavioralCloningTrainer(args.dataset, args)
-    bct.train_agents(epochs=250)
-    tms = bct.get_agents()
+    teammates = {}
+    for layout_name in args.layout_names:
+        bct = BehavioralCloningTrainer(args.dataset, args, layout_names=[layout_name])
+        bct.train_agents(epochs=200)
+        teammates[layout_name] = bct.get_agents()[0]
 
-    self_play_trainer = SingleAgentTrainer(tms, args, name='bcp')
+    self_play_trainer = SingleAgentTrainer(teammates, args, name='bcp')
     self_play_trainer.train_agents(total_timesteps=training_steps)
     return self_play_trainer.get_agents()
 
@@ -129,11 +131,10 @@ def create_test_population(args, training_steps=1e7):
     # print(f'Starting training for: {name}')
     # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_frame_stack=True, hidden_dim=h_dim, seed=seed)
     # mat.train_agents(total_timesteps=1e6)
-    args.layout_names = ['counter_circuit_o_1order', 'forced_coordination', 'asymmetric_advantages']
-    create_behavioral_cloning_play_agent(args, training_steps=3e6)
-
-    args.layout_names = ['counter_circuit_o_1order']
-    create_behavioral_cloning_play_agent(args, training_steps=3e6)
+    a = True
+    if a:
+        args.layout_names = ['counter_circuit_o_1order', 'forced_coordination', 'asymmetric_advantages']
+        create_behavioral_cloning_play_agent(args, training_steps=3e6)
 
     # name = 'multi_env_uniform'
     # print(f'Starting training for: {name}')
@@ -141,18 +142,29 @@ def create_test_population(args, training_steps=1e7):
     # args.multi_env_mode = 'uniform'
     # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, seed=seed)
     # mat.train_agents(total_timesteps=3e6)
-    #
-    # name = 'single_env'
-    # print(f'Starting training for: {name}')
-    # args.layout_names = ['counter_circuit_o_1order']
-    # args.multi_env_mode = 'uniform'
-    # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, seed=seed)
-    # mat.train_agents(total_timesteps=3e6)
 
-    # name = 'lstm'
-    # print(f'Starting training for: {name}')
-    # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_lstm=True, hidden_dim=h_dim, seed=seed)
-    # mat.train_agents(total_timesteps=1e6)
+    else:
+        args.layout_names = ['counter_circuit_o_1order']
+        # get subtask worker
+        name = 'multi_agent_subtask_worker'
+        worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
+
+        name = 'hrl_default'
+        tms = SB3Wrapper.load(args.base_dir / 'agent_models' / 'no_fs_32' / 'best' / 'agents_dir' / 'agent_0', args)
+        inc_sp = False
+
+        b = True
+        if b:
+            inc_sp = True
+            tms = []
+            name = 'hrl_sp'
+
+        # Create manager
+        rlmt = RLManagerTrainer(worker, tms, args, use_subtask_counts=True, inc_sp=inc_sp, name=name)
+        rlmt.train_agents(total_timesteps=training_steps)
+        manager = rlmt.get_agents()[0]
+        hrl = HierarchicalRL(worker, manager, args, name='hrl_sp')
+        hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))
 
 
 if __name__ == '__main__':

@@ -40,6 +40,7 @@ class OAIAgent(nn.Module, ABC):
         self.mdp = None
         self.horizon = None
         self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
+        self.use_hrl_obs = False
 
     @abstractmethod
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool = False) -> Tuple[
@@ -329,6 +330,8 @@ class OAITrainer(ABC):
             th.manual_seed(seed)
             np.random.seed(seed)
 
+        self.eval_tm_idx = 0
+
         # For environment splits while training
         self.n_layouts = len(self.args.layout_names)
         self.splits = []
@@ -340,11 +343,13 @@ class OAITrainer(ABC):
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
 
-    def evaluate(self, eval_agent, eval_teammate, num_episodes=1, visualize=False, timestep=None):
+    def evaluate(self, eval_agent, num_episodes=1, visualize=False, timestep=None):
         tot_mean_reward = []
         timestep = timestep or eval_agent.num_timesteps
+        use_specific_tms = type(self.teammates) == dict
         for i, env in enumerate(self.eval_envs):
-            env.set_teammate(eval_teammate)
+            tm = self.teammates[env.get_layout_name()] if use_specific_tms else self.teammates[self.eval_tm_idx]
+            env.set_teammate(tm)
             mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_episodes,
                                                       deterministic=True, warn=False, render=visualize)
             tot_mean_reward.append(mean_reward)
@@ -352,12 +357,21 @@ class OAITrainer(ABC):
             wandb.log({f'eval_mean_reward_{self.args.layout_names[i]}': mean_reward, 'timestep': timestep})
         print(f'Eval at timestep {timestep}: {np.mean(tot_mean_reward)}')
         wandb.log({f'eval_mean_reward': np.mean(tot_mean_reward), 'timestep': timestep})
+        self.eval_tm_idx = (self.eval_tm_idx + 1) % len(self.teammates)
         return np.mean(tot_mean_reward)
 
     def set_new_teammates(self):
-        for i in range(self.args.n_envs):
-            teammate = self.teammates[np.random.randint(len(self.teammates))]
-            self.env.env_method('set_teammate', teammate, indices=i)
+        if type(self.teammates) == dict:
+            # set teammates up so that each env gets a specific teammate
+            for i in range(self.args.n_envs):
+                layout_name = self.env.env_method('get_layout_name', indices=i)[0]
+                teammate = self.teammates[layout_name]
+                self.env.env_method('set_teammate', teammate, indices=i)
+        else:
+            # set teammates up so that each env gets a random teammate
+            for i in range(self.args.n_envs):
+                teammate = self.teammates[np.random.randint(len(self.teammates))]
+                self.env.env_method('set_teammate', teammate, indices=i)
 
     def set_new_envs(self):
         if self.args.multi_env_mode == 'splits':

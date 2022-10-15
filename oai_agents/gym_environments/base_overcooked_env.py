@@ -109,6 +109,9 @@ class OvercookedGymEnv(Env):
         self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
         obs = self.reset()
 
+    def get_layout_name(self):
+        return self.layout_name
+
     def set_teammate(self, teammate):
         # TODO asser has attribute observation space
         self.teammate = teammate
@@ -164,7 +167,7 @@ class OvercookedGymEnv(Env):
         joint_action = [None, None]
         joint_action[self.p_idx] = action
         tm_obs = self.get_obs(p_idx=self.t_idx, enc_fn=self.teammate.encoding_fn)
-        joint_action[self.t_idx] = self.teammate.predict(tm_obs)[0]
+        joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=self.is_eval_env)[0]
         joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action

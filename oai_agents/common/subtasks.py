@@ -150,7 +150,7 @@ def get_doable_subtasks(state, prev_subtask, terrain, p_idx, n_counters):
     # The player is holding an onion, so it can only accomplish tasks that involve putting the onion somewhere
     elif state.players[p_idx].held_object.name == 'onion':
         # There must be an empty counter to put something down
-        if len(state.objects.values()) < n_counters:
+        if len(state.objects.values()) < n_counters and prev_subtask != 'get_onion_from_counter':
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_closer']] = 1
         # There must be an empty pot to put an onion into
         if non_full_pot_exists(state, terrain):
@@ -158,7 +158,7 @@ def get_doable_subtasks(state, prev_subtask, terrain, p_idx, n_counters):
     # The player is holding a plate, so it can only accomplish tasks that involve putting the plate somewhere
     elif state.players[p_idx].held_object.name == 'dish':
         # There must be an empty counter to put something down
-        if len(state.objects.values()) < n_counters:
+        if len(state.objects.values()) < n_counters and prev_subtask != 'get_plate_from_counter':
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_plate_closer']] = 1
         # Can only grab the soup using the plate if a soup is currently cooking
         for obj in state.objects.values():
@@ -170,7 +170,7 @@ def get_doable_subtasks(state, prev_subtask, terrain, p_idx, n_counters):
     elif state.players[p_idx].held_object.name == 'soup':
         subtask_mask[Subtasks.SUBTASKS_TO_IDS['serve_soup']] = 1
         # There must be an empty counter to put something down
-        if len(state.objects.values()) < n_counters:
+        if len(state.objects.values()) < n_counters and prev_subtask != 'get_soup_from_counter':
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_soup_closer']] = 1
 
     # If no other subtask is possible, then set subtask to unknown

@@ -123,7 +123,7 @@ class BehaviouralCloningAgent(OAIAgent):
 
 # TODO clean up and remove p_idx
 class BehavioralCloningTrainer(OAITrainer):
-    def __init__(self, dataset, args, vis_eval=False):
+    def __init__(self, dataset, args, layout_names=None, vis_eval=False):
         """
         Class to train BC agent
         :param env: Overcooked environment to use
@@ -135,16 +135,19 @@ class BehavioralCloningTrainer(OAITrainer):
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
         self.num_players = 2
         self.dataset = dataset
-        self.train_dataset = OvercookedDataset(dataset, args.layout_names, args)
+        layout_names = layout_names or args.layout_names
+        self.train_dataset = OvercookedDataset(dataset, layout_names, args)
         self.grid_shape = self.train_dataset.grid_shape
         self.eval_envs = [OvercookedGymEnv(shape_rewards=False, is_eval_env=True, grid_shape=self.grid_shape,
-                                           enc_fn='OAI_feats', env_index=i, args=args) for i in range(len(args.layout_names))]
+                                           enc_fn='OAI_feats', horizon=400, env_index=i, args=args)
+                          for i in range(len(layout_names))]
         obs = self.eval_envs[0].get_obs(p_idx=0)
         print({k: v.shape for k, v in obs.items()})
         visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
         agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0
         self.agent = BehaviouralCloningAgent(visual_obs_shape, agent_obs_shape, args)
         self.agents = [self.agent]
+        self.teammates = [self.agent]
         self.optimizer = th.optim.Adam(self.agent.parameters(), lr=args.lr)
         action_weights = th.tensor(self.train_dataset.get_action_weights(), dtype=th.float32, device=self.device)
         self.action_criterion = nn.CrossEntropyLoss(weight=action_weights)
@@ -191,13 +194,12 @@ class BehavioralCloningTrainer(OAITrainer):
         for epoch in range(epochs):
             mean_loss = self.train_epoch()
             print('Mean loss: ', mean_loss)
-            if epoch % 2 == 0:
-                mean_reward = self.evaluate(self.agent, self.agent, timestep=epoch)
-                wandb.log({'mean_loss': mean_loss, 'epoch': epoch})
-                if mean_reward > best_reward:
-                    print('Saving best BC model')
-                    best_path, best_tag = self.save_agents()
-                    best_reward = mean_reward
+            mean_reward = self.evaluate(self.agent, timestep=epoch)
+            wandb.log({'mean_loss': mean_loss, 'epoch': epoch})
+            if mean_reward > best_reward:
+                print('Saving best BC model')
+                best_path, best_tag = self.save_agents()
+                best_reward = mean_reward
         if best_path is not None:
             print('Loading best BC model')
             self.load_agents(best_path, best_tag)

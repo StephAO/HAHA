@@ -16,7 +16,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
         self.worker = worker
 
-    def get_low_level_obs(self, p_idx=None, done=False):
+    def get_low_level_obs(self, p_idx, done=False):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
         if p_idx == self.p_idx:
             obs['curr_subtask'] = self.curr_subtask
@@ -47,8 +47,9 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         ready_for_next_subtask = False
         worker_steps = 0
         while (not ready_for_next_subtask and not done):
-            joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(p_idx=self.p_idx))[0]
-            joint_action[self.t_idx] = self.teammate.predict(self.get_low_level_obs(p_idx=self.t_idx))[0]
+            joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(self.p_idx))[0]
+            tm_obs = self.get_obs(self.t_idx) if self.teammate.use_hrl_obs else self.get_low_level_obs(self.t_idx)
+            joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=self.is_eval_env)[0]
             # joint_action = [self.agents[i].predict(self.get_obs(p_idx=i))[0] for i in range(2)]
             joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
 

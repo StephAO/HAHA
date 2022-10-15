@@ -56,9 +56,9 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             obs['visual_obs'] = obs['visual_obs'].squeeze()
         return obs
 
-    def get_proximity_reward(self, feature_locations):
-        # Calculate reward for using the pass.
-        # Reward should be proportional to how much time is saved from using the pass
+    def get_putdown_proximity_reward(self, feature_locations):
+        # Calculate bonus reward for putting an object down on the pass.
+        # Reward should be proportional to how much time is saved by using the pass
         smallest_dist = float('inf')
         object_location = np.array(self.state.players[self.p_idx].position) + np.array(
             self.state.players[self.p_idx].orientation)
@@ -76,6 +76,27 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         smallest_dist = min(smallest_dist, curr_dist + 2)
         # Reward proportional to how much time is saved from using the pass
         return (curr_dist - smallest_dist) * 0.1
+
+    def get_pickup_proximity_reward(self, feature_locations):
+        # Calculate bonus reward for picking up an object on the pass.
+        # Reward should be proportional to how much time is saved by using the pass
+        largest_dist = -float('inf')
+        object_location = np.array(self.state.players[self.p_idx].position) + np.array(
+            self.state.players[self.p_idx].orientation)
+        for direction in [np.array([0, 1]), np.array([0, -1]), np.array([1, 0]), np.array([-1, 0])]:
+            adj_tile = tuple(np.array(object_location) + direction)
+            # Can't pick up from a terrain location that is not walkable
+            if adj_tile not in self.mdp.get_valid_player_positions():
+                continue
+            if adj_tile == self.state.players[self.p_idx].position:
+                curr_dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, Direction.NORTH), feature_locations)
+            else:
+                dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, Direction.NORTH), feature_locations)
+                if dist > largest_dist:
+                    largest_dist = dist
+        largest_dist = max(largest_dist, curr_dist - 2)
+        # Reward proportional to how much time is saved from using the pass
+        return (largest_dist - curr_dist) * 0.1
 
     def get_fuller_pot_reward(self, state, terrain):
         """
@@ -122,15 +143,25 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 # Extra rewards to incentivize petter placements
                 if self.goal_subtask == 'put_onion_closer':
                     pot_locations = self.mdp.get_pot_locations()
-                    reward += self.get_proximity_reward(pot_locations)
+                    reward += self.get_putdown_proximity_reward(pot_locations)
                 elif self.goal_subtask == 'put_plate_closer':
                     pot_locations = self.mdp.get_pot_locations()
-                    reward += self.get_proximity_reward(pot_locations)
+                    reward += self.get_putdown_proximity_reward(pot_locations)
                 elif self.goal_subtask == 'put_soup_closer':
                     serving_locations = self.mdp.get_serving_locations()
-                    reward += self.get_proximity_reward(serving_locations)
+                    reward += self.get_putdown_proximity_reward(serving_locations)
+                elif self.goal_subtask == 'get_onion_from_counter':
+                    pot_locations = self.mdp.get_pot_locations()
+                    reward += self.get_pickup_proximity_reward(pot_locations)
+                elif self.goal_subtask == 'get_plate_from_counter':
+                    pot_locations = self.mdp.get_pot_locations()
+                    reward += self.get_pickup_proximity_reward(pot_locations)
+                elif self.goal_subtask == 'get_soup_from_counter':
+                    serving_locations = self.mdp.get_serving_locations()
+                    reward += self.get_pickup_proximity_reward(serving_locations)
                 elif self.goal_subtask == 'put_onion_in_pot':
                     reward += self.get_fuller_pot_reward(self.state, self.mdp.terrain_mtx)
+
 
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
