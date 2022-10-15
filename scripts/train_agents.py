@@ -129,7 +129,6 @@ def create_test_population(args, training_steps=1e7):
     # print(f'Starting training for: {name}')
     # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_frame_stack=True, hidden_dim=h_dim, seed=seed)
     # mat.train_agents(total_timesteps=1e6)
-
     args.layout_names = ['counter_circuit_o_1order', 'forced_coordination', 'asymmetric_advantages']
     create_behavioral_cloning_play_agent(args, training_steps=3e6)
 

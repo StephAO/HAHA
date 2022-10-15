@@ -19,7 +19,7 @@ import wandb
 
 
 class BehaviouralCloningPolicy(nn.Module):
-    def __init__(self, visual_obs_shape, agent_obs_shape, args, act=nn.ReLU, hidden_dim=256):
+    def __init__(self, visual_obs_shape, agent_obs_shape, args, act=nn.ReLU, hidden_dim=64):
         """
         NN network for a behavioral cloning agent
         :param visual_obs_shape: Shape of any grid-like input to be passed into a CNN
@@ -52,7 +52,7 @@ class BehaviouralCloningPolicy(nn.Module):
         print(agent_obs_shape)
         print(int(self.cnn_output_shape + np.prod(agent_obs_shape)))
         self.mlp = MLP(input_dim=int(self.cnn_output_shape + np.prod(agent_obs_shape)),
-                       output_dim=hidden_dim, hidden_dim=hidden_dim, act=act)
+                       output_dim=hidden_dim, num_layers=2, hidden_dim=hidden_dim, act=act)
         self.action_predictor = nn.Linear(hidden_dim, Action.NUM_ACTIONS)
 
         self.apply(weights_init_)
@@ -85,7 +85,7 @@ class BehaviouralCloningPolicy(nn.Module):
 
 
 class BehaviouralCloningAgent(OAIAgent):
-    def __init__(self, visual_obs_shape, agent_obs_shape, args, hidden_dim=256, name=None):
+    def __init__(self, visual_obs_shape, agent_obs_shape, args, hidden_dim=64, name=None):
         super(BehaviouralCloningAgent, self).__init__('bc', args)
         self.encoding_fn = ENCODING_SCHEMES['OAI_feats']
         self.visual_obs_shape, self.agent_obs_shape, self.args, self.hidden_dim = \
