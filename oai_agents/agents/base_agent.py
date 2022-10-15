@@ -345,8 +345,8 @@ class OAITrainer(ABC):
 
     def evaluate(self, eval_agent, num_episodes=1, visualize=False, timestep=None):
         tot_mean_reward = []
-        timestep = timestep or eval_agent.num_timesteps
         use_specific_tms = type(self.teammates) == dict
+        timestep = timestep if timestep is not None else eval_agent.num_timesteps
         for i, env in enumerate(self.eval_envs):
             tm = self.teammates[env.get_layout_name()] if use_specific_tms else self.teammates[self.eval_tm_idx]
             env.set_teammate(tm)

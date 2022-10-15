@@ -86,7 +86,8 @@ class BehaviouralCloningPolicy(nn.Module):
 
 class BehaviouralCloningAgent(OAIAgent):
     def __init__(self, visual_obs_shape, agent_obs_shape, args, hidden_dim=64, name=None):
-        super(BehaviouralCloningAgent, self).__init__('bc', args)
+        name = name or 'bc'
+        super(BehaviouralCloningAgent, self).__init__(name, args)
         self.encoding_fn = ENCODING_SCHEMES['OAI_feats']
         self.visual_obs_shape, self.agent_obs_shape, self.args, self.hidden_dim = \
              visual_obs_shape, agent_obs_shape, args, hidden_dim
@@ -123,7 +124,7 @@ class BehaviouralCloningAgent(OAIAgent):
 
 # TODO clean up and remove p_idx
 class BehavioralCloningTrainer(OAITrainer):
-    def __init__(self, dataset, args, layout_names=None, vis_eval=False):
+    def __init__(self, dataset, args, name=None, layout_names=None, vis_eval=False):
         """
         Class to train BC agent
         :param env: Overcooked environment to use
@@ -131,7 +132,8 @@ class BehavioralCloningTrainer(OAITrainer):
         :param args: arguments to use
         :param vis_eval: If true, the evaluate function will visualize the agents
         """
-        super(BehavioralCloningTrainer, self).__init__('bc', args)
+        name = name or 'bc'
+        super(BehavioralCloningTrainer, self).__init__(name, args)
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
         self.num_players = 2
         self.dataset = dataset
@@ -142,10 +144,9 @@ class BehavioralCloningTrainer(OAITrainer):
                                            enc_fn='OAI_feats', horizon=400, env_index=i, args=args)
                           for i in range(len(layout_names))]
         obs = self.eval_envs[0].get_obs(p_idx=0)
-        print({k: v.shape for k, v in obs.items()})
         visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
         agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0
-        self.agent = BehaviouralCloningAgent(visual_obs_shape, agent_obs_shape, args)
+        self.agent = BehaviouralCloningAgent(visual_obs_shape, agent_obs_shape, args, name=name)
         self.agents = [self.agent]
         self.teammates = [self.agent]
         self.optimizer = th.optim.Adam(self.agent.parameters(), lr=args.lr)
@@ -188,7 +189,7 @@ class BehavioralCloningTrainer(OAITrainer):
         """ Training routine """
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent, dir=str(self.args.base_dir / 'wandb'),
-                         reinit=True, name='_'.join([exp_name, 'bc']),  mode=self.args.wandb_mode)
+                         reinit=True, name=exp_name + '_' + self.name,  mode=self.args.wandb_mode)
 
         best_reward, best_path, best_tag = 0, None, None
         for epoch in range(epochs):

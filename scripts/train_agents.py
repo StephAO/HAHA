@@ -32,7 +32,7 @@ def create_selfplay_agent(args, training_steps=1e7):
 def create_behavioral_cloning_play_agent(args, training_steps=1e7):
     teammates = {}
     for layout_name in args.layout_names:
-        bct = BehavioralCloningTrainer(args.dataset, args, layout_names=[layout_name])
+        bct = BehavioralCloningTrainer(args.dataset, args, name=f'bc_{layout_name}', layout_names=[layout_name])
         bct.train_agents(epochs=200)
         teammates[layout_name] = bct.get_agents()[0]
 
