@@ -2,10 +2,12 @@ from oai_agents.agents.base_agent import OAIAgent, OAITrainer
 from oai_agents.common.arguments import get_arguments
 from oai_agents.common.networks import GridEncoder, MLP, weights_init_, get_output_shape
 from oai_agents.common.overcooked_dataset import OvercookedDataset
+from oai_agents.common.state_encodings import ENCODING_SCHEMES
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
+from gym import spaces
 import numpy as np
 from tqdm import tqdm
 import torch as th
@@ -30,16 +32,26 @@ class BehaviouralCloningPolicy(nn.Module):
         self.device = args.device
         self.use_visual_obs = np.prod(visual_obs_shape) > 0
         self.use_agent_obs = np.prod(agent_obs_shape) > 0
+        self.obs_dict = {}
+
 
         # Define CNN for grid-like observations
         if self.use_visual_obs:
+            self.obs_dict['visual_obs'] = spaces.Box(0, 20, visual_obs_shape, dtype=np.int)
             self.cnn = GridEncoder(visual_obs_shape)
             self.cnn_output_shape = get_output_shape(self.cnn, [1, *visual_obs_shape])[0]
         else:
+            self.obs_dict['visual_obs'] = spaces.Box(0, 1, (1,), dtype=np.int)
             self.cnn_output_shape = 0
 
+        if self.use_agent_obs:
+            self.obs_dict['agent_obs'] = spaces.Box(0, 400, agent_obs_shape, dtype=np.int)
+        self.observation_space = spaces.Dict(self.obs_dict)
+
         # Define MLP for vector/feature based observations
-        self.mlp = MLP(input_dim=self.cnn_output_shape + np.prod(agent_obs_shape),
+        print(agent_obs_shape)
+        print(int(self.cnn_output_shape + np.prod(agent_obs_shape)))
+        self.mlp = MLP(input_dim=int(self.cnn_output_shape + np.prod(agent_obs_shape)),
                        output_dim=hidden_dim, hidden_dim=hidden_dim, act=act)
         self.action_predictor = nn.Linear(hidden_dim, Action.NUM_ACTIONS)
 
@@ -59,7 +71,7 @@ class BehaviouralCloningPolicy(nn.Module):
             if len(obs['agent_obs'].shape) == 3:
                 obs['agent_obs'] = obs['agent_obs'].unsqueeze(0)
             mlp_input.append(obs['agent_obs'])
-        return self.mlp.forward(th.cat(mlp_input, dim=-1))
+        return self.mlp.forward(th.cat(mlp_input, dim=-1).float())
 
     def forward(self, obs):
         return self.action_predictor(self.get_latent_feats(obs))
@@ -75,10 +87,12 @@ class BehaviouralCloningPolicy(nn.Module):
 class BehaviouralCloningAgent(OAIAgent):
     def __init__(self, visual_obs_shape, agent_obs_shape, args, hidden_dim=256, name=None):
         super(BehaviouralCloningAgent, self).__init__('bc', args)
+        self.encoding_fn = ENCODING_SCHEMES['OAI_feats']
         self.visual_obs_shape, self.agent_obs_shape, self.args, self.hidden_dim = \
              visual_obs_shape, agent_obs_shape, args, hidden_dim
         self.device = args.device
         self.policy = BehaviouralCloningPolicy(visual_obs_shape, agent_obs_shape, args, hidden_dim=hidden_dim)
+        self.observation_space = self.policy.observation_space
         self.to(self.device)
         self.num_timesteps = 0
 
@@ -121,12 +135,14 @@ class BehavioralCloningTrainer(OAITrainer):
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
         self.num_players = 2
         self.dataset = dataset
-        self.train_dataset = OvercookedDataset(dataset, [args.layout_names], args)
+        self.train_dataset = OvercookedDataset(dataset, args.layout_names, args)
         self.grid_shape = self.train_dataset.grid_shape
-        self.eval_envs = OvercookedGymEnv(shape_rewards=False, is_eval_env=True, grid_shape=self.grid_shape, args=args)
-        obs = self.eval_envs.get_obs()
-        visual_obs_shape = obs['visual_obs'][0].shape if 'visual_obs' in obs else 0
-        agent_obs_shape = obs['agent_obs'][0].shape if 'agent_obs' in obs else 0
+        self.eval_envs = [OvercookedGymEnv(shape_rewards=False, is_eval_env=True, grid_shape=self.grid_shape,
+                                           enc_fn='OAI_feats', env_index=i, args=args) for i in range(len(args.layout_names))]
+        obs = self.eval_envs[0].get_obs(p_idx=0)
+        print({k: v.shape for k, v in obs.items()})
+        visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
+        agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0
         self.agent = BehaviouralCloningAgent(visual_obs_shape, agent_obs_shape, args)
         self.agents = [self.agent]
         self.optimizer = th.optim.Adam(self.agent.parameters(), lr=args.lr)
@@ -169,19 +185,21 @@ class BehavioralCloningTrainer(OAITrainer):
         """ Training routine """
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent, dir=str(self.args.base_dir / 'wandb'),
-                                  reinit=True, name='_'.join([exp_name, 'bc']),
-                                  mode=self.args.wandb_mode)
+                         reinit=True, name='_'.join([exp_name, 'bc']),  mode=self.args.wandb_mode)
 
         best_reward, best_path, best_tag = 0, None, None
         for epoch in range(epochs):
             mean_loss = self.train_epoch()
+            print('Mean loss: ', mean_loss)
             if epoch % 2 == 0:
                 mean_reward = self.evaluate(self.agent, self.agent, timestep=epoch)
                 wandb.log({'mean_loss': mean_loss, 'epoch': epoch})
                 if mean_reward > best_reward:
+                    print('Saving best BC model')
                     best_path, best_tag = self.save_agents()
                     best_reward = mean_reward
         if best_path is not None:
+            print('Loading best BC model')
             self.load_agents(best_path, best_tag)
         run.finish()
 

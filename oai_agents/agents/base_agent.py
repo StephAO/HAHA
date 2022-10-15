@@ -129,9 +129,11 @@ class OAIAgent(nn.Module, ABC):
         Save model to a given location.
         :param path:
         """
+        Path(path).mkdir(parents=True, exist_ok=True)
+        save_path = path / 'agent_file'
         args = get_args_to_save(self.args)
         th.save({'agent_type': type(self), 'state_dict': self.state_dict(),
-                 'const_params': self._get_constructor_parameters(), 'args': args}, path)
+                 'const_params': self._get_constructor_parameters(), 'args': args}, save_path)
 
     @classmethod
     def load(cls, path: str, args: argparse.Namespace) -> 'OAIAgent':
@@ -142,7 +144,8 @@ class OAIAgent(nn.Module, ABC):
         :return:
         """
         device = args.device
-        saved_variables = th.load(path, map_location=device)
+        load_path = path / 'agent_file'
+        saved_variables = th.load(load_path, map_location=device)
         set_args_from_load(saved_variables['args'], args)
         saved_variables['const_params']['args'] = args
         # Create agent object

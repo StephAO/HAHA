@@ -14,7 +14,7 @@ from tqdm import tqdm
 class OvercookedDataset(Dataset):
     def __init__(self, dataset, layouts, args, add_subtask_info=True):
         self.add_subtask_info = add_subtask_info
-        self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
+        self.encoding_fn = ENCODING_SCHEMES['OAI_feats']
         self.data_path = args.base_dir / args.data_path / dataset
         self.main_trials = pd.read_pickle(self.data_path)
         if dataset == '2019_hh_trials_all.pickle':
@@ -29,13 +29,13 @@ class OvercookedDataset(Dataset):
         # print(type(self.main_trials['joint_action'].values[0]))
 
 
-        self.layout_to_env = {}
+        self.layout_to_mdp = {}
         self.grid_shape = [0, 0]
         for layout in self.main_trials.layout_name.unique():
-            env = OvercookedEnv.from_mdp(OvercookedGridworld.from_layout_name(layout), horizon=args.horizon)
-            self.layout_to_env[layout] = env
-            self.grid_shape[0] = max(env.mdp.shape[0], self.grid_shape[0])
-            self.grid_shape[1] = max(env.mdp.shape[1], self.grid_shape[1])
+            mdp = OvercookedGridworld.from_layout_name(layout)
+            self.layout_to_mdp[layout] = mdp
+            self.grid_shape[0] = max(mdp.shape[0], self.grid_shape[0])
+            self.grid_shape[1] = max(mdp.shape[1], self.grid_shape[1])
 
         print(f'Number of {str(layouts)} trials: {len(self.main_trials)}, max grid size: {self.grid_shape}')
         # Remove all transitions where both agents noop-ed
@@ -72,8 +72,8 @@ class OvercookedDataset(Dataset):
             if type(state) is str:
                 state = json.loads(state)
             state = OvercookedState.from_dict(state)
-            env = self.layout_to_env[df['layout_name']]
-            obs = self.encoding_fn(env.mdp, state, self.grid_shape, args.horizon)
+            mdp = self.layout_to_mdp[df['layout_name']]
+            obs = self.encoding_fn(mdp, state, self.grid_shape, args.horizon)
             df['state'] = state
             if 'visual_obs' in obs:
                 df['visual_obs'] = obs['visual_obs']

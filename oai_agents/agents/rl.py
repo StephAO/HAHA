@@ -11,7 +11,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
-EPOCH_TIMESTEPS = 10000
+EPOCH_TIMESTEPS = 1000
 VEC_ENV_CLS = DummyVecEnv #SubprocVecEnv
 
 class SingleAgentTrainer(OAITrainer):
@@ -30,7 +30,6 @@ class SingleAgentTrainer(OAITrainer):
         self.teammates = teammates
         self.n_tm = len(teammates)
         if env is None:
-            n_layouts = len(self.args.layout_names)
             env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts,
                           'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
             self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, vec_env_cls=VEC_ENV_CLS,
@@ -38,7 +37,7 @@ class SingleAgentTrainer(OAITrainer):
 
             eval_envs_kwargs = {'is_eval_env': True, 'ret_completed_subtasks': use_subtask_counts,
                                 'stack_frames': use_frame_stack, 'horizon': 400, 'args': args}
-            self.eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
+            self.eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(self.n_layouts)]
         else:
             self.env = env
             self.eval_envs = eval_envs
@@ -88,7 +87,7 @@ class SingleAgentTrainer(OAITrainer):
             self.num_success = 0
         while self.learning_agent.num_timesteps < total_timesteps:
             # Set new env distribution if training on multiple envs
-            if len(self.n_layouts) > 1 and self.args.multi_env_mode != 'uniform':
+            if self.n_layouts > 1 and self.args.multi_env_mode != 'uniform':
                 self.set_new_envs()
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
@@ -137,7 +136,6 @@ class MultipleAgentsTrainer(OAITrainer):
         self.use_frame_stack = use_frame_stack
         self.use_policy_clones = use_policy_clone
 
-        n_layouts = len(self.args.layout_names)
         env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts,
                       'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
         self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, vec_env_cls=VEC_ENV_CLS,
@@ -146,7 +144,7 @@ class MultipleAgentsTrainer(OAITrainer):
 
         eval_envs_kwargs = {'ret_completed_subtasks': use_subtask_counts, 'stack_frames': use_frame_stack,
                             'is_eval_env': True, 'horizon': 400, 'args': args}
-        self.eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
+        self.eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(self.n_layouts)]
 
         policy_kwargs = dict(
             # features_extractor_class=OAISinglePlayerFeatureExtractor,

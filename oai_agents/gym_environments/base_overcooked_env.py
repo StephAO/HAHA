@@ -22,13 +22,15 @@ class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self, grid_shape=None, ret_completed_subtasks=False, stack_frames=False, is_eval_env=False,
-                 shape_rewards=False, full_init=True, args=None, **kwargs):
+                 shape_rewards=False, enc_fn=None, full_init=True, args=None, **kwargs):
         self.is_eval_env = is_eval_env
         self.args = args
         self.device = args.device
         # Observation encoding setup
-        self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
-        if args.encoding_fn == 'OAI_egocentric':
+        enc_fn = enc_fn or args.encoding_fn
+        self.encoding_fn =  ENCODING_SCHEMES[enc_fn]
+        print(enc_fn)
+        if enc_fn == 'OAI_egocentric':
             # Override grid shape to make it egocentric
             assert grid_shape is None, 'Grid shape cannot be used when egocentric encodings are used!'
             self.grid_shape = (7, 7)
@@ -36,15 +38,20 @@ class OvercookedGymEnv(Env):
             base_layout_params = read_layout_dict(layout_name)
             grid = [layout_row.strip() for layout_row in base_layout_params['grid'].split("\n")]
             self.grid_shape = (len(grid[0]), len(grid))
+        else:
+            self.grid_shape = grid_shape
 
         # Set Sp Observation Space
         # Currently 20 is the default value for recipe time (which I believe is the largest value used in encoding)
         self.enc_num_channels = 26 # Default channels of OAI_Lossless encoding
         self.obs_dict = {}
-        self.obs_dict['visual_obs'] = spaces.Box(0, 20, (self.enc_num_channels, *self.grid_shape), dtype=np.int)
-        # Stacked obs for main player (index 0) and teammate (index 1)
-        self.stackedobs = [StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first'),
-                           StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first')]
+        if enc_fn == 'OAI_feats':
+            self.obs_dict['agent_obs'] = spaces.Box(0, 400, (96,), dtype=np.int)
+        else:
+            self.obs_dict['visual_obs'] = spaces.Box(0, 20, (self.enc_num_channels, *self.grid_shape), dtype=np.int)
+            # Stacked obs for main player (index 0) and teammate (index 1)
+            self.stackedobs = [StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first'),
+                               StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first')]
         if stack_frames:
             self.obs_dict['visual_obs'] = self.stackedobs[0].stack_observation_space(self.obs_dict['visual_obs'])
 
@@ -122,8 +129,9 @@ class OvercookedGymEnv(Env):
     def action_masks(self):
         return get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS).astype(bool)
 
-    def get_obs(self, p_idx=None, done=False):
-        obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
+    def get_obs(self, p_idx, done=False, enc_fn=None):
+        enc_fn = enc_fn or self.encoding_fn
+        obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
         if self.stack_frames[p_idx]:
             obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
             if self.stack_frames_need_reset[p_idx]: # On reset
@@ -155,7 +163,8 @@ class OvercookedGymEnv(Env):
 
         joint_action = [None, None]
         joint_action[self.p_idx] = action
-        joint_action[self.t_idx] = self.teammate.predict(self.get_obs(p_idx=self.t_idx))[0]
+        tm_obs = self.get_obs(p_idx=self.t_idx, enc_fn=self.teammate.encoding_fn)
+        joint_action[self.t_idx] = self.teammate.predict(tm_obs)[0]
         joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
