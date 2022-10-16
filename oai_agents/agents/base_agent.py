@@ -353,8 +353,8 @@ class OAITrainer(ABC):
             mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_episodes,
                                                       deterministic=True, warn=False, render=visualize)
             tot_mean_reward.append(mean_reward)
-            print(f'Eval at timestep {timestep} for layout {self.args.layout_names[i]}: {mean_reward}')
-            wandb.log({f'eval_mean_reward_{self.args.layout_names[i]}': mean_reward, 'timestep': timestep})
+            print(f'Eval at timestep {timestep} for layout {env.layout_name}: {mean_reward}')
+            wandb.log({f'eval_mean_reward_{env.layout_name}': mean_reward, 'timestep': timestep})
         print(f'Eval at timestep {timestep}: {np.mean(tot_mean_reward)}')
         wandb.log({f'eval_mean_reward': np.mean(tot_mean_reward), 'timestep': timestep})
         self.eval_tm_idx = (self.eval_tm_idx + 1) % len(self.teammates)

@@ -76,7 +76,7 @@ class OvercookedGymEnv(Env):
             self.init_base_env(**kwargs)
 
     # TODO rename
-    def init_base_env(self, env_index=None, base_env=None, horizon=None):
+    def init_base_env(self, env_index=None, layout_name=None, base_env=None, horizon=None):
         '''
         :param shape_rewards: Shape rewards for RL
         :param base_env: Base overcooked environment. If None, create env from layout name. Useful if special parameters
@@ -84,9 +84,10 @@ class OvercookedGymEnv(Env):
         :param horizon: How many steps to run the env for. If None, default to args.horizon value
         :param args: Experiment arguments (see arguments.py)
         '''
-        assert env_index is not None
-        self.layout_name = self.args.layout_names[env_index]
+        assert env_index is not None or layout_name is not None or base_env is not None
+
         if base_env is None:
+            self.layout_name = layout_name or self.args.layout_names[env_index]
             self.mdp = OvercookedGridworld.from_layout_name(self.layout_name)
             horizon = horizon or self.args.horizon
             all_counters = self.mdp.get_counter_locations()
@@ -104,6 +105,7 @@ class OvercookedGymEnv(Env):
             self.env = OvercookedEnv.from_mdp(self.mdp, horizon=horizon, start_state_fn=ss_fn)
         else:
             self.env = base_env
+            self.layout_name = self.env.mdp.layout_name
 
         self.terrain = self.mdp.terrain_mtx
         self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
@@ -153,7 +155,7 @@ class OvercookedGymEnv(Env):
                     self.completed_tasks[p_idx][comp_st] += 1
                     if p_idx == self.p_idx:
                         self.prev_st = comp_st
-            obs['player_completed_subtasks'] = self.completed_tasks[p_idx]
+            obs['player_completed_subtasks'] = np.eye(Subtasks.NUM_SUBTASKS)[comp_st] if comp_st is not None else np.zeros(Subtasks.NUM_SUBTASKS) #self.completed_tasks[p_idx]
             obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
             if p_idx == self.t_idx:
                 obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}

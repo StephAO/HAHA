@@ -33,7 +33,7 @@ def create_behavioral_cloning_play_agent(args, training_steps=1e7):
     teammates = {}
     for layout_name in args.layout_names:
         bct = BehavioralCloningTrainer(args.dataset, args, name=f'bc_{layout_name}', layout_names=[layout_name])
-        bct.train_agents(epochs=200)
+        bct.train_agents(epochs=30)
         teammates[layout_name] = bct.get_agents()[0]
 
     self_play_trainer = SingleAgentTrainer(teammates, args, name='bcp')
@@ -131,7 +131,7 @@ def create_test_population(args, training_steps=1e7):
     # print(f'Starting training for: {name}')
     # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_frame_stack=True, hidden_dim=h_dim, seed=seed)
     # mat.train_agents(total_timesteps=1e6)
-    a = True
+    a = False
     if a:
         args.layout_names = ['counter_circuit_o_1order', 'forced_coordination', 'asymmetric_advantages']
         create_behavioral_cloning_play_agent(args, training_steps=3e6)
@@ -152,6 +152,24 @@ def create_test_population(args, training_steps=1e7):
         name = 'hrl_default'
         tms = SB3Wrapper.load(args.base_dir / 'agent_models' / 'no_fs_32' / 'best' / 'agents_dir' / 'agent_0', args)
         inc_sp = False
+
+
+        from oai_agents.common.subtasks import Subtasks
+        from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
+        for i in range(Subtasks.NUM_SUBTASKS - 1):
+            print(f"Subtask {i}: {Subtasks.IDS_TO_SUBTASKS[i]}")
+            env_kwargs = {'single_subtask_id': i, 'stack_frames': False, 'full_init': True, 'args': args}
+            eval_env1 = OvercookedSubtaskGymEnv(**{'env_index': 0, 'is_eval_env': True, **env_kwargs})
+            eval_env1.set_teammate(tms)
+            print("Running with determinism")
+            eval_env1.evaluate(worker.agents[i])
+            eval_env2 = OvercookedSubtaskGymEnv(**{'env_index': 0, 'is_eval_env': False, **env_kwargs})
+            eval_env2.set_teammate(tms)
+            print("Running without determinism")
+            eval_env2.evaluate(worker.agents[i])
+
+        exit(0)
+
 
         b = True
         if b:

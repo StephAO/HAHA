@@ -14,20 +14,20 @@ import wandb
 
 class OvercookedSubtaskGymEnv(OvercookedGymEnv):
     def __init__(self, single_subtask_id=None, use_curriculum=False, **kwargs):
-        super(OvercookedSubtaskGymEnv, self).__init__(**kwargs)
-        self.obs_dict['curr_subtask'] = spaces.Discrete(Subtasks.NUM_SUBTASKS)
-        self.observation_space = spaces.Dict(self.obs_dict)
-        assert not (use_curriculum and self.use_single_subtask)  # only one of them can be true
         self.use_curriculum = use_curriculum
         self.use_single_subtask = single_subtask_id is not None
         if self.use_single_subtask:
             self.single_subtask, self.single_subtask_id = Subtasks.IDS_TO_SUBTASKS[single_subtask_id], single_subtask_id
         elif self.use_curriculum:
             self.curr_lvl = 0
+        super(OvercookedSubtaskGymEnv, self).__init__(**kwargs)
+        self.obs_dict['curr_subtask'] = spaces.Discrete(Subtasks.NUM_SUBTASKS)
+        self.observation_space = spaces.Dict(self.obs_dict)
+        assert not (use_curriculum and self.use_single_subtask)  # only one of them can be true
 
     def init_base_env(self, env_index=None, **kwargs):
         assert env_index is not None
-        self.mdp = OvercookedGridworld.from_layout_name(kwargs['args'].layout_names[env_index])
+        self.mdp = OvercookedGridworld.from_layout_name(self.args.layout_names[env_index])
         all_counters = self.mdp.get_counter_locations()
         COUNTERS_PARAMS = {
             'start_orientations': False,
@@ -42,7 +42,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         env = OvercookedEnv.from_mdp(self.mdp, horizon=100, start_state_fn=ss_fn)
         super(OvercookedSubtaskGymEnv, self).init_base_env(env_index=env_index, base_env=env, **kwargs)
 
-    def get_obs(self, p_idx=None, done=False):
+    def get_obs(self, p_idx, done=False, enc_fn=None):
         obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
         if p_idx == self.p_idx:
             obs['curr_subtask'] = self.goal_subtask_id
@@ -121,7 +121,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             raise ValueError('set_teammate must be set called before starting game.')
         joint_action = [None, None]
         joint_action[self.p_idx] = action
-        joint_action[self.t_idx] = self.teammate.predict(self.get_obs(p_idx=self.t_idx))[0]
+        joint_action[self.t_idx] = self.teammate.predict(self.get_obs(self.t_idx))[0] #, deterministic=self.is_eval_env
         joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
@@ -243,7 +243,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                     invalid_trial = True
                     break
 
-                action = agent.predict(obs)[0]
+                action = agent.predict(obs)[0] # , deterministic=self.is_eval_env
                 obs, reward, done, info = self.step(action)
                 cum_reward += reward
 
