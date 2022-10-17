@@ -171,7 +171,6 @@ def create_test_population(args, training_steps=1e7):
         #
         # exit(0)
 
-
         b = True
         if b:
             inc_sp = True
