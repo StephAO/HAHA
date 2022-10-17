@@ -128,6 +128,8 @@ class MultiAgentSubtaskWorker(OAIAgent):
             if i != Subtasks.SUBTASKS_TO_IDS['unknown']:
                 rl_sat.train_agents(total_timesteps=1e7)
             agents.extend(rl_sat.get_agents())
+
+        args.layout_names = original_layout_names
         model = cls(agents=agents, args=args)
         path = args.base_dir / 'agent_models' / model.name
         Path(path).mkdir(parents=True, exist_ok=True)
@@ -194,7 +196,7 @@ class HierarchicalRL(OAIAgent):
             self.num_steps_since_new_subtask = 0
         obs['curr_subtask'] = self.curr_subtask_id
         self.num_steps_since_new_subtask += 1
-        return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
+        return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=False)
 
     def get_agent_output(self):
         return Subtasks.IDS_TO_HR_SUBTASKS[int(self.curr_subtask_id)]

@@ -47,10 +47,9 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         ready_for_next_subtask = False
         worker_steps = 0
         while (not ready_for_next_subtask and not done):
-            joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(self.p_idx))[0]
+            joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(self.p_idx), deterministic=False)[0]
             tm_obs = self.get_obs(self.t_idx) if self.teammate.use_hrl_obs else self.get_low_level_obs(self.t_idx)
-            joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=self.is_eval_env)[0]
-            # joint_action = [self.agents[i].predict(self.get_obs(p_idx=i))[0] for i in range(2)]
+            joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=False)[0] # self.is_eval_env
             joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
 
             # If the state didn't change from the previous timestep and the agent is choosing the same action

@@ -85,30 +85,34 @@ class SingleAgentTrainer(OAITrainer):
         best_score = -1
         if self.use_subtask_eval:
             self.num_success = 0
+
+        epoch = 0
         while self.learning_agent.num_timesteps < total_timesteps:
             # Set new env distribution if training on multiple envs
             if self.n_layouts > 1 and self.args.multi_env_mode != 'uniform':
                 self.set_new_envs()
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
-            if self.use_subtask_eval:
-                env_success = []
-                use_specific_tms = type(self.teammates) == dict
-                for env in self.eval_envs:
-                    tm = self.teammates[env.get_layout_name()] if use_specific_tms else self.teammates[self.eval_tm_idx]
-                    env.set_teammate(tm)
-                    all_successes = env.evaluate(self.learning_agent)
-                    env_success.append(all_successes)
-                self.eval_tm_idx = (self.eval_tm_idx + 1) % len(self.teammates)
-                self.num_success = (self.num_success + 1) if all(env_success) else 0
-                if self.num_success >= 3:
-                    break
-            else:
-                mean_reward = self.evaluate(self.learning_agent)
-                if mean_reward >= best_score:
-                    best_path, best_tag = self.save_agents(tag='best')
-                    print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
-                    best_score = mean_reward
+            if epoch % 10 == 0:
+                if self.use_subtask_eval:
+                    env_success = []
+                    use_specific_tms = type(self.teammates) == dict
+                    for env in self.eval_envs:
+                        tm = self.teammates[env.get_layout_name()] if use_specific_tms else self.teammates[self.eval_tm_idx]
+                        env.set_teammate(tm)
+                        all_successes = env.evaluate(self.learning_agent)
+                        env_success.append(all_successes)
+                    self.eval_tm_idx = (self.eval_tm_idx + 1) % len(self.teammates)
+                    self.num_success = (self.num_success + 1) if all(env_success) else 0
+                    if self.num_success >= 3:
+                        break
+                else:
+                    mean_reward = self.evaluate(self.learning_agent)
+                    if mean_reward >= best_score:
+                        best_path, best_tag = self.save_agents(tag='best')
+                        print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
+                        best_score = mean_reward
+            epoch += 1
         path, tag = self.save_agents()
         self.load_agents(best_path, best_tag)
         run.finish()
@@ -193,13 +197,15 @@ class MultipleAgentsTrainer(OAITrainer):
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
                                   dir=str(self.args.base_dir / 'wandb'),
                                   reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
+
+        epoch = 0
         # Each agent should learn for `total_timesteps` steps. Keep training until all agents hit this threshold
         while any(self.agents_in_training):
             # Set new env distribution if training on multiple envs
             if self.n_layouts > 1 and self.args.multi_env_mode != 'uniform':
                 self.set_new_envs()
             # Randomly select new teammates from population (can include learner)
-            self.set_random_teammates()
+            self.set_new_teammates()
             # Randomly choose agent that will learn this time
             learner_idx = np.random.choice(len(self.agents), p=self.agents_in_training)
             # Learn and update recoded timesteps for that agent
@@ -210,17 +216,19 @@ class MultipleAgentsTrainer(OAITrainer):
             if self.use_policy_clones:
                 self.teammates[learner_idx].update_policy(self.agents[learner_idx])
             # Evaluate
-            mean_reward = self.evaluate(self.agents[learner_idx], timestep=np.sum(self.agents_timesteps))
-            # FCP checkpoint saving
-            if self.fcp_ck_rate and len(self.agents) == 1:
-                if self.agents_timesteps[0] // self.fcp_ck_rate > (len(self.ck_list) - 1):
-                    path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
-                    self.ck_list.append((mean_reward, path, tag))
-            # Saving best model
-            if mean_reward >= best_score:
-                best_path, best_tag = self.save_agents(tag='best')
-                print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
-                best_score = mean_reward
+            if epoch % 10 == 0:
+                mean_reward = self.evaluate(self.agents[learner_idx], timestep=np.sum(self.agents_timesteps))
+                # FCP checkpoint saving
+                if self.fcp_ck_rate and len(self.agents) == 1:
+                    if self.agents_timesteps[0] // self.fcp_ck_rate > (len(self.ck_list) - 1):
+                        path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
+                        self.ck_list.append((mean_reward, path, tag))
+                # Saving best model
+                if mean_reward >= best_score:
+                    best_path, best_tag = self.save_agents(tag='best')
+                    print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
+                    best_score = mean_reward
+            epoch += 1
         self.load_agents(best_path, best_tag)
         run.finish()
 

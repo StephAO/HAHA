@@ -141,8 +141,7 @@ class BehavioralCloningTrainer(OAITrainer):
         self.train_dataset = OvercookedDataset(dataset, layout_names, args)
         self.grid_shape = self.train_dataset.grid_shape
         self.eval_envs = [OvercookedGymEnv(shape_rewards=False, is_eval_env=True, grid_shape=self.grid_shape,
-                                           enc_fn='OAI_feats', horizon=400, env_index=i, args=args)
-                          for i in range(len(layout_names))]
+                          enc_fn='OAI_feats', horizon=400, layout_name=ln, args=args) for ln in layout_names]
         obs = self.eval_envs[0].get_obs(p_idx=0)
         visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
         agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0

@@ -15,8 +15,8 @@ def calculate_agent_pairing_score_matrix(agents, args):
         for i, p1 in enumerate(agents):
             for j, p2 in enumerate(agents):
                 env.set_teammate(p2)
-                mean_reward, std_reward = evaluate_policy(p1, eval_env, n_eval_episodes=1,
-                                                          deterministic=True, warn=False, render=False)
+                mean_reward, std_reward = evaluate_policy(p1, eval_env, n_eval_episodes=10,
+                                                          deterministic=False, warn=False, render=False)
                 score_matrix[i][j] = mean_reward
     return score_matrix
 
@@ -33,7 +33,7 @@ def create_behavioral_cloning_play_agent(args, training_steps=1e7):
     teammates = {}
     for layout_name in args.layout_names:
         bct = BehavioralCloningTrainer(args.dataset, args, name=f'bc_{layout_name}', layout_names=[layout_name])
-        bct.train_agents(epochs=200)
+        bct.train_agents(epochs=300)
         teammates[layout_name] = bct.get_agents()[0]
 
     self_play_trainer = SingleAgentTrainer(teammates, args, name='bcp')
@@ -54,17 +54,17 @@ def create_population_play_agent(args, pop_size=8, training_steps=1e7):
 def create_fcp_population(args, training_steps=1e7):
     agents = []
     for use_fs in [False, True]:
-        for h_dim in [32]:
-            # seed = 1997
+        for h_dim in [16, 256]: # 16, 64, 128, 256
+            seed = 4
             ck_rate = training_steps / 20
             name = f'fs_{h_dim}' if use_fs else f'no_fs_{h_dim}'
             print(f'Starting training for: {name}')
             mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, use_frame_stack=use_fs,
-                                        fcp_ck_rate=ck_rate)
+                                        fcp_ck_rate=ck_rate, seed=seed)
             mat.train_agents(total_timesteps=training_steps)
             mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp'), tag=name)
             agents.extend(mat.get_fcp_agents())
-    pop = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
+    pop = MultipleAgentsTrainer(args, name='fcp_pop1', num_agents=0)
     pop.set_agents(agents)
     pop.save_agents()
     return pop.get_agents()
@@ -131,7 +131,7 @@ def create_test_population(args, training_steps=1e7):
     # print(f'Starting training for: {name}')
     # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_frame_stack=True, hidden_dim=h_dim, seed=seed)
     # mat.train_agents(total_timesteps=1e6)
-    a = True
+    a = False
     if a:
         args.layout_names = ['counter_circuit_o_1order', 'forced_coordination', 'asymmetric_advantages']
         create_behavioral_cloning_play_agent(args, training_steps=3e6)
@@ -150,8 +150,27 @@ def create_test_population(args, training_steps=1e7):
         worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
 
         name = 'hrl_default'
-        tms = SB3Wrapper.load(args.base_dir / 'agent_models' / 'no_fs_32' / 'best' / 'agents_dir' / 'agent_0', args)
+        mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
+        tms = mat.load_agents()
         inc_sp = False
+
+
+        # from oai_agents.common.subtasks import Subtasks
+        # from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
+        # for i in range(Subtasks.NUM_SUBTASKS - 1):
+        #     print(f"Subtask {i}: {Subtasks.IDS_TO_SUBTASKS[i]}")
+        #     env_kwargs = {'single_subtask_id': i, 'stack_frames': False, 'full_init': True, 'args': args}
+        #     eval_env1 = OvercookedSubtaskGymEnv(**{'env_index': 0, 'is_eval_env': True, **env_kwargs})
+        #     eval_env1.set_teammate(tms)
+        #     print("Running with determinism")
+        #     eval_env1.evaluate(worker.agents[i])
+        #     eval_env2 = OvercookedSubtaskGymEnv(**{'env_index': 0, 'is_eval_env': False, **env_kwargs})
+        #     eval_env2.set_teammate(tms)
+        #     print("Running without determinism")
+        #     eval_env2.evaluate(worker.agents[i])
+        #
+        # exit(0)
+
 
         b = True
         if b:
@@ -169,7 +188,8 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
-    create_test_population(args)
+    create_fcp_population(args, training_steps=1e7)
+    # create_test_population(args)
     # create_all_agents(args, agents_to_train=['hrl'])
 
     # from oai_agents.agents.base_agent import SB3Wrapper

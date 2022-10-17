@@ -90,7 +90,13 @@ class OAIAgent(nn.Module, ABC):
         if 'player_completed_subtasks' in self.policy.observation_space.keys():
             # If this isn't the first step of the game, see if a subtask has been completed
             if self.prev_state is not None:
-                comp_st = [calculate_completed_subtask(self.terrain, self.prev_state, state, i) for i in range(2)]
+                comp_st = []
+                for i in range(2):
+                    try:
+                        cst = calculate_completed_subtask(self.terrain, self.prev_state, state, i)
+                    except ValueError:
+                        cst = None
+                    comp_st.append(cst)
                 # If a subtask has been completed, update counts
                 if comp_st[self.p_idx] is not None:
                     self.player_completed_tasks[comp_st[self.p_idx]] += 1
@@ -232,7 +238,6 @@ class SB3Wrapper(OAIAgent):
 
 class SB3LSTMWrapper(SB3Wrapper):
     ''' A wrapper for a stable baselines 3 agents that uses an lstm and controls a single player '''
-
     def __init__(self, agent, name, args):
         super(SB3LSTMWrapper, self).__init__(agent, name, args)
         self.lstm_states = None
@@ -343,7 +348,7 @@ class OAITrainer(ABC):
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
 
-    def evaluate(self, eval_agent, num_episodes=1, visualize=False, timestep=None):
+    def evaluate(self, eval_agent, num_episodes=10, visualize=False, timestep=None):
         tot_mean_reward = []
         use_specific_tms = type(self.teammates) == dict
         timestep = timestep if timestep is not None else eval_agent.num_timesteps
@@ -351,10 +356,10 @@ class OAITrainer(ABC):
             tm = self.teammates[env.get_layout_name()] if use_specific_tms else self.teammates[self.eval_tm_idx]
             env.set_teammate(tm)
             mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_episodes,
-                                                      deterministic=True, warn=False, render=visualize)
+                                                      deterministic=False, warn=False, render=visualize)
             tot_mean_reward.append(mean_reward)
-            print(f'Eval at timestep {timestep} for layout {self.args.layout_names[i]}: {mean_reward}')
-            wandb.log({f'eval_mean_reward_{self.args.layout_names[i]}': mean_reward, 'timestep': timestep})
+            print(f'Eval at timestep {timestep} for layout {env.layout_name}: {mean_reward}')
+            wandb.log({f'eval_mean_reward_{env.layout_name}': mean_reward, 'timestep': timestep})
         print(f'Eval at timestep {timestep}: {np.mean(tot_mean_reward)}')
         wandb.log({f'eval_mean_reward': np.mean(tot_mean_reward), 'timestep': timestep})
         self.eval_tm_idx = (self.eval_tm_idx + 1) % len(self.teammates)
