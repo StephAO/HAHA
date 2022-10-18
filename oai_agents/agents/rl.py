@@ -16,9 +16,9 @@ VEC_ENV_CLS = DummyVecEnv #SubprocVecEnv
 
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
-    def __init__(self, teammates, args, name=None, env=None, eval_envs=None, use_lstm=False, use_frame_stack=False,
-                 use_subtask_counts=False, use_maskable_ppo=False, inc_sp=False, hidden_dim=256, use_subtask_eval=False,
-                 seed=None):
+    def __init__(self, teammates, args, eval_tms=None, name=None, env=None, eval_envs=None, use_lstm=False,
+                 use_frame_stack=False, use_subtask_counts=False, use_maskable_ppo=False, inc_sp=False, hidden_dim=64,
+                 use_subtask_eval=False, seed=None):
         name = name or 'rl_singleagent'
         super(SingleAgentTrainer, self).__init__(name, args, seed=seed)
         self.args = args
@@ -30,6 +30,7 @@ class SingleAgentTrainer(OAITrainer):
         self.seed = seed
         self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
         self.teammates = teammates
+        self.eval_teammates = eval_tms
         if env is None:
             env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts,
                           'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
@@ -65,6 +66,14 @@ class SingleAgentTrainer(OAITrainer):
         if inc_sp:
             self.teammates.append(self.learning_agent)
 
+        if type(self.eval_teammates) == dict:
+            for k in self.eval_teammates:
+                self.eval_teammates[k].append(self.learning_agent)
+        elif self.eval_teammates is not None:
+            self.eval_teammates.append(self.learning_agent)
+        else:
+            self.eval_teammates = self.teammates
+
     def _get_constructor_parameters(self):
         return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, use_frame_stack=self.use_frame_stack,
                     hidden_dim=self.hidden_dim, seed=self.seed)
@@ -96,13 +105,13 @@ class SingleAgentTrainer(OAITrainer):
             if epoch % 10 == 0:
                 if self.use_subtask_eval:
                     env_success = []
-                    use_specific_tms = type(self.teammates) == dict
+                    use_layout_specific_tms = type(self.teammates) == dict
                     for env in self.eval_envs:
-                        tm = self.teammates[env.get_layout_name()] if use_specific_tms else self.teammates[self.eval_tm_idx]
-                        env.set_teammate(tm)
-                        all_successes = env.evaluate(self.learning_agent)
-                        env_success.append(all_successes)
-                    self.eval_tm_idx = (self.eval_tm_idx + 1) % len(self.teammates)
+                        tms = self.eval_teammates[env.get_layout_name()] if use_layout_specific_tms else self.eval_teammates
+                        for tm in tms:
+                            env.set_teammate(tm)
+                            all_successes = env.evaluate(self.learning_agent)
+                            env_success.append(all_successes)
                     self.num_success = (self.num_success + 1) if all(env_success) else 0
                     if self.num_success >= 3:
                         break
@@ -121,8 +130,8 @@ class SingleAgentTrainer(OAITrainer):
 class MultipleAgentsTrainer(OAITrainer):
     ''' Train two independent RL agents to play with each other '''
 
-    def __init__(self, args, name=None, num_agents=1, use_lstm=False, use_frame_stack=False, use_subtask_counts=False,
-                 hidden_dim=256, use_policy_clone=False, fcp_ck_rate=None, seed=None):
+    def __init__(self, args, name=None, eval_tms=None,num_agents=1, use_lstm=False, use_frame_stack=False,
+                 use_subtask_counts=False, hidden_dim=64, use_policy_clone=False, fcp_ck_rate=None, seed=None):
         '''
         Train multiple agents with each other.
         :param num_agents: Number of agents to train. num_agents=1 mean self-play, num_agents > 1 is population play

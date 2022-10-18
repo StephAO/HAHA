@@ -35,7 +35,7 @@ class OvercookedGymEnv(Env):
             assert grid_shape is None, 'Grid shape cannot be used when egocentric encodings are used!'
             self.grid_shape = (7, 7)
         elif grid_shape is None:
-            base_layout_params = read_layout_dict(layout_name)
+            base_layout_params = read_layout_dict(args.layout_names[0])
             grid = [layout_row.strip() for layout_row in base_layout_params['grid'].split("\n")]
             self.grid_shape = (len(grid[0]), len(grid))
         else:
@@ -229,17 +229,6 @@ register(
     entry_point='OvercookedGymEnv'
 )
 
-class DummyPolicy:
-    def __init__(self, obs_space):
-        self.observation_space = obs_space
-
-class DummyAgent:
-    def __init__(self, action=Action.STAY):
-        self.action = Action.ACTION_TO_INDEX[action]
-        self.policy = DummyPolicy(spaces.Dict({'visual_obs': spaces.Box(0,1,(1,))}))
-
-    def predict(self, x, state=None, episode_start=None, deterministic=False):
-        return np.array(self.action), None
 
 if __name__ == '__main__':
     from oai_agents.common.arguments import get_arguments

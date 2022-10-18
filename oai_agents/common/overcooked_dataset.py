@@ -24,10 +24,6 @@ class OvercookedDataset(Dataset):
         self.layouts = layouts
         if layouts != 'all':
             self.main_trials = self.main_trials[self.main_trials['layout_name'].isin(layouts)]
-        # print(self.main_trials['joint_action'])
-        # print(self.main_trials['joint_action'].values[0])
-        # print(type(self.main_trials['joint_action'].values[0]))
-
 
         self.layout_to_mdp = {}
         self.grid_shape = [0, 0]
@@ -75,17 +71,19 @@ class OvercookedDataset(Dataset):
             mdp = self.layout_to_mdp[df['layout_name']]
             obs = self.encoding_fn(mdp, state, self.grid_shape, args.horizon)
             df['state'] = state
-            if 'visual_obs' in obs:
-                df['visual_obs'] = obs['visual_obs']
-            if 'agent_obs' in obs:
-                df['agent_obs'] = obs['agent_obs']
+            df['agent_obs'] = obs['agent_obs']
             return df
 
         self.main_trials['joint_action'] = self.main_trials['joint_action'].apply(str_to_actions)
         self.main_trials = self.main_trials.apply(str_to_obss, axis=1)
+        self.main_trials = self.main_trials[['agent_obs', 'joint_action']]
 
-        self.add_subtasks()
+        self.ind_trials = [self.main_trials.copy(deep=True), self.main_trials.copy(deep=True)]
+        for i in range(2):
+            self.ind_trials[i]['agent_obs'] = self.ind_trials[i].apply(lambda row: row['agent_obs'][i], axis=1)
+            self.ind_trials[i]['action'] = self.ind_trials[i].apply(lambda row: row['joint_action'][i], axis=1)
 
+        self.main_trials = pd.concat(self.ind_trials, axis=0, ignore_index=True)
         # Calculate class weights for cross entropy
         self.action_weights = np.ones(6)
         for action in Action.ALL_ACTIONS:
@@ -96,88 +94,12 @@ class OvercookedDataset(Dataset):
     def get_action_weights(self):
         return self.action_weights
 
-    def get_subtask_weights(self):
-        return self.subtask_weights
-
     def __len__(self):
         return len(self.main_trials)
 
     def __getitem__(self, idx):
         data_point = self.main_trials.iloc[idx]
-        item_dict = {'joint_action': data_point['joint_action'],
-                     'subtasks': np.array( [[data_point['p1_curr_subtask'], data_point['p2_curr_subtask']],
-                                           [data_point['p1_next_subtask'], data_point['p2_next_subtask']]])}
-        if 'visual_obs' in data_point:
-            item_dict['visual_obs'] = data_point['visual_obs'].squeeze()
-        if 'agent_obs' in data_point:
-            item_dict['agent_obs'] = data_point['agent_obs'].squeeze()
-        return item_dict
-
-    def add_subtasks(self):
-        curr_trial = None
-        subtask_start_idx = [0, 0]
-        interact_id = Action.ACTION_TO_INDEX[Action.INTERACT]
-
-        # Add columns in dataframe
-        self.main_trials['p1_curr_subtask'] = None
-        self.main_trials['p2_curr_subtask'] = None
-        self.main_trials['p1_next_subtask'] = None
-        self.main_trials['p2_next_subtask'] = None
-        self.main_trials = self.main_trials.reset_index()
-
-        # Iterate over all rows
-        for index, row in tqdm(self.main_trials.iterrows()):
-            if row['trial_id'] != curr_trial:
-                # Start of a new trial, label final actions of previous trial with unknown subtask
-                subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
-                for i in range(len(row['state'].players)):
-                    self.main_trials.loc[subtask_start_idx[i]:index-1, f'p{i + 1}_curr_subtask'] = subtask
-                    self.main_trials.loc[subtask_start_idx[i]-1:index-1, f'p{i + 1}_next_subtask'] = subtask
-                curr_trial = row['trial_id']
-                # Store starting index of next subtask
-                subtask_start_idx = [index, index]
-
-            # For each agent
-            for i in range(len(row['state'].players)):
-                try: # Get next row
-                    next_row = self.main_trials.loc[index + 1]
-                except KeyError: # End of file, label last actions with 'unknown'
-                    subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
-                    self.main_trials.loc[subtask_start_idx[i]:index, f'p{i + 1}_curr_subtask'] = subtask
-                    self.main_trials.loc[subtask_start_idx[i]-1:index, f'p{i + 1}_next_subtask'] = subtask
-                    subtask_start_idx[i] = index + 1
-                    continue
-
-                # All subtasks will start and end with an INTERACT action
-                if row['joint_action'][i] == interact_id:
-                    # Make sure the next row is part of the current trial
-                    if next_row['trial_id'] == curr_trial:
-                        # Find out which subtask has been completed
-                        subtask = calculate_completed_subtask(row['layout'], row['state'], next_row['state'], i)
-                        if subtask is None:
-                            continue # No completed subtask, continue to next player
-                    else:
-                        continue
-
-                    # Label previous actions with subtask
-                    self.main_trials.loc[subtask_start_idx[i]:index, f'p{i + 1}_curr_subtask'] = subtask
-                    self.main_trials.loc[subtask_start_idx[i]-1:index-1, f'p{i + 1}_next_subtask'] = subtask
-                    subtask_start_idx[i] = index + 1
-
-        # Make sure that this data is defined everywhere
-        assert not (self.main_trials['p1_curr_subtask'].isna().any())
-        assert not (self.main_trials['p2_curr_subtask'].isna().any())
-        assert not (self.main_trials['p1_next_subtask'].isna().any())
-        assert not (self.main_trials['p2_next_subtask'].isna().any())
-
-        # Calculate subtask ratios to be used as weights in a cross entropy loss
-        self.subtask_weights = np.ones(Subtasks.NUM_SUBTASKS)
-        for i in range(2):
-            counts = self.main_trials[f'p{i+1}_next_subtask'].value_counts().to_dict()
-            for k, v in counts.items():
-                self.subtask_weights[k] += v
-        self.subtask_weights = 1.0 / self.subtask_weights
-        self.subtask_weights = Subtasks.NUM_SUBTASKS * self.subtask_weights / self.subtask_weights.sum()
+        return {'agent_obs': data_point['agent_obs'].squeeze(), 'action': data_point['action']}
 
 
 def main():

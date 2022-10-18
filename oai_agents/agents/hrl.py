@@ -148,7 +148,8 @@ class Manager:
 
 class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
-    def __init__(self, worker, teammates, args, use_frame_stack=False, use_subtask_counts=False, inc_sp=False, name=None):
+    def __init__(self, worker, teammates, args, eval_tms=None, use_frame_stack=False, use_subtask_counts=False,
+                 inc_sp=False, name=None):
         name = name or 'rl_manager'
         n_layouts = len(args.layout_names)
         env_kwargs = {'worker': worker, 'shape_rewards': False, 'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
@@ -159,8 +160,9 @@ class RLManagerTrainer(SingleAgentTrainer):
         eval_envs = [OvercookedManagerGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         self.worker = worker
-        super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env, eval_envs=eval_envs, inc_sp=False,
-                                               use_subtask_counts=use_subtask_counts, use_maskable_ppo=True)
+        super(RLManagerTrainer, self).__init__(teammates, args, eval_tms=eval_tms, name=name, env=env,
+                                               eval_envs=eval_envs, inc_sp=False, use_subtask_counts=use_subtask_counts,
+                                               use_maskable_ppo=True)
         if inc_sp:
             playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
             self.teammates.append(playable_self)

@@ -9,10 +9,11 @@ from overcooked_ai_py.mdp.overcooked_mdp import Action
 
 from gym import spaces
 import numpy as np
+from pathlib import Path
 from tqdm import tqdm
 import torch as th
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 from torch.distributions.categorical import Categorical
 from typing import Dict, Any
 import wandb
@@ -34,7 +35,6 @@ class BehaviouralCloningPolicy(nn.Module):
         self.use_agent_obs = np.prod(agent_obs_shape) > 0
         self.obs_dict = {}
 
-
         # Define CNN for grid-like observations
         if self.use_visual_obs:
             self.obs_dict['visual_obs'] = spaces.Box(0, 20, visual_obs_shape, dtype=np.int)
@@ -49,8 +49,6 @@ class BehaviouralCloningPolicy(nn.Module):
         self.observation_space = spaces.Dict(self.obs_dict)
 
         # Define MLP for vector/feature based observations
-        print(agent_obs_shape)
-        print(int(self.cnn_output_shape + np.prod(agent_obs_shape)))
         self.mlp = MLP(input_dim=int(self.cnn_output_shape + np.prod(agent_obs_shape)),
                        output_dim=hidden_dim, num_layers=2, hidden_dim=hidden_dim, act=act)
         self.action_predictor = nn.Linear(hidden_dim, Action.NUM_ACTIONS)
@@ -78,7 +76,8 @@ class BehaviouralCloningPolicy(nn.Module):
 
     def predict(self, obs, state=None, episode_start=None, deterministic=False):
         """Predict action. If sample is True, sample action from distribution, else pick best scoring action"""
-        return Categorical(logits=self.forward(obs)).sample() if deterministic else th.argmax(self.forward(obs), dim=-1), None
+        return Categorical(logits=self.forward(obs)).sample() if deterministic else th.argmax(self.forward(obs),
+                                                                                              dim=-1), None
 
     def get_distribution(self, obs):
         return Categorical(logits=self.forward(obs))
@@ -90,7 +89,7 @@ class BehaviouralCloningAgent(OAIAgent):
         super(BehaviouralCloningAgent, self).__init__(name, args)
         self.encoding_fn = ENCODING_SCHEMES['OAI_feats']
         self.visual_obs_shape, self.agent_obs_shape, self.args, self.hidden_dim = \
-             visual_obs_shape, agent_obs_shape, args, hidden_dim
+            visual_obs_shape, agent_obs_shape, args, hidden_dim
         self.device = args.device
         self.policy = BehaviouralCloningPolicy(visual_obs_shape, agent_obs_shape, args, hidden_dim=hidden_dim)
         self.observation_space = self.policy.observation_space
@@ -105,7 +104,7 @@ class BehaviouralCloningAgent(OAIAgent):
         return dict(
             visual_obs_shape=self.visual_obs_shape,
             agent_obs_shape=self.agent_obs_shape,
-            hidden_dim = self.hidden_dim
+            hidden_dim=self.hidden_dim
         )
 
     def forward(self, obs):
@@ -121,6 +120,7 @@ class BehaviouralCloningAgent(OAIAgent):
     def get_distribution(self, obs: th.Tensor):
         obs = {k: th.tensor(v, device=self.device).unsqueeze(0) for k, v in obs.items()}
         return self.policy.get_distribution(obs)
+
 
 # TODO clean up and remove p_idx
 class BehavioralCloningTrainer(OAITrainer):
@@ -138,72 +138,95 @@ class BehavioralCloningTrainer(OAITrainer):
         self.num_players = 2
         self.dataset = dataset
         layout_names = layout_names or args.layout_names
-        self.train_dataset = OvercookedDataset(dataset, layout_names, args)
-        self.grid_shape = self.train_dataset.grid_shape
-        self.eval_envs = [OvercookedGymEnv(shape_rewards=False, is_eval_env=True, grid_shape=self.grid_shape,
-                          enc_fn='OAI_feats', horizon=400, layout_name=ln, args=args) for ln in layout_names]
+        self.full_ds = OvercookedDataset(dataset, layout_names, args)
+        val_size = int(len(self.full_ds) * 0.5 * 0.15)
+        train_size = int(len(self.full_ds) * 0.5) - val_size
+        train1, val1, train2, val2 = random_split(self.full_ds, [train_size, val_size, train_size, val_size])
+        self.datasets = [{'train': train1, 'val': val1}, {'train': train2, 'val': val2}]
+        self.eval_envs = [OvercookedGymEnv(shape_rewards=False, is_eval_env=True, enc_fn='OAI_feats', horizon=400,
+                                           layout_name=ln, args=args) for ln in layout_names]
         obs = self.eval_envs[0].get_obs(p_idx=0)
         visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
         agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0
-        self.agent = BehaviouralCloningAgent(visual_obs_shape, agent_obs_shape, args, name=name)
-        self.agents = [self.agent]
-        self.teammates = [self.agent]
-        self.optimizer = th.optim.Adam(self.agent.parameters(), lr=args.lr)
-        action_weights = th.tensor(self.train_dataset.get_action_weights(), dtype=th.float32, device=self.device)
+        self.agents = [BehaviouralCloningAgent(visual_obs_shape, agent_obs_shape, args, name=name),
+                       BehaviouralCloningAgent(visual_obs_shape, agent_obs_shape, args, name=name)]
+        self.bc, self.human_proxy = None, None
+        self.teammates = self.agents
+        self.optimizers = [th.optim.Adam(self.agents[0].parameters(), lr=args.lr),
+                           th.optim.Adam(self.agents[1].parameters(), lr=args.lr)]
+        action_weights = th.tensor(self.full_ds.get_action_weights(), dtype=th.float32, device=self.device)
         self.action_criterion = nn.CrossEntropyLoss(weight=action_weights)
         if vis_eval:
             self.eval_envs.setup_visualization()
 
-    def train_on_batch(self, batch):
+    def run_batch(self, agent_idx, batch, val=False):
         """Train BC agent on a batch of data"""
         batch = {k: v.to(self.device) for k, v in batch.items()}
-        action = batch['joint_action'].long()
-        losses = []
         # train agent on both players actions
-        for i in range(self.num_players):
-            self.optimizer.zero_grad()
-            obs = {}
-            if 'visual_obs' in batch:
-                obs['visual_obs'] = batch['visual_obs'][:, i]
-            if 'agent_obs' in batch:
-                obs['agent_obs'] = batch['agent_obs'][:, i]
-            preds = self.agent.forward(obs)
-            # Train on action prediction task
-            loss = self.action_criterion(preds, action[:, i])
+        if not val:
+            self.optimizers[agent_idx].zero_grad()
+        preds = self.agents[agent_idx].forward({'agent_obs': batch['agent_obs']})
+        loss = self.action_criterion(preds, batch['action'].long())
+        if not val:
             loss.backward()
-            self.optimizer.step()
-            losses.append(loss.item())
-            self.agent.num_timesteps += self.args.batch_size
-        return losses
+            self.optimizers[agent_idx].step()
+            self.agents[agent_idx].num_timesteps += self.args.batch_size
+        return loss.item()
 
-    def train_epoch(self):
-        self.agent.train()
+    def run_epoch(self, agent_idx, val=False):
+        self.agents[agent_idx].train()
+        ds = 'val' if val else 'train'
         losses = []
-        dataloader = DataLoader(self.train_dataset, batch_size=self.args.batch_size, shuffle=True, num_workers=4)
-        for batch in tqdm(dataloader):
-            losses += self.train_on_batch(batch)
+        dl = DataLoader(self.datasets[agent_idx][ds], batch_size=self.args.batch_size, shuffle=True, num_workers=4)
+        for batch in tqdm(dl):
+            losses.append(self.run_batch(agent_idx, batch))
         return np.mean(losses)
 
     def train_agents(self, epochs=100, exp_name=None):
         """ Training routine """
         exp_name = exp_name or self.args.exp_name
-        run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent, dir=str(self.args.base_dir / 'wandb'),
-                         reinit=True, name=exp_name + '_' + self.name,  mode=self.args.wandb_mode)
+        run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
+                         dir=str(self.args.base_dir / 'wandb'),
+                         reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
 
-        best_reward, best_path, best_tag = 0, None, None
+        best_val, best_path = [float('inf'), float('inf')], [None, None]
+
         for epoch in range(epochs):
-            mean_loss = self.train_epoch()
-            print('Mean loss: ', mean_loss)
-            mean_reward = self.evaluate(self.agent, timestep=epoch)
-            wandb.log({'mean_loss': mean_loss, 'epoch': epoch})
-            if mean_reward > best_reward:
-                print('Saving best BC model')
-                best_path, best_tag = self.save_agents()
-                best_reward = mean_reward
-        if best_path is not None:
-            print('Loading best BC model')
-            self.load_agents(best_path, best_tag)
+            for i in range(2):
+                train_loss = self.run_epoch(i)
+                val_loss = self.run_epoch(i, val=True)
+                wandb.log({f'train_loss_{i}': train_loss, f'val_loss_{i}': val_loss, 'epoch': epoch})
+                if val_loss < best_val[i]:
+                    print(f'Saving best BC model for agent {i}')
+                    path = self.args.base_dir / 'agent_models' / self.name / self.args.exp_name / 'agents_dir'
+                    Path(path).mkdir(parents=True, exist_ok=True)
+                    self.agents[i].save(path / f'agent_{i}')
+                    best_path[i] = path / f'agent_{i}'
+                    best_val[i] = val_loss
+
+        rewards = [0, 0]
+        for i in range(2):
+            self.agents[i] = BehaviouralCloningAgent.load(best_path[i], self.args)
+            self.agents[i].to(self.device)
+            self.eval_teammates = [self.agents[i]]
+            rewards[i] = self.evaluate(self.agents[i])
+
+        self.save_agents()
+        self.bc, self.human_proxy = (self.agents[0], self.agents[1]) if rewards[1] > rewards[0] else \
+                                    (self.agents[1], self.agents[0])
+
         run.finish()
+
+    def get_agents(self):
+        if self.bc is None:
+            rewards = [-1, -1]
+            for i in range(2):
+                self.eval_teammates = [self.agents[i]]
+                rewards[i] = self.evaluate(self.agents[i], log_wandb=False)
+            self.bc, self.human_proxy = (self.agents[0], self.agents[1]) if rewards[1] > rewards[0] else \
+                                        (self.agents[1], self.agents[0])
+        return self.bc, self.human_proxy
+
 
 
 if __name__ == '__main__':

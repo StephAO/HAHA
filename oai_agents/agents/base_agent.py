@@ -325,7 +325,6 @@ class OAITrainer(ABC):
     An abstract base class for trainer classes.
     Trainer classes must have two agents that they can train using some paradigm
     """
-
     def __init__(self, name, args, seed=None):
         super(OAITrainer, self).__init__()
         self.name = name
@@ -335,7 +334,7 @@ class OAITrainer(ABC):
             th.manual_seed(seed)
             np.random.seed(seed)
 
-        self.eval_tm_idx = 0
+        self.eval_teammates = None
 
         # For environment splits while training
         self.n_layouts = len(self.args.layout_names)
@@ -348,35 +347,36 @@ class OAITrainer(ABC):
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
 
-    def evaluate(self, eval_agent, num_episodes=10, visualize=False, timestep=None):
+    def evaluate(self, eval_agent, num_eps_per_layout_per_tm=3, visualize=False, timestep=None, log_wandb=True):
         tot_mean_reward = []
-        use_specific_tms = type(self.teammates) == dict
+        use_layout_specific_tms = type(self.eval_teammates) == dict
         timestep = timestep if timestep is not None else eval_agent.num_timesteps
         for i, env in enumerate(self.eval_envs):
-            tm = self.teammates[env.get_layout_name()] if use_specific_tms else self.teammates[self.eval_tm_idx]
-            env.set_teammate(tm)
-            mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_episodes,
-                                                      deterministic=False, warn=False, render=visualize)
-            tot_mean_reward.append(mean_reward)
-            print(f'Eval at timestep {timestep} for layout {env.layout_name}: {mean_reward}')
-            wandb.log({f'eval_mean_reward_{env.layout_name}': mean_reward, 'timestep': timestep})
+            tms = self.eval_teammates[env.get_layout_name()] if use_layout_specific_tms else self.eval_teammates
+            for tm in tms:
+                env.set_teammate(tm)
+                mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_eps_per_layout_per_tm,
+                                                          deterministic=False, warn=False, render=visualize)
+                tot_mean_reward.append(mean_reward)
+                print(f'Eval at timestep {timestep} for layout {env.layout_name} with tm {tm.name}: {mean_reward}')
+                if log_wandb:
+                    wandb.log({f'eval_mean_reward_{env.layout_name}_{tm.name}': mean_reward, 'timestep': timestep})
+
         print(f'Eval at timestep {timestep}: {np.mean(tot_mean_reward)}')
-        wandb.log({f'eval_mean_reward': np.mean(tot_mean_reward), 'timestep': timestep})
-        self.eval_tm_idx = (self.eval_tm_idx + 1) % len(self.teammates)
+        if log_wandb:
+            wandb.log({f'eval_mean_reward': np.mean(tot_mean_reward), 'timestep': timestep})
         return np.mean(tot_mean_reward)
 
     def set_new_teammates(self):
-        if type(self.teammates) == dict:
-            # set teammates up so that each env gets a specific teammate
-            for i in range(self.args.n_envs):
+        for i in range(self.args.n_envs):
+            # each layout has different potential teammates
+            if type(self.teammates) == dict:
                 layout_name = self.env.env_method('get_layout_name', indices=i)[0]
-                teammate = self.teammates[layout_name]
-                self.env.env_method('set_teammate', teammate, indices=i)
-        else:
-            # set teammates up so that each env gets a random teammate
-            for i in range(self.args.n_envs):
-                teammate = self.teammates[np.random.randint(len(self.teammates))]
-                self.env.env_method('set_teammate', teammate, indices=i)
+                teammates = self.teammates[layout_name]
+            else: # all layouts share teammates
+                teammates = self.teammates
+            teammate = self.teammates[np.random.randint(len(teammates))]
+            self.env.env_method('set_teammate', teammate, indices=i)
 
     def set_new_envs(self):
         if self.args.multi_env_mode == 'splits':
