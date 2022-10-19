@@ -6,6 +6,7 @@ from oai_agents.common.arguments import get_arguments
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
 from gym import Env, spaces
+import numpy as np
 from pathlib import Path
 from stable_baselines3.common.evaluation import evaluate_policy
 
@@ -19,6 +20,8 @@ class DummyAgent:
         self.action = action if action == 'random' else Action.ACTION_TO_INDEX[action]
         self.name = f'{action}_agent'
         self.policy = DummyPolicy(spaces.Dict({'visual_obs': spaces.Box(0,1,(1,))}))
+        self.encoding_fn = lambda *args, **kwargs: None
+        self.use_hrl_obs = False
 
     def predict(self, x, state=None, episode_start=None, deterministic=False):
         if self.action == 'random':
@@ -75,7 +78,7 @@ def get_eval_teammates(args):
     random_agent = DummyAgent('random')
     eval_tms = {}
     for ln in args.layout_names:
-        eval_tms[ln] = [bcs[ln], sp, random_agent]
+        eval_tms[ln] = [bcs[ln][0], sp[0], random_agent]
     return eval_tms
 
 ### BASELINES ###
@@ -131,14 +134,15 @@ def get_population_play_agent(args, pop_size=8, training_steps=1e7):
 # FCP
 def get_fcp_population(args, training_steps=1e7):
     try:
-        mat = MultipleAgentsTrainer(args, name='fcp_pop_seed=4', num_agents=0)
+        mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
         fcp_pop = mat.load_agents()
+        print(f'Loaded fcp_pop with {len(fcp_pop)} agents.')
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
         agents = []
         for use_fs in [False, True]:
             for h_dim in [16, 256]: # 16, 64, 128, 256
-                seed = 4
+                seed = 4 # 64, 1024, 16384
                 ck_rate = training_steps / 20
                 name = f'fs_{h_dim}' if use_fs else f'no_fs_{h_dim}'
                 print(f'Starting training for: {name}')
@@ -156,7 +160,7 @@ def get_fcp_population(args, training_steps=1e7):
 def get_fcp_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     eval_tms = get_eval_teammates(args)
-    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_sp_stc', inc_sp=True, use_subtask_counts=True)
+    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_sp', inc_sp=True) #, use_subtask_counts=True)
     fcp_trainer.train_agents(total_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 
@@ -263,8 +267,7 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
-    args.layout_names = ['counter_circuit_o_1order']#,['forced_coordination'] # ['asymmetric_advantages']
-    get_bc_and_human_proxy(args)
-    # get_fcp_agent(args, training_steps=1e7)
+    #get_bc_and_human_proxy(args)
+    get_fcp_agent(args, training_steps=1e7)
     # teammates = get_fcp_population(args, 1e3)
     # get_hrl_worker(teammates, args)

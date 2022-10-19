@@ -347,7 +347,7 @@ class OAITrainer(ABC):
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
 
-    def evaluate(self, eval_agent, num_eps_per_layout_per_tm=3, visualize=False, timestep=None, log_wandb=True,
+    def evaluate(self, eval_agent, num_eps_per_layout_per_tm=10, visualize=False, timestep=None, log_wandb=True,
                  deterministic=False):
         tot_mean_reward = []
         use_layout_specific_tms = type(self.eval_teammates) == dict
