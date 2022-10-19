@@ -12,6 +12,9 @@ from overcooked_ai_py.mdp.overcooked_mdp import Action, Direction
 import wandb
 
 
+import math
+
+
 class OvercookedSubtaskGymEnv(OvercookedGymEnv):
     def __init__(self, single_subtask_id=None, use_curriculum=False, **kwargs):
         self.use_curriculum = use_curriculum
@@ -73,14 +76,23 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, Direction.NORTH), feature_locations)
                 if dist < smallest_dist:
                     smallest_dist = dist
-        smallest_dist = min(smallest_dist, curr_dist + 2)
-        # Reward proportional to how much time is saved from using the pass
-        return (curr_dist - smallest_dist) * 0.1
+
+        # Impossible to reach the feature from our curr spot,
+        # Reward should scale by how close the best pickup spot is to the feature
+        if curr_dist == float('inf'):
+            # Every spot further from the pot is -0.1 starting at 1. Max reward of 1
+            reward = max(1, 1 - (smallest_dist * 0.1))
+        else:
+            # Reward proportional to how much time is saved from using the pass compared to walking ourselves
+            # Only get additional reward if there is a worst spot that exists
+            smallest_dist = min(smallest_dist, curr_dist)
+            reward = (curr_dist - smallest_dist) * 0.1
+        return max(0, reward) # No negative reward
 
     def get_pickup_proximity_reward(self, feature_locations):
         # Calculate bonus reward for picking up an object on the pass.
         # Reward should be proportional to how much time is saved by using the pass
-        largest_dist = -float('inf')
+        largest_dist = 0
         object_location = np.array(self.state.players[self.p_idx].position) + np.array(
             self.state.players[self.p_idx].orientation)
         for direction in [np.array([0, 1]), np.array([0, -1]), np.array([1, 0]), np.array([-1, 0])]:
@@ -92,11 +104,15 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 curr_dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, Direction.NORTH), feature_locations)
             else:
                 dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, Direction.NORTH), feature_locations)
-                if dist > largest_dist:
+                if dist != float('inf') and dist > largest_dist:
                     largest_dist = dist
-        largest_dist = max(largest_dist, curr_dist - 2)
+
+        # If there is a further place that you could've picked it up form (i.e. worse place)
+        # then get bonus reward for picking it up from the better place
+        largest_dist = max(largest_dist, curr_dist)
         # Reward proportional to how much time is saved from using the pass
-        return (largest_dist - curr_dist) * 0.1
+        reward = (largest_dist - curr_dist) * 0.1
+        return max(0, reward) # No negative reward
 
     def get_fuller_pot_reward(self, state, terrain):
         """
@@ -114,6 +130,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                     chosen_pot_num_onions = len(obj.ingredients) - 1
                 else:  # this is the other pot
                     other_pot_num_onions = len(obj.ingredients)
+
         return max(0, (chosen_pot_num_onions - other_pot_num_onions) * 0.2)
 
     def step(self, action):
@@ -162,7 +179,6 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 elif self.goal_subtask == 'put_onion_in_pot':
                     reward += self.get_fuller_pot_reward(self.state, self.mdp.terrain_mtx)
 
-
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self, evaluation_trial_num=-1):
@@ -175,18 +191,20 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 # nothing past curr level can be selected
                 subtask_probs[self.curr_lvl + 1:] = 0
             subtask_mask = get_doable_subtasks(self.env.state, Subtasks.SUBTASKS_TO_IDS['unknown'],
-                                               self.terrain, self.p_idx, USEABLE_COUNTERS + 1)
+                                               self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 1)
             subtask_probs = subtask_mask / np.sum(subtask_mask)
             self.goal_subtask = np.random.choice(Subtasks.SUBTASKS, p=subtask_probs)
         self.goal_subtask_id = Subtasks.SUBTASKS_TO_IDS[self.goal_subtask]
 
         # For layouts where there are restrictions on what player can do each subtask, set the right player for the
         # goal subtask. If certain subtasks are useless for certain layouts, raise errors if trying to learn on them
-        if self.layout_name == 'force_coordination':
-            if self.goal_subtask_id in ['get_onion_from_dispenser', 'put_onion_closer', 'get_plate_from_dish_rack',
+        if self.goal_subtask == 'unknown': # Just so unknown doesn't break other stuff. Unknown agent doesnt get trained anyways
+            self.p_idx = np.random.randint(2)
+        elif self.layout_name == 'forced_coordination':
+            if self.goal_subtask in ['get_onion_from_dispenser', 'put_onion_closer', 'get_plate_from_dish_rack',
                                         'put_plate_closer']:
                 self.p_idx = 1
-            elif self.goal_subtask_id in ['get_onion_from_counter', 'put_onion_in_pot', 'get_plate_from_counter',
+            elif self.goal_subtask in ['get_onion_from_counter', 'put_onion_in_pot', 'get_plate_from_counter',
                                           'get_soup', 'serve_soup']:
                 self.p_idx = 0
             else:
@@ -196,7 +214,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             self.p_idx = np.random.randint(2)
             useless_subtasks = ['put_soup_closer', 'put_onion_closer', 'put_plate_closer',
                                 'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']
-            if self.goal_subtask_id in useless_subtasks:
+            if self.goal_subtask in useless_subtasks:
                 raise ValueError(f"{useless_subtasks} are not valid subtasks for asymmetric_advantages")
         else:
             self.p_idx = np.random.randint(2)
@@ -210,27 +228,27 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         self.stack_frames_need_reset = [True, True]
 
         if evaluation_trial_num >= 0:
-            counters = evaluation_trial_num % USEABLE_COUNTERS
+            counters = evaluation_trial_num % max(USEABLE_COUNTERS[self.layout_name], 1)
             random_pos = (self.layout_name == 'counter_circuit_o_1order')
             ss_kwargs = {'p_idx': self.p_idx, 'random_pos': random_pos, 'random_dir': True,
                          'curr_subtask': self.goal_subtask, 'num_random_objects': counters}
         else:
             random_pos = (self.layout_name == 'counter_circuit_o_1order')
             ss_kwargs = {'p_idx': self.p_idx, 'random_pos': random_pos, 'random_dir': True,
-                         'curr_subtask': self.goal_subtask, 'max_random_objs': USEABLE_COUNTERS}
+                         'curr_subtask': self.goal_subtask, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
         self.env.reset(start_state_kwargs=ss_kwargs)
         self.state = self.env.state
         self.prev_state = None
         if self.goal_subtask != 'unknown':
             unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-            assert get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS + 1)[
+            assert get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 1)[
                 self.goal_subtask_id]
         return self.get_obs(self.p_idx)
 
     def evaluate(self, agent):
         results = np.zeros((Subtasks.NUM_SUBTASKS, 2))
         mean_reward = []
-        curr_trial, tot_trials = 0, USEABLE_COUNTERS * 20
+        curr_trial, tot_trials = 0, 102 // len(self.args.layout_names)
         while curr_trial < tot_trials:
             invalid_trial = False
             cum_reward, reward, done = 0, 0, False
@@ -239,7 +257,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 # If the subtask is no longer possible (e.g. other agent picked the only onion up from the counter)
                 # then stop the trial and don't count it
                 unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-                if not get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS + 1)[
+                if not get_doable_subtasks(self.state, unk_id, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 1)[
                     self.goal_subtask_id]:
                     invalid_trial = True
                     break
@@ -262,11 +280,12 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         mean_reward = np.mean(mean_reward)
         num_succ = np.sum(results[:, 0])
 
+        print(f'Subtask eval results on layout {self.layout_name} with teammate {self.teammate.name}.')
         for subtask in Subtasks.SUBTASKS:
             subtask_id = Subtasks.SUBTASKS_TO_IDS[subtask]
             print(f'{subtask_id} - successes: {results[subtask_id][0]}, failures: {results[subtask_id][1]}')
         if self.use_curriculum and np.sum(results[:, 0]) == num_trials and self.curr_lvl < Subtasks.NUM_SUBTASKS:
             print(f'Going from level {self.curr_lvl} to {self.curr_lvl + 1}')
             self.curr_lvl += 1
-        wandb.log({'subtask_reward': mean_reward, 'subtask_success': num_succ, 'timestep': agent.num_timesteps})
-        return num_succ == tot_trials and num_succ > 10
+        wandb.log({f'st_rew_{self.teammate.name}_{self.layout_name}': mean_reward, f'st_succ_{self.teammate.name}_{self.layout_name}': num_succ, 'timestep': agent.num_timesteps})
+        return num_succ == tot_trials# and num_succ > 10

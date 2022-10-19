@@ -112,6 +112,10 @@ class SingleAgentTrainer(OAITrainer):
                             env.set_teammate(tm)
                             all_successes = env.evaluate(self.learning_agent)
                             env_success.append(all_successes)
+
+                    wandb.log({f'num_tm_layout_successes': np.sum(env_success),
+                               'timestep': self.learning_agent.num_timesteps})
+
                     self.num_success = (self.num_success + 1) if all(env_success) else 0
                     if self.num_success >= 3:
                         break

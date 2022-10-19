@@ -160,19 +160,21 @@ def get_fcp_agent(args, training_steps=1e7):
     fcp_trainer.train_agents(total_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 
-def get_hrl_worker(teammates, args):
+def get_hrl_worker(args):
+    teammates = get_fcp_population(args, 1e7)
+    eval_tms = get_eval_teammates(args)
     # Create subtask worker
     name = 'multi_agent_subtask_worker'
     try:
         worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
     except FileNotFoundError as e:
         print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
-        worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates)
+        worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
     return worker
 
 def get_hrl_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
-    worker = get_hrl_worker(teammates, args)
+    worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
     # Create manager
     rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=True, name='hrl')
@@ -263,8 +265,7 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
-    args.layout_names = ['counter_circuit_o_1order']#,['forced_coordination'] # ['asymmetric_advantages']
-    get_bc_and_human_proxy(args)
+    # get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)
-    # teammates = get_fcp_population(args, 1e3)
-    # get_hrl_worker(teammates, args)
+    teammates = get_fcp_population(args)
+    get_hrl_worker(teammates, args)
