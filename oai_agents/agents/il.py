@@ -148,8 +148,8 @@ class BehavioralCloningTrainer(OAITrainer):
         obs = self.eval_envs[0].get_obs(p_idx=0)
         visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
         agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0
-        self.agents = [BehaviouralCloningAgent(visual_obs_shape, agent_obs_shape, args, name=name),
-                       BehaviouralCloningAgent(visual_obs_shape, agent_obs_shape, args, name=name)]
+        self.agents = [BehaviouralCloningAgent(visual_obs_shape, agent_obs_shape, args, name=name+'1'),
+                       BehaviouralCloningAgent(visual_obs_shape, agent_obs_shape, args, name=name+'2')]
         self.bc, self.human_proxy = None, None
         self.teammates = self.agents
         self.optimizers = [th.optim.Adam(self.agents[0].parameters(), lr=args.lr),
@@ -203,6 +203,9 @@ class BehavioralCloningTrainer(OAITrainer):
                     self.agents[i].save(path / f'agent_{i}')
                     best_path[i] = path / f'agent_{i}'
                     best_val[i] = val_loss
+                if epoch % 10 == 0:
+                    self.eval_teammates = [self.agents[i]]
+                    self.evaluate(self.agents[i])
 
         rewards = [0, 0]
         for i in range(2):

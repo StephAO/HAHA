@@ -24,7 +24,7 @@ def get_arguments(additional_args=[]):
                         help='Encoding scheme to use. '
                              'Options: "dense_lossless", "OAI_lossless", "OAI_feats", "OAI_egocentric"')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-    parser.add_argument('--batch-size', type=int, default=256, help='batch size')
+    parser.add_argument('--batch-size', type=int, default=64, help='batch size')
     parser.add_argument('--eta', type=float, default=0.1, help='eta used in plastic policy update.')
     parser.add_argument('--exp-name', type=str, default='default_exp',
                         help='Name of experiment. Used to tag save files.')

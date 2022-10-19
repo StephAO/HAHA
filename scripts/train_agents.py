@@ -70,7 +70,7 @@ def combine_populations(args, pop_names):
 ### EVALUATION AGENTS ###
 def get_eval_teammates(args):
     sp = get_selfplay_agent(args, training_steps=1e7)
-    bcs, human_proxies = get_behavioral_cloning_play_agent(args)
+    bcs, human_proxies = get_bc_and_human_proxy(args)
     random_agent = DummyAgent('random')
     eval_tms = {}
     for ln in args.layout_names:
@@ -98,10 +98,10 @@ def get_bc_and_human_proxy(args):
             bct.load_agents()
         except FileNotFoundError as e:
             print(f'Could not find saved BC and human proxy, creating them from scratch...\nFull Error: {e}')
-            bct.train_agents(epochs=3)
+            bct.train_agents(epochs=250)
         bc, human_proxy = bct.get_agents()
-        bcs[layout_name] = bc
-        human_proxies[layout_name] = human_proxy
+        bcs[layout_name] = [bc]
+        human_proxies[layout_name] = [human_proxy]
     return bcs, human_proxies
 
 # BCP
@@ -155,7 +155,7 @@ def get_fcp_population(args, training_steps=1e7):
 def get_fcp_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     eval_tms = get_eval_teammates(args)
-    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_sp', inc_sp=True, use_subtask_counts=True)
+    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_sp_stc', inc_sp=True, use_subtask_counts=True)
     fcp_trainer.train_agents(total_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 
