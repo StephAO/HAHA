@@ -99,7 +99,7 @@ def get_bc_and_human_proxy(args):
             bct.load_agents()
         except FileNotFoundError as e:
             print(f'Could not find saved BC and human proxy, creating them from scratch...\nFull Error: {e}')
-            bct.train_agents(epochs=500)
+            bct.train_agents(epochs=300)
         bc, human_proxy = bct.get_agents()
         bcs[layout_name] = [bc]
         human_proxies[layout_name] = [human_proxy]
@@ -114,8 +114,6 @@ def get_behavioral_cloning_play_agent(args, training_steps=1e7):
         bcp = self_play_trainer.load_agents()
     except FileNotFoundError as e:
         print(f'Could not find saved BCP, creating them from scratch...\nFull Error: {e}')
-        print('?1', self_play_trainer.teammates)
-        print('?2', self_play_trainer.eval_teammates)
         self_play_trainer.train_agents(total_timesteps=training_steps)
         bcp = self_play_trainer.get_agents()
     return bcp
@@ -133,7 +131,7 @@ def get_population_play_agent(args, pop_size=8, training_steps=1e7):
 # FCP
 def get_fcp_population(args, training_steps=1e7):
     try:
-        mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
+        mat = MultipleAgentsTrainer(args, name='fcp_pop_seed=4', num_agents=0)
         fcp_pop = mat.load_agents()
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
@@ -162,19 +160,19 @@ def get_fcp_agent(args, training_steps=1e7):
     fcp_trainer.train_agents(total_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 
-def get_hrl_worker(args):
+def get_hrl_worker(teammates, args):
     # Create subtask worker
     name = 'multi_agent_subtask_worker'
     try:
         worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
     except FileNotFoundError as e:
         print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
-        worker, _ = MultiAgentSubtaskWorker.get_model_from_scratch(args, teammates=fcp_pop)
+        worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates)
     return worker
 
 def get_hrl_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
-    worker = get_hrl_worker(args)
+    worker = get_hrl_worker(teammates, args)
     eval_tms = get_eval_teammates(args)
     # Create manager
     rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=True, name='hrl')
@@ -265,5 +263,8 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
+    args.layout_names = ['counter_circuit_o_1order']#,['forced_coordination'] # ['asymmetric_advantages']
     get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)
+    # teammates = get_fcp_population(args, 1e3)
+    # get_hrl_worker(teammates, args)

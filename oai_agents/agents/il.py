@@ -112,6 +112,7 @@ class BehaviouralCloningAgent(OAIAgent):
         return self.policy.action_predictor(z)
 
     def predict(self, obs, state=None, episode_start=None, deterministic=False):
+        deterministic = True # BC Agents are just much better is this is true
         obs = {k: th.tensor(v, device=self.device) for k, v in obs.items()}
         action_logits = self.forward(obs)
         action = Categorical(logits=action_logits).sample() if deterministic else th.argmax(action_logits, dim=-1)
@@ -139,10 +140,9 @@ class BehavioralCloningTrainer(OAITrainer):
         self.dataset = dataset
         layout_names = layout_names or args.layout_names
         self.full_ds = OvercookedDataset(dataset, layout_names, args)
-        val_size = int(len(self.full_ds) * 0.5 * 0.15)
-        train_size = int(len(self.full_ds) * 0.5) - val_size
-        train1, val1, train2, val2 = random_split(self.full_ds, [train_size, val_size, train_size, val_size])
-        self.datasets = [{'train': train1, 'val': val1}, {'train': train2, 'val': val2}]
+        train_size = len(self.full_ds) // 2
+        train1, train2 = random_split(self.full_ds, [train_size, train_size])
+        self.datasets = [train1, train2]
         self.eval_envs = [OvercookedGymEnv(shape_rewards=False, is_eval_env=True, enc_fn='OAI_feats', horizon=400,
                                            layout_name=ln, args=args) for ln in layout_names]
         obs = self.eval_envs[0].get_obs(p_idx=0)
@@ -159,25 +159,22 @@ class BehavioralCloningTrainer(OAITrainer):
         if vis_eval:
             self.eval_envs.setup_visualization()
 
-    def run_batch(self, agent_idx, batch, val=False):
+    def run_batch(self, agent_idx, batch):
         """Train BC agent on a batch of data"""
         batch = {k: v.to(self.device) for k, v in batch.items()}
         # train agent on both players actions
-        if not val:
-            self.optimizers[agent_idx].zero_grad()
+        self.optimizers[agent_idx].zero_grad()
         preds = self.agents[agent_idx].forward({'agent_obs': batch['agent_obs']})
         loss = self.action_criterion(preds, batch['action'].long())
-        if not val:
-            loss.backward()
-            self.optimizers[agent_idx].step()
-            self.agents[agent_idx].num_timesteps += self.args.batch_size
+        loss.backward()
+        self.optimizers[agent_idx].step()
+        self.agents[agent_idx].num_timesteps += self.args.batch_size
         return loss.item()
 
-    def run_epoch(self, agent_idx, val=False):
+    def run_epoch(self, agent_idx):
         self.agents[agent_idx].train()
-        ds = 'val' if val else 'train'
         losses = []
-        dl = DataLoader(self.datasets[agent_idx][ds], batch_size=self.args.batch_size, shuffle=True, num_workers=4)
+        dl = DataLoader(self.datasets[agent_idx], batch_size=self.args.batch_size, shuffle=True, num_workers=4)
         for batch in tqdm(dl):
             losses.append(self.run_batch(agent_idx, batch))
         return np.mean(losses)
@@ -189,20 +186,21 @@ class BehavioralCloningTrainer(OAITrainer):
                          dir=str(self.args.base_dir / 'wandb'),
                          reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
 
-        best_val, best_path = [float('inf'), float('inf')], [None, None]
+        best_rew, best_path = [float('-inf'), float('-inf')], [None, None]
 
         for epoch in range(epochs):
             for i in range(2):
                 train_loss = self.run_epoch(i)
-                val_loss = self.run_epoch(i, val=True)
-                wandb.log({f'train_loss_{i}': train_loss, f'val_loss_{i}': val_loss, 'epoch': epoch})
-                if val_loss < best_val[i]:
-                    print(f'Saving best BC model for agent {i}')
+                self.eval_teammates = [self.agents[i]]
+                mean_sp_reward = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=1, deterministic=True)
+                wandb.log({f'train_loss_{i}': train_loss, 'epoch': epoch})
+                if mean_sp_reward > best_rew[i]:
+                    print(f'Saving new best BC model for agent {i} on epoch {epoch} with reward {mean_sp_reward}')
                     path = self.args.base_dir / 'agent_models' / self.name / self.args.exp_name / 'agents_dir'
                     Path(path).mkdir(parents=True, exist_ok=True)
                     self.agents[i].save(path / f'agent_{i}')
                     best_path[i] = path / f'agent_{i}'
-                    best_val[i] = val_loss
+                    best_rew[i] = mean_sp_reward
 
         rewards = [0, 0]
         for i in range(2):
