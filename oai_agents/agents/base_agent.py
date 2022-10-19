@@ -347,7 +347,8 @@ class OAITrainer(ABC):
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
 
-    def evaluate(self, eval_agent, num_eps_per_layout_per_tm=3, visualize=False, timestep=None, log_wandb=True):
+    def evaluate(self, eval_agent, num_eps_per_layout_per_tm=3, visualize=False, timestep=None, log_wandb=True,
+                 deterministic=False):
         tot_mean_reward = []
         use_layout_specific_tms = type(self.eval_teammates) == dict
         timestep = timestep if timestep is not None else eval_agent.num_timesteps
@@ -356,7 +357,7 @@ class OAITrainer(ABC):
             for tm in tms:
                 env.set_teammate(tm)
                 mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_eps_per_layout_per_tm,
-                                                          deterministic=False, warn=False, render=visualize)
+                                                          deterministic=deterministic, warn=False, render=visualize)
                 tot_mean_reward.append(mean_reward)
                 print(f'Eval at timestep {timestep} for layout {env.layout_name} with tm {tm.name}: {mean_reward}')
                 if log_wandb:

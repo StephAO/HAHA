@@ -99,7 +99,7 @@ def get_bc_and_human_proxy(args):
             bct.load_agents()
         except FileNotFoundError as e:
             print(f'Could not find saved BC and human proxy, creating them from scratch...\nFull Error: {e}')
-            bct.train_agents(epochs=250)
+            bct.train_agents(epochs=500)
         bc, human_proxy = bct.get_agents()
         bcs[layout_name] = [bc]
         human_proxies[layout_name] = [human_proxy]

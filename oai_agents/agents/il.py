@@ -203,16 +203,13 @@ class BehavioralCloningTrainer(OAITrainer):
                     self.agents[i].save(path / f'agent_{i}')
                     best_path[i] = path / f'agent_{i}'
                     best_val[i] = val_loss
-                if epoch % 10 == 0:
-                    self.eval_teammates = [self.agents[i]]
-                    self.evaluate(self.agents[i])
 
         rewards = [0, 0]
         for i in range(2):
             self.agents[i] = BehaviouralCloningAgent.load(best_path[i], self.args)
             self.agents[i].to(self.device)
             self.eval_teammates = [self.agents[i]]
-            rewards[i] = self.evaluate(self.agents[i])
+            rewards[i] = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=10, deterministic=True)
 
         self.save_agents()
         self.bc, self.human_proxy = (self.agents[0], self.agents[1]) if rewards[1] > rewards[0] else \
@@ -225,7 +222,7 @@ class BehavioralCloningTrainer(OAITrainer):
             rewards = [-1, -1]
             for i in range(2):
                 self.eval_teammates = [self.agents[i]]
-                rewards[i] = self.evaluate(self.agents[i], log_wandb=False)
+                rewards[i] = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=10, deterministic=True, log_wandb=False)
             self.bc, self.human_proxy = (self.agents[0], self.agents[1]) if rewards[1] > rewards[0] else \
                                         (self.agents[1], self.agents[0])
         return self.bc, self.human_proxy
