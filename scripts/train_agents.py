@@ -5,6 +5,7 @@ from oai_agents.common.arguments import get_arguments
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
+from gym import Env, spaces
 from pathlib import Path
 from stable_baselines3.common.evaluation import evaluate_policy
 
@@ -113,6 +114,8 @@ def get_behavioral_cloning_play_agent(args, training_steps=1e7):
         bcp = self_play_trainer.load_agents()
     except FileNotFoundError as e:
         print(f'Could not find saved BCP, creating them from scratch...\nFull Error: {e}')
+        print('?1', self_play_trainer.teammates)
+        print('?2', self_play_trainer.eval_teammates)
         self_play_trainer.train_agents(total_timesteps=training_steps)
         bcp = self_play_trainer.get_agents()
     return bcp
@@ -262,5 +265,5 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
-    # get_bc_and_human_proxy(args)
-    get_fcp_agent(args, training_steps=1e7)
+    get_bc_and_human_proxy(args)
+    # get_fcp_agent(args, training_steps=1e7)

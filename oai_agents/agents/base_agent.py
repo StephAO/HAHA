@@ -375,7 +375,7 @@ class OAITrainer(ABC):
                 teammates = self.teammates[layout_name]
             else: # all layouts share teammates
                 teammates = self.teammates
-            teammate = self.teammates[np.random.randint(len(teammates))]
+            teammate = teammates[np.random.randint(len(teammates))]
             self.env.env_method('set_teammate', teammate, indices=i)
 
     def set_new_envs(self):
