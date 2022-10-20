@@ -165,6 +165,8 @@ class BehavioralCloningTrainer(OAITrainer):
         # train agent on both players actions
         self.optimizers[agent_idx].zero_grad()
         preds = self.agents[agent_idx].forward({'agent_obs': batch['agent_obs']})
+
+
         loss = self.action_criterion(preds, batch['action'].long())
         loss.backward()
         self.optimizers[agent_idx].step()
@@ -177,6 +179,7 @@ class BehavioralCloningTrainer(OAITrainer):
         dl = DataLoader(self.datasets[agent_idx], batch_size=self.args.batch_size, shuffle=True, num_workers=4)
         for batch in tqdm(dl):
             losses.append(self.run_batch(agent_idx, batch))
+        self.agents[agent_idx].eval()
         return np.mean(losses)
 
     def train_agents(self, epochs=100, exp_name=None):
@@ -192,8 +195,8 @@ class BehavioralCloningTrainer(OAITrainer):
             for i in range(2):
                 train_loss = self.run_epoch(i)
                 self.eval_teammates = [self.agents[i]]
-                mean_sp_reward = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=1, deterministic=True)
-                wandb.log({f'train_loss_{i}': train_loss, 'epoch': epoch})
+                mean_sp_reward = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=1, timestep=epoch, deterministic=True)
+                wandb.log({f'train_loss_{i}': train_loss, 'timestep': epoch})
                 if mean_sp_reward > best_rew[i]:
                     print(f'Saving new best BC model for agent {i} on epoch {epoch} with reward {mean_sp_reward}')
                     path = self.args.base_dir / 'agent_models' / self.name / self.args.exp_name / 'agents_dir'

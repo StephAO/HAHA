@@ -66,13 +66,14 @@ class SingleAgentTrainer(OAITrainer):
         if inc_sp:
             self.teammates.append(self.learning_agent)
 
-        if type(self.eval_teammates) == dict:
-            for k in self.eval_teammates:
-                self.eval_teammates[k].append(self.learning_agent)
-        elif self.eval_teammates is not None:
-            self.eval_teammates.append(self.learning_agent)
-        else:
-            self.eval_teammates = self.teammates
+        if not self.use_subtask_eval:
+            if type(self.eval_teammates) == dict:
+                for k in self.eval_teammates:
+                    self.eval_teammates[k].append(self.learning_agent)
+            elif self.eval_teammates is not None:
+                self.eval_teammates.append(self.learning_agent)
+            else:
+                self.eval_teammates = self.teammates
 
     def _get_constructor_parameters(self):
         return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, use_frame_stack=self.use_frame_stack,
@@ -105,13 +106,18 @@ class SingleAgentTrainer(OAITrainer):
             if epoch % 10 == 0:
                 if self.use_subtask_eval:
                     env_success = []
-                    use_layout_specific_tms = type(self.teammates) == dict
+                    use_layout_specific_tms = type(self.eval_teammates) == dict
                     for env in self.eval_envs:
                         tms = self.eval_teammates[env.get_layout_name()] if use_layout_specific_tms else self.eval_teammates
+                        print('WHY', tms)
                         for tm in tms:
                             env.set_teammate(tm)
                             all_successes = env.evaluate(self.learning_agent)
                             env_success.append(all_successes)
+
+                    wandb.log({f'num_tm_layout_successes': np.sum(env_success),
+                               'timestep': self.learning_agent.num_timesteps})
+
                     self.num_success = (self.num_success + 1) if all(env_success) else 0
                     if self.num_success >= 3:
                         break

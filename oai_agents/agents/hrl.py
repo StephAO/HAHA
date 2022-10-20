@@ -84,7 +84,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         return cls(agents=agents, args=args)
 
     @classmethod
-    def create_model_from_scratch(cls, args, teammates=None, dataset_file=None) -> Tuple['OAIAgent', List['OAIAgent']]:
+    def create_model_from_scratch(cls, args, teammates=None, eval_tms=None, dataset_file=None) -> Tuple['OAIAgent', List['OAIAgent']]:
         # Define teammates
         if teammates is not None:
             tms = teammates
@@ -100,7 +100,8 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
-        for i in range(Subtasks.NUM_SUBTASKS):
+        for i in range(9, Subtasks.NUM_SUBTASKS):
+            print(f'Starting subtask {i} - {Subtasks.IDS_TO_SUBTASKS[i]}')
             # RL single subtask agents trained with teammeates
             # Make necessary envs
 
@@ -119,11 +120,11 @@ class MultiAgentSubtaskWorker(OAIAgent):
                                vec_env_cls=VEC_ENV_CLS)
 
             env_kwargs['full_init'] = True
-            eval_envs = [OvercookedSubtaskGymEnv(**{'index': n, 'is_eval_env': True, **env_kwargs})
+            eval_envs = [OvercookedSubtaskGymEnv(**{'env_index': n, 'is_eval_env': True, **env_kwargs})
                          for n in range(n_layouts)]
             # Create trainer
             name = f'subtask_worker_{i}'
-            rl_sat = SingleAgentTrainer(tms, args, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
+            rl_sat = SingleAgentTrainer(tms, args, eval_tms=eval_tms, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
             # Train if it makes sense to (can't train on an unknown task)
             if i != Subtasks.SUBTASKS_TO_IDS['unknown']:
                 rl_sat.train_agents(total_timesteps=1e7)

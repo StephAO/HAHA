@@ -86,7 +86,7 @@ class OAIAgent(nn.Module, ABC):
             obs['visual_obs'] = obs['visual_obs'].squeeze()
         if 'subtask_mask' in self.policy.observation_space.keys():
             obs['subtask_mask'] = \
-                get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS - 1).astype(bool)
+                get_doable_subtasks(state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] - 1).astype(bool)
         if 'player_completed_subtasks' in self.policy.observation_space.keys():
             # If this isn't the first step of the game, see if a subtask has been completed
             if self.prev_state is not None:

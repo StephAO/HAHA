@@ -31,7 +31,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return obs
 
     def action_masks(self):
-        return get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS - 1).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] - 1).astype(bool)
 
     def step(self, action):
         # Action is the subtask for subtask agent to perform
@@ -71,7 +71,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             self.state = self.env.state
 
             if worker_steps % 5 == 0:
-                if not get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS)[self.curr_subtask]:
+                if not get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[self.curr_subtask]:
                     ready_for_next_subtask = True
             if worker_steps > 25:
                 ready_for_next_subtask = True
@@ -90,7 +90,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
         else:
             random_pos = (self.layout_name == 'counter_circuit_o_1order')
-            ss_kwargs = {'random_pos': random_pos, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS}
+            ss_kwargs = {'random_pos': random_pos, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
         self.env.reset(start_state_kwargs=ss_kwargs)
         self.state = self.env.state
         self.prev_state = None

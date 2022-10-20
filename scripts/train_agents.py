@@ -5,6 +5,7 @@ from oai_agents.common.arguments import get_arguments
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
+from copy import deepcopy
 from gym import Env, spaces
 import numpy as np
 from pathlib import Path
@@ -20,7 +21,7 @@ class DummyAgent:
         self.action = action if action == 'random' else Action.ACTION_TO_INDEX[action]
         self.name = f'{action}_agent'
         self.policy = DummyPolicy(spaces.Dict({'visual_obs': spaces.Box(0,1,(1,))}))
-        self.encoding_fn = lambda *args, **kwargs: None
+        self.encoding_fn = lambda *args, **kwargs: {}
         self.use_hrl_obs = False
 
     def predict(self, x, state=None, episode_start=None, deterministic=False):
@@ -96,7 +97,9 @@ def get_selfplay_agent(args, training_steps=1e7):
 # BC and Human Proxy
 def get_bc_and_human_proxy(args):
     bcs, human_proxies = {}, {}
-    for layout_name in args.layout_names:
+    # This is required because loading agents will overwrite args.layout_names
+    all_layouts = deepcopy(args.layout_names)
+    for layout_name in all_layouts:
         bct = BehavioralCloningTrainer(args.dataset, args, name=f'bc_{layout_name}', layout_names=[layout_name])
         try:
             bct.load_agents()
@@ -106,6 +109,8 @@ def get_bc_and_human_proxy(args):
         bc, human_proxy = bct.get_agents()
         bcs[layout_name] = [bc]
         human_proxies[layout_name] = [human_proxy]
+
+    args.layout_names = all_layouts
     return bcs, human_proxies
 
 # BCP
@@ -160,23 +165,25 @@ def get_fcp_population(args, training_steps=1e7):
 def get_fcp_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     eval_tms = get_eval_teammates(args)
-    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_sp', inc_sp=True) #, use_subtask_counts=True)
+    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_sp_stc', inc_sp=True, use_subtask_counts=True)
     fcp_trainer.train_agents(total_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 
-def get_hrl_worker(teammates, args):
+def get_hrl_worker(args):
+    eval_tms = get_eval_teammates(args)
+    teammates = get_fcp_population(args, 1e7)
     # Create subtask worker
     name = 'multi_agent_subtask_worker'
     try:
         worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
     except FileNotFoundError as e:
         print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
-        worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates)
+        worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
     return worker
 
 def get_hrl_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
-    worker = get_hrl_worker(teammates, args)
+    worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
     # Create manager
     rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=True, name='hrl')
@@ -267,7 +274,10 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
-    #get_bc_and_human_proxy(args)
-    get_fcp_agent(args, training_steps=1e7)
+    # get_bc_and_human_proxy(args)
+    #get_fcp_agent(args, training_steps=1e7)
     # teammates = get_fcp_population(args, 1e3)
     # get_hrl_worker(teammates, args)
+    # get_bc_and_human_proxy(args)
+    # get_fcp_agent(args, training_steps=1e7)
+    get_hrl_worker(args)
