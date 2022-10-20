@@ -92,9 +92,8 @@ class SingleAgentTrainer(OAITrainer):
                                   dir=str(self.args.base_dir / 'wandb'),
                                   reinit=True, name=exp_name + '_' + self.learning_agent.name, mode=self.args.wandb_mode)
         best_path, best_tag = None, None
+        fewest_failures = float('inf')
         best_score = -1
-        if self.use_subtask_eval:
-            self.num_success = 0
 
         epoch = 0
         while self.learning_agent.num_timesteps < total_timesteps:
@@ -107,19 +106,21 @@ class SingleAgentTrainer(OAITrainer):
                 if self.use_subtask_eval:
                     env_success = []
                     use_layout_specific_tms = type(self.eval_teammates) == dict
+                    tot_failures = 0
                     for env in self.eval_envs:
                         tms = self.eval_teammates[env.get_layout_name()] if use_layout_specific_tms else self.eval_teammates
-                        print('WHY', tms)
                         for tm in tms:
                             env.set_teammate(tm)
-                            all_successes = env.evaluate(self.learning_agent)
-                            env_success.append(all_successes)
-
-                    wandb.log({f'num_tm_layout_successes': np.sum(env_success),
+                            fully_successful, num_failures = env.evaluate(self.learning_agent)
+                            tot_failures += num_failures
+                            env_success.append(fully_successful)
+                    wandb.log({f'num_tm_layout_successes': np.sum(env_success), 'total_failures': tot_failures,
                                'timestep': self.learning_agent.num_timesteps})
-
-                    self.num_success = (self.num_success + 1) if all(env_success) else 0
-                    if self.num_success >= 3:
+                    if tot_failures <= fewest_failures:
+                        best_path, best_tag = self.save_agents(tag='best')
+                        print(f'New fewest failures of {fewest_failures} reached, model saved to {best_path}/{best_tag}')
+                        fewest_failures = tot_failures
+                    if all(env_success):
                         break
                 else:
                     mean_reward = self.evaluate(self.learning_agent)

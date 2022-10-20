@@ -249,7 +249,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
     def evaluate(self, agent):
         results = np.zeros((Subtasks.NUM_SUBTASKS, 2))
         mean_reward = []
-        curr_trial, tot_trials = 0, 102 // len(self.args.layout_names)
+        curr_trial, tot_trials = 0, 240 // len(self.args.layout_names)
         while curr_trial < tot_trials:
             invalid_trial = False
             cum_reward, reward, done = 0, 0, False
@@ -289,4 +289,4 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             print(f'Going from level {self.curr_lvl} to {self.curr_lvl + 1}')
             self.curr_lvl += 1
         wandb.log({f'st_rew_{self.teammate.name}_{self.layout_name}': mean_reward, f'st_succ_{self.teammate.name}_{self.layout_name}': num_succ, 'timestep': agent.num_timesteps})
-        return num_succ == tot_trials# and num_succ > 10
+        return num_succ == tot_trials, np.sum(results[:, 1])# and num_succ > 10
