@@ -18,7 +18,7 @@ class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, teammates, args, eval_tms=None, name=None, env=None, eval_envs=None, use_lstm=False,
                  use_frame_stack=False, use_subtask_counts=False, use_maskable_ppo=False, inc_sp=False, hidden_dim=64,
-                 use_subtask_eval=False, seed=None):
+                 use_subtask_eval=False, use_hrl=False, seed=None):
         name = name or 'rl_singleagent'
         super(SingleAgentTrainer, self).__init__(name, args, seed=seed)
         self.args = args
@@ -26,6 +26,7 @@ class SingleAgentTrainer(OAITrainer):
         self.use_lstm = use_lstm
         self.use_frame_stack = use_frame_stack
         self.use_subtask_eval = use_subtask_eval
+        self.using_hrl = use_hrl
         self.hidden_dim = hidden_dim
         self.seed = seed
         self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
@@ -66,7 +67,7 @@ class SingleAgentTrainer(OAITrainer):
         if inc_sp:
             self.teammates.append(self.learning_agent)
 
-        if not self.use_subtask_eval:
+        if not self.use_subtask_eval and not self.using_hrl:
             if type(self.eval_teammates) == dict:
                 for k in self.eval_teammates:
                     self.eval_teammates[k].append(self.learning_agent)
@@ -102,6 +103,10 @@ class SingleAgentTrainer(OAITrainer):
                 self.set_new_envs()
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
+            if self.using_hrl:
+                failures = self.env.env_method('get_worker_failures')
+                wandb.log({f'num_worker_failures': np.sum(failures), 'timestep': self.learning_agent.num_timesteps})
+                print(f'Number of worker failures: {np.sum(failures)}')
             if epoch % 10 == 0:
                 if self.use_subtask_eval:
                     env_success = []

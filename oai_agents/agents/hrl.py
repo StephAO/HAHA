@@ -151,7 +151,7 @@ class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, worker, teammates, args, eval_tms=None, use_frame_stack=False, use_subtask_counts=False,
                  inc_sp=False, name=None):
-        name = name or 'rl_manager'
+        name = name or 'hrl_manager'
         n_layouts = len(args.layout_names)
         env_kwargs = {'worker': worker, 'shape_rewards': False, 'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
         env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs, vec_env_cls=VEC_ENV_CLS)
@@ -163,15 +163,25 @@ class RLManagerTrainer(SingleAgentTrainer):
         self.worker = worker
         super(RLManagerTrainer, self).__init__(teammates, args, eval_tms=eval_tms, name=name, env=env,
                                                eval_envs=eval_envs, inc_sp=False, use_subtask_counts=use_subtask_counts,
-                                               use_maskable_ppo=True)
+                                               use_hrl=True, use_maskable_ppo=True)
         if inc_sp:
             playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
             self.teammates.append(playable_self)
 
+        if type(self.eval_teammates) == dict:
+            playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
+            for k in self.eval_teammates:
+                self.eval_teammates[k].append(playable_self)
+        elif self.eval_teammates is not None:
+            playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
+            self.eval_teammates.append(playable_self)
+        else:
+            self.eval_teammates = self.teammates
+
 
 class HierarchicalRL(OAIAgent):
     def __init__(self, worker, manager, args, name=None):
-        name = name or 'hierarchical_rl'
+        name = name or 'hrl'
         super(HierarchicalRL, self).__init__(name, args)
         self.worker = worker
         self.manager = manager

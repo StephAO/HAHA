@@ -16,6 +16,8 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env.stacked_observations import StackedObservations
 
+# For counter circuit, trained workers with 8, but trained manager with 5. Only 4 spots are useful, but add
+# extra spots in worker to make worker more robust, and 5 in manager for a bit of flexibility
 USEABLE_COUNTERS = {'counter_circuit_o_1order': 8,
                     'forced_coordination': 3,
                     'asymmetric_advantages': 0} # Max number of counters the agents should use
@@ -31,7 +33,6 @@ class OvercookedGymEnv(Env):
         # Observation encoding setup
         enc_fn = enc_fn or args.encoding_fn
         self.encoding_fn =  ENCODING_SCHEMES[enc_fn]
-        print(enc_fn)
         if enc_fn == 'OAI_egocentric':
             # Override grid shape to make it egocentric
             assert grid_shape is None, 'Grid shape cannot be used when egocentric encodings are used!'
@@ -134,7 +135,7 @@ class OvercookedGymEnv(Env):
         pygame.display.flip()
 
     def action_masks(self):
-        return get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
 
     def get_obs(self, p_idx, done=False, enc_fn=None):
         enc_fn = enc_fn or self.encoding_fn

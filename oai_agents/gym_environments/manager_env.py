@@ -15,9 +15,16 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         super(OvercookedManagerGymEnv, self).__init__(**kwargs)
         self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
         self.worker = worker
+        self.worker_failures = 0
 
-    def get_low_level_obs(self, p_idx, done=False):
-        obs = self.encoding_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
+    def get_worker_failures(self):
+        failures = self.worker_failures
+        self.worker_failures = 0
+        return failures
+
+    def get_low_level_obs(self, p_idx, done=False, enc_fn=None):
+        enc_fn = enc_fn or self.encoding_fn
+        obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
         if p_idx == self.p_idx:
             obs['curr_subtask'] = self.curr_subtask
         if self.stack_frames[p_idx]:
@@ -31,7 +38,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return obs
 
     def action_masks(self):
-        return get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] - 1).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] - 1).astype(bool)
 
     def step(self, action):
         # Action is the subtask for subtask agent to perform
@@ -40,7 +47,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         # put itself in a bad position, penalize with -1 and end current episode
         if self.curr_subtask == Subtasks.SUBTASKS_TO_IDS['unknown'] and not self.is_eval_env:
             obs = self.get_obs(self.p_idx)
-            reward = -1
+            reward = -20
             return obs, reward, True, {}
         joint_action = [Action.STAY, Action.STAY]
         reward, done, info = 0, False, None
@@ -48,8 +55,9 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         worker_steps = 0
         while (not ready_for_next_subtask and not done):
             joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(self.p_idx), deterministic=False)[0]
-            tm_obs = self.get_obs(self.t_idx) if self.teammate.use_hrl_obs else self.get_low_level_obs(self.t_idx)
-            joint_action[self.t_idx] = self.teammate.predict(tm_obs, enc_fn=self.teammate.encoding_fn, deterministic=False)[0] # self.is_eval_env
+            tm_obs = self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn) if self.teammate.use_hrl_obs else \
+                     self.get_low_level_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
+            joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=False)[0] # self.is_eval_env
             joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
 
             # If the state didn't change from the previous timestep and the agent is choosing the same action
@@ -71,7 +79,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             self.state = self.env.state
 
             if worker_steps % 5 == 0:
-                if not get_doable_subtasks(self.state, self.prev_st, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[self.curr_subtask]:
+                if not get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[self.curr_subtask]:
                     ready_for_next_subtask = True
             if worker_steps > 25:
                 ready_for_next_subtask = True
@@ -79,8 +87,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             if joint_action[self.p_idx] == Action.INTERACT:
                 completed_subtask = calculate_completed_subtask(self.terrain, self.prev_state, self.state, self.p_idx)
                 if completed_subtask != self.curr_subtask:
-                    completed_subtask_str = Subtasks.IDS_TO_SUBTASKS[completed_subtask] if (completed_subtask is not None) else 'None'
-                    print(f'Worker Failure! -> goal: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask]}, completed: {completed_subtask_str}', flush=True)
+                    self.worker_failures += 1
                 ready_for_next_subtask = (completed_subtask is not None)
 
         return self.get_obs(self.p_idx, done=done), reward, done, info

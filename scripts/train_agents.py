@@ -182,11 +182,11 @@ def get_hrl_worker(args):
     return worker
 
 def get_hrl_agent(args, training_steps=1e7):
-    teammates = get_fcp_population(args, training_steps)
+    teammates = get_fcp_population(args, training_steps)[:1]
     worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
     # Create manager
-    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=True, name='hrl')
+    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=True, name='hrl_manager')
     rlmt.train_agents(total_timesteps=training_steps)
     manager = rlmt.get_agents()[0]
     hrl = HierarchicalRL(worker, manager, args)
@@ -280,4 +280,4 @@ if __name__ == '__main__':
     # get_hrl_worker(teammates, args)
     # get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)
-    get_hrl_worker(args)
+    get_hrl_agent(args, 1e7)
