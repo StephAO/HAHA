@@ -105,9 +105,13 @@ class SingleAgentTrainer(OAITrainer):
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
             if self.using_hrl:
-                failures = self.env.env_method('get_worker_failures')
-                wandb.log({f'num_worker_failures': np.sum(failures), 'timestep': self.learning_agent.num_timesteps})
-                print(f'Number of worker failures: {np.sum(failures)}')
+                failure_dicts = self.env.env_method('get_worker_failures')
+                tot_failure_dict = {k: 0 for k in failure_dicts[0].keys()}
+                for fd in failure_dicts:
+                    for k in tot_failure_dict:
+                        tot_failure_dict[k] += fd[k]
+                wandb.log({f'num_worker_failures': sum(tot_failure_dict.values()), 'timestep': self.learning_agent.num_timesteps})
+                print(f'Number of worker failures: {tot_failure_dict}')
 
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.learning_agent.agent.ep_info_buffer])
             if epoch % 20 == 0 or (mean_training_rew > best_training_rew and self.learning_agent.num_timesteps > 5e5):

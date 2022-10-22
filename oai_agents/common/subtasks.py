@@ -9,7 +9,7 @@ class Subtasks:
                          'I am grabbing a dish from the dispenser', 'I am grabbing dish from the counter',
                          'I am placing my dish closer to the pot', 'I am getting the soup',
                          'I am grabbing the soup from the counter', 'I am placing the soup closer',
-                         'I am serving the soup', 'unknown']
+                         'I am serving the soup', 'I am unsure what to do']
     NUM_SUBTASKS = len(SUBTASKS)
     SUBTASKS_TO_IDS = {s: i for i, s in enumerate(SUBTASKS)}
     IDS_TO_SUBTASKS = {v: k for k, v in SUBTASKS_TO_IDS.items()}
@@ -18,7 +18,6 @@ class Subtasks:
     BASE_STS = ['get_onion_from_dispenser', 'put_onion_in_pot', 'get_plate_from_dish_rack', 'get_soup', 'serve_soup']
     SUPP_STS = ['put_onion_closer', 'put_plate_closer', 'put_soup_closer']
     COMP_STS = ['get_onion_from_counter', 'get_plate_from_counter', 'get_soup_from_counter']
-
 
 
 def facing(layout, player):

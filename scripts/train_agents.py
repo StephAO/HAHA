@@ -1,6 +1,6 @@
 from oai_agents.agents.il import BehavioralCloningTrainer
 from oai_agents.agents.rl import SingleAgentTrainer, MultipleAgentsTrainer, SB3Wrapper
-from oai_agents.agents.hrl import MultiAgentSubtaskWorker, RLManagerTrainer, HierarchicalRL
+from oai_agents.agents.hrl import MultiAgentSubtaskWorker, RLManagerTrainer, HierarchicalRL, DummyAgent
 from oai_agents.common.arguments import get_arguments
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
@@ -11,25 +11,6 @@ import numpy as np
 from pathlib import Path
 from stable_baselines3.common.evaluation import evaluate_policy
 
-### UTILS ###
-class DummyPolicy:
-    def __init__(self, obs_space):
-        self.observation_space = obs_space
-
-class DummyAgent:
-    def __init__(self, action=Action.STAY):
-        self.action = action if action == 'random' else Action.ACTION_TO_INDEX[action]
-        self.name = f'{action}_agent'
-        self.policy = DummyPolicy(spaces.Dict({'visual_obs': spaces.Box(0,1,(1,))}))
-        self.encoding_fn = lambda *args, **kwargs: {}
-        self.use_hrl_obs = False
-
-    def predict(self, x, state=None, episode_start=None, deterministic=False):
-        if self.action == 'random':
-            action = np.random.randint(0, Action.NUM_ACTIONS)
-        else:
-            action = self.action
-        return action, None
 
 def calculate_agent_pairing_score_matrix(agents, args):
     eval_envs_kwargs = {'is_eval_env': True, 'args': args}

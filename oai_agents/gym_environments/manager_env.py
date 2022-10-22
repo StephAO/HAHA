@@ -43,12 +43,6 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
     def step(self, action):
         # Action is the subtask for subtask agent to perform
         self.curr_subtask = action.cpu() if type(action) == th.tensor else action
-        # Manager can only choose the unknown subtask if no other subtask is possible. If this is the case, the manager
-        # put itself in a bad position, penalize with -1 and end current episode
-        if self.curr_subtask == Subtasks.SUBTASKS_TO_IDS['unknown'] and not self.is_eval_env:
-            obs = self.get_obs(self.p_idx)
-            reward = -20
-            return obs, reward, True, {}
         joint_action = [Action.STAY, Action.STAY]
         reward, done, info = 0, False, None
         ready_for_next_subtask = False
@@ -83,6 +77,17 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                     ready_for_next_subtask = True
             if worker_steps > 25:
                 ready_for_next_subtask = True
+            # If subtask equals unknown, HRL agent will just STAY. This essentially forces a recheck every timestep
+            # to see if any other task is possible
+            if self.curr_subtask == Subtasks.SUBTASKS_TO_IDS['unknown']:
+                ready_for_next_subtask = True
+                self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
+                self.unknowns_in_a_row += 1
+                # If no new subtask becomes available after 25 timesteps, end round
+                if self.unknowns_in_a_row > 25:
+                    done = True
+            else:
+                self.unknowns_in_a_row = 0
 
             if joint_action[self.p_idx] == Action.INTERACT:
                 completed_subtask = calculate_completed_subtask(self.terrain, self.prev_state, self.state, self.p_idx)
@@ -110,6 +115,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                                             (self.enc_num_channels * self.args.num_stack)
         self.stack_frames_need_reset = [True, True]
         self.curr_subtask = 0
+        self.unknowns_in_a_row = 0
         # Reset subtask counts
         self.completed_tasks = [np.zeros(Subtasks.NUM_SUBTASKS), np.zeros(Subtasks.NUM_SUBTASKS)]
         return self.get_obs(self.p_idx)

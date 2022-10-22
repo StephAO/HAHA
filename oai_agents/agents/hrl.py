@@ -26,11 +26,34 @@ def is_held_obj(player, object):
             (object.name == 'soup' and player.held_object.name == 'onion'))\
            and object.position == (x, y)
 
+### UTILS ###
+class DummyPolicy:
+    def __init__(self, obs_space):
+        self.observation_space = obs_space
+
+class DummyAgent:
+    def __init__(self, action=Action.STAY):
+        self.action = action if action == 'random' else Action.ACTION_TO_INDEX[action]
+        self.name = f'{action}_agent'
+        self.policy = DummyPolicy(spaces.Dict({'visual_obs': spaces.Box(0,1,(1,))}))
+        self.encoding_fn = lambda *args, **kwargs: {}
+        self.use_hrl_obs = False
+
+    def predict(self, x, state=None, episode_start=None, deterministic=False):
+        if self.action == 'random':
+            action = np.random.randint(0, Action.NUM_ACTIONS)
+        else:
+            action = self.action
+        return action, None
+
+
 
 class MultiAgentSubtaskWorker(OAIAgent):
     def __init__(self, agents, args):
         super(MultiAgentSubtaskWorker, self).__init__('multi_agent_subtask_worker', args)
+        assert len(agents) == Subtasks.NUM_SUBTASKS
         self.agents = agents
+        self.agents[-1] = DummyAgent(action=Action.STAY) # Make unknown subtask equivalent to stay
 
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False):
         assert 'curr_subtask' in obs.keys()
@@ -159,16 +182,6 @@ class MultiAgentSubtaskWorker(OAIAgent):
         Path(path).mkdir(parents=True, exist_ok=True)
         model.save(path / args.exp_name)
 
-# Mix-in class, currently unused
-class Manager:
-    def update_subtasks(self, completed_subtasks):
-        if completed_subtasks == [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]:
-            self.trajectory = []
-        for i in range(2):
-            subtask_id = completed_subtasks[i]
-            if subtask_id is not None: # i.e. If interact has an effect
-                self.worker_subtask_counts[i][subtask_id] += 1
-
 class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, worker, teammates, args, eval_tms=None, use_frame_stack=False, use_subtask_counts=False,
@@ -211,6 +224,8 @@ class HierarchicalRL(OAIAgent):
         self.policy = self.manager.policy
         self.num_steps_since_new_subtask = 0
         self.use_hrl_obs = True
+        self.curr_layout = None
+        self.subtask_step = 0
 
     def get_distribution(self, obs, sample=True):
         if obs['player_completed_subtasks'] != self.prev_player_comp_st:
@@ -220,10 +235,68 @@ class HierarchicalRL(OAIAgent):
         obs['curr_subtask'] = self.curr_subtask_id
         return self.worker.get_distribution(obs, sample=sample)
 
+    def set_curr_layout(self, layout_name):
+        self.curr_layout = layout_name
+        self.subtask_step = 0
+
+    def adjust_distributions(self, probs, indices, weights):
+        new_probs = np.copy(probs)
+        original_values = np.zeros_like(new_probs)
+        adjusted_values = np.zeros_like(new_probs)
+        for i, idx in enumerate(indices):
+            original_values = new_probs[idx]
+            adjusted_values[idx] = new_probs[idx] * weights[i]
+            new_probs[idx] = 0
+        if np.sum(adjusted_values) > 1:
+            adjusted_values = adjusted_values / np.sum(adjusted_values)
+        if np.sum(original_values) > 1:
+            original_values = original_values / np.sum(original_values)
+        new_probs = new_probs - (np.sum(adjusted_values) - np.sum(original_values)) * new_probs / np.sum(new_probs)
+        new_probs = np.clip(new_probs, 0, None)
+        for idx in indices:
+            new_probs[idx] = adjusted_values[idx]
+        return new_probs
+
+    def get_manually_tuned_action(self, obs):
+        # Currently assumes p2 for hrl agent
+        dist = self.manager.get_distribution(obs)
+        probs = dist.distribution.probs
+        if self.curr_layout == None:
+            raise ValueError("Set current layout using set_curr_layout before attempting manual adjustment")
+        elif self.curr_layout == 'counter_circuit_o_1order':
+            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter'],
+                                 Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
+            subtask_weighting = [2, 2]
+            new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+        elif self.curr_layout == 'forced_coordination':
+            # 3 onions then one plate
+            subtask_weighting = [2]
+            if (self.subtask_step + 2) % 8 == 0:
+                subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']
+            elif (self.subtask_step + 1) % 8 == 0:
+                subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
+            else:
+                if self.subtask_step % 2 == 0:
+                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+                else:
+                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
+                subtask_weighting = [2]
+            new_probs = self.adjust_distributions(probs, subtasks_to_weigh, [2, 2])
+        elif self.curr_layout == 'asymmetric_advantages':
+            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'],
+                                 Subtasks.SUBTASKS_TO_IDS['get_soup'],
+                                 Subtasks.SUBTASKS_TO_IDS['serve_soup']]
+            new_probs = self.adjust_distributions(probs, subtasks_to_weigh, [2, 2, 2])
+        else:
+            new_probs = probs
+        new_dist = Categorical(probs=new_probs)
+        return new_dist.sample()
+
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         # TODO consider forcing new subtask if none has been completed in x timesteps
         # print(obs['player_completed_subtasks'],  self.prev_player_comp_st, (obs['player_completed_subtasks'] != self.prev_player_comp_st).any(), flush=True)
-        if (obs['player_completed_subtasks'] != self.prev_player_comp_st).any() or self.num_steps_since_new_subtask > 25:
+        if (obs['player_completed_subtasks'] != self.prev_player_comp_st).any() or \
+                self.num_steps_since_new_subtask > 25 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
             # Completed previous subtask, set new subtask
             self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
                                                         deterministic=deterministic)[0]
