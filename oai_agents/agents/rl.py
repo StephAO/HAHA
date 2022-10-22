@@ -114,7 +114,7 @@ class SingleAgentTrainer(OAITrainer):
                 print(f'Number of worker failures: {tot_failure_dict}')
 
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.learning_agent.agent.ep_info_buffer])
-            if epoch % 20 == 0 or (mean_training_rew > best_training_rew and self.learning_agent.num_timesteps > 5e5):
+            if epoch % 10 == 0 or (mean_training_rew > best_training_rew and self.learning_agent.num_timesteps > 3e5):
                 if mean_training_rew > best_training_rew:
                     best_training_rew = mean_training_rew
                 if self.use_subtask_eval:

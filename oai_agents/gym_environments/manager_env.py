@@ -15,11 +15,11 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         super(OvercookedManagerGymEnv, self).__init__(**kwargs)
         self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
         self.worker = worker
-        self.worker_failures = 0
+        self.worker_failures = {k: 0 for k in range(Subtasks.NUM_SUBTASKS)}
 
     def get_worker_failures(self):
         failures = self.worker_failures
-        self.worker_failures = 0
+        self.worker_failures = {k: 0 for k in range(Subtasks.NUM_SUBTASKS)}
         return failures
 
     def get_low_level_obs(self, p_idx, done=False, enc_fn=None):
@@ -92,7 +92,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             if joint_action[self.p_idx] == Action.INTERACT:
                 completed_subtask = calculate_completed_subtask(self.terrain, self.prev_state, self.state, self.p_idx)
                 if completed_subtask != self.curr_subtask:
-                    self.worker_failures += 1
+                    self.worker_failures[self.curr_subtask] += 1
                 ready_for_next_subtask = (completed_subtask is not None)
 
         return self.get_obs(self.p_idx, done=done), reward, done, info
