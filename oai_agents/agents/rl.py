@@ -95,6 +95,7 @@ class SingleAgentTrainer(OAITrainer):
         best_path, best_tag = None, None
         fewest_failures = float('inf')
         best_score = -1
+        best_training_rew = float('-inf')
 
         epoch = 0
         while self.learning_agent.num_timesteps < total_timesteps:
@@ -107,7 +108,11 @@ class SingleAgentTrainer(OAITrainer):
                 failures = self.env.env_method('get_worker_failures')
                 wandb.log({f'num_worker_failures': np.sum(failures), 'timestep': self.learning_agent.num_timesteps})
                 print(f'Number of worker failures: {np.sum(failures)}')
-            if epoch % 10 == 0:
+
+            mean_training_rew = np.mean([ep_info["r"] for ep_info in self.learning_agent.agent.ep_info_buffer])
+            if epoch % 20 == 0 or (mean_training_rew > best_training_rew and self.learning_agent.num_timesteps > 5e5):
+                if mean_training_rew > best_training_rew:
+                    best_training_rew = mean_training_rew
                 if self.use_subtask_eval:
                     env_success = []
                     use_layout_specific_tms = type(self.eval_teammates) == dict
