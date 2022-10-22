@@ -100,7 +100,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
-        for i in range(9, Subtasks.NUM_SUBTASKS):
+        for i in [8]: #range(1,3): #, Subtasks.NUM_SUBTASKS):
             print(f'Starting subtask {i} - {Subtasks.IDS_TO_SUBTASKS[i]}')
             # RL single subtask agents trained with teammeates
             # Make necessary envs
