@@ -6,9 +6,10 @@ from oai_agents.common.subtasks import Subtasks
 from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
 from oai_agents.gym_environments.manager_env import OvercookedManagerGymEnv
 
-from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld
+from overcooked_ai_py.mdp.overcooked_mdp import Action, OvercookedGridworld
 
 from copy import deepcopy
+from gym import spaces
 import numpy as np
 from pathlib import Path
 from stable_baselines3.common.env_util import make_vec_env
@@ -104,6 +105,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
             agent = load_agent(agent_dir / agent_fn, args)
             agent.to(device)
             agents.append(agent)
+        print(f'Loaded {len(agents)} subtask worker agents')
         return cls(agents=agents, args=args)
 
     @classmethod
@@ -123,7 +125,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
-        for i in [8]: #range(1,3): #, Subtasks.NUM_SUBTASKS):
+        for i in range(Subtasks.NUM_SUBTASKS):
             print(f'Starting subtask {i} - {Subtasks.IDS_TO_SUBTASKS[i]}')
             # RL single subtask agents trained with teammeates
             # Make necessary envs
@@ -346,7 +348,7 @@ class HierarchicalRL(OAIAgent):
 
 
 ### EVERYTHING BELOW IS A DRAFT AT BEST
-class ValueBasedManager(Manager):
+class ValueBasedManager():
     """
     Follows a few basic rules. (tm = teammate)
     1. All independent tasks values:
@@ -504,7 +506,7 @@ class ValueBasedManager(Manager):
         super().reset(state)
         self.init_subtask_values()
 
-class DistBasedManager(Manager):
+class DistBasedManager():
     def __init__(self, agent, p_idx, args):
         super(DistBasedManager, self).__init__(agent, p_idx, args)
         self.name = 'dist_based_subtask_agent'
