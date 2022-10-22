@@ -6,9 +6,10 @@ from oai_agents.common.subtasks import Subtasks
 from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
 from oai_agents.gym_environments.manager_env import OvercookedManagerGymEnv
 
-from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld
+from overcooked_ai_py.mdp.overcooked_mdp import Action, OvercookedGridworld
 
 from copy import deepcopy
+from gym import Env, spaces
 import numpy as np
 from pathlib import Path
 from stable_baselines3.common.env_util import make_vec_env
@@ -51,9 +52,9 @@ class DummyAgent:
 class MultiAgentSubtaskWorker(OAIAgent):
     def __init__(self, agents, args):
         super(MultiAgentSubtaskWorker, self).__init__('multi_agent_subtask_worker', args)
-        assert len(agents) == Subtasks.NUM_SUBTASKS
+        assert len(agents) == Subtasks.NUM_SUBTASKS - 1
         self.agents = agents
-        self.agents[-1] = DummyAgent(action=Action.STAY) # Make unknown subtask equivalent to stay
+        self.agents.append( DummyAgent(action=Action.STAY) ) # Make unknown subtask equivalent to stay
 
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False):
         assert 'curr_subtask' in obs.keys()
@@ -123,15 +124,13 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
-        for i in [8]: #range(1,3): #, Subtasks.NUM_SUBTASKS):
+        for i in []: # 1, 5, 8, 2, 4, 7, 0, 3, 6, 9, 10 #range(1,3): #, Subtasks.NUM_SUBTASKS):
             print(f'Starting subtask {i} - {Subtasks.IDS_TO_SUBTASKS[i]}')
             # RL single subtask agents trained with teammeates
             # Make necessary envs
 
             # Don't bother training an agent on a subtask if that subtask is useless for that layout
             layouts_to_use = deepcopy(original_layout_names)
-            if Subtasks.IDS_TO_SUBTASKS[i] in ['get_soup_from_counter', 'put_soup_closer']:
-                layouts_to_use.remove('forced_coordination')
             if Subtasks.IDS_TO_SUBTASKS[i] in ['put_soup_closer', 'put_onion_closer', 'put_plate_closer',
                                                'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']:
                 layouts_to_use.remove('asymmetric_advantages')
@@ -151,7 +150,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
             # Train if it makes sense to (can't train on an unknown task)
             if i != Subtasks.SUBTASKS_TO_IDS['unknown']:
                 rl_sat.train_agents(total_timesteps=1e7)
-            agents.extend(rl_sat.get_agents())
+                agents.extend(rl_sat.get_agents())
 
         args.layout_names = original_layout_names
         model = cls(agents=agents, args=args)
@@ -346,7 +345,7 @@ class HierarchicalRL(OAIAgent):
 
 
 ### EVERYTHING BELOW IS A DRAFT AT BEST
-class ValueBasedManager(Manager):
+class ValueBasedManager():
     """
     Follows a few basic rules. (tm = teammate)
     1. All independent tasks values:
@@ -504,7 +503,7 @@ class ValueBasedManager(Manager):
         super().reset(state)
         self.init_subtask_values()
 
-class DistBasedManager(Manager):
+class DistBasedManager():
     def __init__(self, agent, p_idx, args):
         super(DistBasedManager, self).__init__(agent, p_idx, args)
         self.name = 'dist_based_subtask_agent'

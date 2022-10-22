@@ -360,8 +360,8 @@ class OAITrainer(ABC):
                                                           deterministic=deterministic, warn=False, render=visualize)
                 tot_mean_reward.append(mean_reward)
                 print(f'Eval at timestep {timestep} for layout {env.layout_name} with tm {tm.name}: {mean_reward}')
-                if log_wandb:
-                    wandb.log({f'eval_mean_reward_{env.layout_name}_{tm.name}': mean_reward, 'timestep': timestep})
+                # if log_wandb:
+                    # wandb.log({f'eval_mean_reward_{env.layout_name}_{tm.name}': mean_reward, 'timestep': timestep})
 
         print(f'Eval at timestep {timestep}: {np.mean(tot_mean_reward)}')
         if log_wandb:

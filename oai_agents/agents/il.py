@@ -223,7 +223,7 @@ class BehavioralCloningTrainer(OAITrainer):
             rewards = [-1, -1]
             for i in range(2):
                 self.eval_teammates = [self.agents[i]]
-                rewards[i] = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=10, deterministic=True, log_wandb=False)
+                rewards[i] = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=1, deterministic=True, log_wandb=False)
             self.bc, self.human_proxy = (self.agents[0], self.agents[1]) if rewards[1] > rewards[0] else \
                                         (self.agents[1], self.agents[0])
         return self.bc, self.human_proxy

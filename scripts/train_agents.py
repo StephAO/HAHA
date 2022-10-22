@@ -213,53 +213,58 @@ def create_test_population(args, training_steps=1e7):
     # mat.train_agents(total_timesteps=3e6)
 
     else:
-        args.layout_names = ['counter_circuit_o_1order']
-        # get subtask worker
+        # args.layout_names = ['counter_circuit_o_1order']
+        # # get subtask worker
         name = 'multi_agent_subtask_worker'
         worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
-
-        name = 'hrl_default'
-        mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
-        tms = mat.load_agents()
-        inc_sp = False
-
-
-        # from oai_agents.common.subtasks import Subtasks
-        # from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
-        # for i in range(Subtasks.NUM_SUBTASKS - 1):
-        #     print(f"Subtask {i}: {Subtasks.IDS_TO_SUBTASKS[i]}")
-        #     env_kwargs = {'single_subtask_id': i, 'stack_frames': False, 'full_init': True, 'args': args}
-        #     eval_env1 = OvercookedSubtaskGymEnv(**{'env_index': 0, 'is_eval_env': True, **env_kwargs})
-        #     eval_env1.set_teammate(tms)
-        #     print("Running with determinism")
-        #     eval_env1.evaluate(worker.agents[i])
-        #     eval_env2 = OvercookedSubtaskGymEnv(**{'env_index': 0, 'is_eval_env': False, **env_kwargs})
-        #     eval_env2.set_teammate(tms)
-        #     print("Running without determinism")
-        #     eval_env2.evaluate(worker.agents[i])
         #
-        # exit(0)
+        # name = 'hrl_default'
+        # mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
+        # tms = mat.load_agents()
+        # inc_sp = False
 
-        b = True
-        if b:
-            inc_sp = True
-            tms = []
-            name = 'hrl_sp'
 
-        # Create manager
-        rlmt = RLManagerTrainer(worker, tms, args, use_subtask_counts=True, inc_sp=inc_sp, name=name)
-        rlmt.train_agents(total_timesteps=training_steps)
-        manager = rlmt.get_agents()[0]
-        hrl = HierarchicalRL(worker, manager, args, name='hrl_sp')
-        hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))
+        from oai_agents.common.subtasks import Subtasks
+        from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
+        tms = get_eval_teammates(args)
+        for env_idx, ln in enumerate(args.layout_names):
+            for i in range(Subtasks.NUM_SUBTASKS - 1):
+                print(f"Subtask {i}: {Subtasks.IDS_TO_SUBTASKS[i]}, layout: {ln}")
+                env_kwargs = {'single_subtask_id': i, 'stack_frames': False, 'full_init': True, 'args': args}
+                eval_env1 = OvercookedSubtaskGymEnv(**{'env_index': env_idx, 'is_eval_env': True, **env_kwargs})
+                tms = tms[ln] if type(tms) == dict else tms
+                for tm in tms:
+                    eval_env1.set_teammate(tm)
+                    # print("Running with determinism")
+                    eval_env1.evaluate(worker.agents[i])
+                # eval_env2 = OvercookedSubtaskGymEnv(**{'env_index': 0, 'is_eval_env': False, **env_kwargs})
+                # eval_env2.set_teammate(tms)
+                # print("Running without determinism")
+                # eval_env2.evaluate(worker.agents[i])
+
+        exit(0)
+
+        # b = True
+        # if b:
+        #     inc_sp = True
+        #     tms = []
+        #     name = 'hrl_sp'
+        #
+        # # Create manager
+        # rlmt = RLManagerTrainer(worker, tms, args, use_subtask_counts=True, inc_sp=inc_sp, name=name)
+        # rlmt.train_agents(total_timesteps=training_steps)
+        # manager = rlmt.get_agents()[0]
+        # hrl = HierarchicalRL(worker, manager, args, name='hrl_sp')
+        # hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))
 
 
 if __name__ == '__main__':
     args = get_arguments()
+    # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
     #get_fcp_agent(args, training_steps=1e7)
     # teammates = get_fcp_population(args, 1e3)
-    # get_hrl_worker(args)
+    get_hrl_worker(args)
     # get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)
-    get_hrl_agent(args, 1e7)
+    # get_hrl_agent(args, 1e7)

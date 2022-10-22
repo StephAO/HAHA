@@ -48,7 +48,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         ready_for_next_subtask = False
         worker_steps = 0
         while (not ready_for_next_subtask and not done):
-            joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(self.p_idx), deterministic=False)[0]
+            joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(self.p_idx), deterministic=True)[0]
             tm_obs = self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn) if self.teammate.use_hrl_obs else \
                      self.get_low_level_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
             joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=False)[0] # self.is_eval_env
@@ -86,6 +86,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 # If no new subtask becomes available after 25 timesteps, end round
                 if self.unknowns_in_a_row > 25:
                     done = True
+                    reward = -1
             else:
                 self.unknowns_in_a_row = 0
 
@@ -106,6 +107,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.env.reset(start_state_kwargs=ss_kwargs)
         self.state = self.env.state
         self.prev_state = None
+        self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
         self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it

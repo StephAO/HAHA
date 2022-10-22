@@ -78,6 +78,9 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 if dist < smallest_dist:
                     smallest_dist = dist
 
+        if smallest_dist == float('inf'): # No other place to pick it up -> i.e. useless
+            return -1
+
         # Impossible to reach the feature from our curr spot,
         # Reward should scale by how close the best pickup spot is to the feature
         if curr_dist == float('inf'):
@@ -132,7 +135,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 else:  # this is the other pot
                     other_pot_num_onions = len(obj.ingredients)
 
-        return max(0, (chosen_pot_num_onions - other_pot_num_onions) * 0.2)
+        return max(0, (chosen_pot_num_onions - other_pot_num_onions) * 0.1)
 
     def step(self, action):
         if self.teammate is None:
@@ -199,18 +202,15 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         # For layouts where there are restrictions on what player can do each subtask, set the right player for the
         # goal subtask. If certain subtasks are useless for certain layouts, raise errors if trying to learn on them
-        if self.goal_subtask == 'unknown': # Just so unknown doesn't break other stuff. Unknown agent doesnt get trained anyways
+        if self.goal_subtask == 'unknown': # Just so unknown doesn't break other stuff.
             self.p_idx = np.random.randint(2)
         elif self.layout_name == 'forced_coordination':
-            if self.goal_subtask in ['get_onion_from_dispenser', 'put_onion_closer', 'get_plate_from_dish_rack',
-                                        'put_plate_closer']:
+            if self.goal_subtask in ['get_onion_from_dispenser', 'get_plate_from_dish_rack']:
                 self.p_idx = 1
-            elif self.goal_subtask in ['get_onion_from_counter', 'put_onion_in_pot', 'get_plate_from_counter',
-                                          'get_soup', 'serve_soup']:
+            elif self.goal_subtask in ['put_onion_in_pot', 'get_soup', 'serve_soup']:
                 self.p_idx = 0
             else:
-                useless_subtasks = ['get_soup_from_counter', 'put_soup_closer']
-                raise ValueError(f"{useless_subtasks} are not valid subtasks for forced_coordination")
+                self.p_idx = np.random.randint(2)
         elif self.layout_name == 'asymmetric_advantages':
             self.p_idx = np.random.randint(2)
             useless_subtasks = ['put_soup_closer', 'put_onion_closer', 'put_plate_closer',
@@ -249,7 +249,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
     def evaluate(self, agent):
         results = np.zeros((Subtasks.NUM_SUBTASKS, 2))
         mean_reward = []
-        curr_trial, tot_trials = 0, 240 // len(self.args.layout_names)
+        curr_trial, tot_trials = 0, 100
         while curr_trial < tot_trials:
             invalid_trial = False
             cum_reward, reward, done = 0, 0, False
@@ -263,7 +263,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                     invalid_trial = True
                     break
 
-                action = agent.predict(obs)[0] # , deterministic=self.is_eval_env
+                action = agent.predict(obs, deterministic=True)[0]
                 obs, reward, done, info = self.step(action)
                 cum_reward += reward
 
@@ -282,11 +282,12 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         num_succ = np.sum(results[:, 0])
 
         print(f'Subtask eval results on layout {self.layout_name} with teammate {self.teammate.name}.')
-        for subtask in Subtasks.SUBTASKS:
-            subtask_id = Subtasks.SUBTASKS_TO_IDS[subtask]
-            print(f'{subtask_id} - successes: {results[subtask_id][0]}, failures: {results[subtask_id][1]}')
+        # for subtask in Subtasks.SUBTASKS:
+        subtask_id = self.goal_subtask_id
+        print(f'Mean reward: {mean_reward}')
+        print(f'{subtask_id} - successes: {results[subtask_id][0]}, failures: {results[subtask_id][1]}')
         if self.use_curriculum and np.sum(results[:, 0]) == num_trials and self.curr_lvl < Subtasks.NUM_SUBTASKS:
             print(f'Going from level {self.curr_lvl} to {self.curr_lvl + 1}')
             self.curr_lvl += 1
-        wandb.log({f'st_rew_{self.teammate.name}_{self.layout_name}': mean_reward, f'st_succ_{self.teammate.name}_{self.layout_name}': num_succ, 'timestep': agent.num_timesteps})
+        # wandb.log({f'st_rew_{self.teammate.name}_{self.layout_name}': mean_reward, f'st_succ_{self.teammate.name}_{self.layout_name}': num_succ, 'timestep': agent.num_timesteps})
         return num_succ == tot_trials, np.sum(results[:, 1])# and num_succ > 10
