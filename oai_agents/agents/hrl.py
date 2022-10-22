@@ -137,6 +137,28 @@ class MultiAgentSubtaskWorker(OAIAgent):
         model.save(path / args.exp_name)
         return model, tms
 
+    @classmethod
+    def create_model_from_pretrained_subtask_workers(cls, args):
+        agents = []
+        for i in range(11):
+            agents.append(SB3Wrapper.load(args.base_dir / 'agent_models' / f'subtask_worker_{i}' / 'best' / 'agents_dir' / 'agent_0', args))
+
+        # All this logic is to get an unknown agent
+        env_kwargs = {'single_subtask_id': 11, 'env_index': 0, 'full_init': True, 'stack_frames': False, 'args': args}
+        env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs,
+                           vec_env_cls=VEC_ENV_CLS)
+        # Create trainer
+        name = f'subtask_worker_11'
+        rl_sat = SingleAgentTrainer(agents, args, name=name, env=env, eval_envs=None, use_subtask_eval=True)
+        agents.extend(rl_sat.get_agents())
+
+        print(len(agents))
+
+        model = cls(agents=agents, args=args)
+        path = args.base_dir / 'agent_models' / model.name
+        Path(path).mkdir(parents=True, exist_ok=True)
+        model.save(path / args.exp_name)
+
 # Mix-in class, currently unused
 class Manager:
     def update_subtasks(self, completed_subtasks):

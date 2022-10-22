@@ -178,6 +178,7 @@ def get_hrl_worker(args):
         worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
     except FileNotFoundError as e:
         print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
+        # worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
         worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
     return worker
 
@@ -277,7 +278,7 @@ if __name__ == '__main__':
     # get_bc_and_human_proxy(args)
     #get_fcp_agent(args, training_steps=1e7)
     # teammates = get_fcp_population(args, 1e3)
-    # get_hrl_worker(teammates, args)
+    # get_hrl_worker(args)
     # get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)
     get_hrl_agent(args, 1e7)
