@@ -16,9 +16,9 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env.stacked_observations import StackedObservations
 
-# For counter circuit, trained workers with 8, but trained manager with 5. Only 4 spots are useful, but add
-# extra spots in worker to make worker more robust, and 5 in manager for a bit of flexibility
-USEABLE_COUNTERS = {'counter_circuit_o_1order': 8,
+# For counter circuit, trained workers with 8, but trained manager with 4. Only 4 spots are useful add
+# more during subtask worker training for robustness
+USEABLE_COUNTERS = {'counter_circuit_o_1order': 4,
                     'forced_coordination': 3,
                     'asymmetric_advantages': 0} # Max number of counters the agents should use
 
