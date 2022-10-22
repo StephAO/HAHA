@@ -9,7 +9,11 @@ from oai_agents.gym_environments.manager_env import OvercookedManagerGymEnv
 from overcooked_ai_py.mdp.overcooked_mdp import Action, OvercookedGridworld
 
 from copy import deepcopy
+<<<<<<< HEAD
 from gym import Env, spaces
+=======
+from gym import spaces
+>>>>>>> 48782658441562653e5fd4402bd877efabecc6e9
 import numpy as np
 from pathlib import Path
 from stable_baselines3.common.env_util import make_vec_env
@@ -105,6 +109,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
             agent = load_agent(agent_dir / agent_fn, args)
             agent.to(device)
             agents.append(agent)
+        print(f'Loaded {len(agents)} subtask worker agents')
         return cls(agents=agents, args=args)
 
     @classmethod
@@ -124,7 +129,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
-        for i in []: # 1, 5, 8, 2, 4, 7, 0, 3, 6, 9, 10 #range(1,3): #, Subtasks.NUM_SUBTASKS):
+        for i in [1]: # 1, 5, 8, 2, 4, 7, 0, 3, 6, 9, 10 #range(1,3): #, Subtasks.NUM_SUBTASKS):
             print(f'Starting subtask {i} - {Subtasks.IDS_TO_SUBTASKS[i]}')
             # RL single subtask agents trained with teammeates
             # Make necessary envs
