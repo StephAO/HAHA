@@ -9,11 +9,7 @@ from oai_agents.gym_environments.manager_env import OvercookedManagerGymEnv
 from overcooked_ai_py.mdp.overcooked_mdp import Action, OvercookedGridworld
 
 from copy import deepcopy
-<<<<<<< HEAD
-from gym import Env, spaces
-=======
 from gym import spaces
->>>>>>> 48782658441562653e5fd4402bd877efabecc6e9
 import numpy as np
 from pathlib import Path
 from stable_baselines3.common.env_util import make_vec_env
@@ -88,7 +84,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
 
         save_dict = {'agent_type': type(self), 'agent_fns': [],
                      'const_params': self._get_constructor_parameters(), 'args': args}
-        for i, agent in enumerate(self.agents):
+        for i, agent in enumerate(self.agents[:-1]): # Exclude final dummy agent
             agent_path_i = agent_dir / f'subtask_{i}_agent'
             agent.save(agent_path_i)
             save_dict['agent_fns'].append(f'subtask_{i}_agent')
@@ -129,7 +125,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
-        for i in [1]: # 1, 5, 8, 2, 4, 7, 0, 3, 6, 9, 10 #range(1,3): #, Subtasks.NUM_SUBTASKS):
+        for i in range(Subtasks.NUM_SUBTASKS):
             print(f'Starting subtask {i} - {Subtasks.IDS_TO_SUBTASKS[i]}')
             # RL single subtask agents trained with teammeates
             # Make necessary envs
@@ -169,17 +165,6 @@ class MultiAgentSubtaskWorker(OAIAgent):
         agents = []
         for i in range(11):
             agents.append(SB3Wrapper.load(args.base_dir / 'agent_models' / f'subtask_worker_{i}' / 'best' / 'agents_dir' / 'agent_0', args))
-
-        # All this logic is to get an unknown agent
-        env_kwargs = {'single_subtask_id': 11, 'env_index': 0, 'full_init': True, 'stack_frames': False, 'args': args}
-        env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs,
-                           vec_env_cls=VEC_ENV_CLS)
-        # Create trainer
-        name = f'subtask_worker_11'
-        rl_sat = SingleAgentTrainer(agents, args, name=name, env=env, eval_envs=None, use_subtask_eval=True)
-        agents.extend(rl_sat.get_agents())
-
-        print(len(agents))
 
         model = cls(agents=agents, args=args)
         path = args.base_dir / 'agent_models' / model.name

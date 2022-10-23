@@ -79,7 +79,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                     smallest_dist = dist
 
         if smallest_dist == float('inf'): # No other place to pick it up -> i.e. useless
-            return -1
+            return -0.5
 
         # Impossible to reach the feature from our curr spot,
         # Reward should scale by how close the best pickup spot is to the feature
@@ -271,7 +271,8 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 tot_trials -= 1
                 continue
 
-            if reward >= 1:
+            thresh = 0.4 if (self.layout_name == 'forced_coordination' and self.p_idx == 0 and self.goal_subtask_id in [3, 6, 9]) else 1
+            if reward >= thresh:
                 results[self.goal_subtask_id][0] += 1
             else:
                 results[self.goal_subtask_id][1] += 1

@@ -84,9 +84,9 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
                 self.unknowns_in_a_row += 1
                 # If no new subtask becomes available after 25 timesteps, end round
-                if self.unknowns_in_a_row > 25:
+                if self.unknowns_in_a_row > 25 and not self.is_eval_env:
                     done = True
-                    reward = -1
+                    reward -= 0.1
             else:
                 self.unknowns_in_a_row = 0
 
@@ -94,7 +94,9 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 completed_subtask = calculate_completed_subtask(self.terrain, self.prev_state, self.state, self.p_idx)
                 if completed_subtask != self.curr_subtask:
                     self.worker_failures[self.curr_subtask] += 1
-                ready_for_next_subtask = (completed_subtask is not None)
+                ready_for_next_subtask = True
+                if not self.is_eval_env:
+                    reward -= 0.1
 
         return self.get_obs(self.p_idx, done=done), reward, done, info
 

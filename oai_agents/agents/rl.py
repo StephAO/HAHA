@@ -133,8 +133,8 @@ class SingleAgentTrainer(OAITrainer):
                                'timestep': self.learning_agent.num_timesteps})
                     if tot_failures <= fewest_failures:
                         best_path, best_tag = self.save_agents(tag='best')
-                        print(f'New fewest failures of {fewest_failures} reached, model saved to {best_path}/{best_tag}')
                         fewest_failures = tot_failures
+                        print(f'New fewest failures of {fewest_failures} reached, model saved to {best_path}/{best_tag}')
                     if all(env_success):
                         break
                 else:
