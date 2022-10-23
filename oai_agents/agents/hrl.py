@@ -86,7 +86,10 @@ class MultiAgentSubtaskWorker(OAIAgent):
 
         save_dict = {'agent_type': type(self), 'agent_fns': [],
                      'const_params': self._get_constructor_parameters(), 'args': args}
-        for i, agent in enumerate(self.agents[:-1]): # Exclude final dummy agent
+        for i, agent in enumerate(self.agents):
+            # Don't save dummy unknown agent
+            if not isinstance(OAIAgent):
+                continue
             agent_path_i = agent_dir / f'subtask_{i}_agent'
             agent.save(agent_path_i)
             save_dict['agent_fns'].append(f'subtask_{i}_agent')
@@ -127,15 +130,14 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
-        for i in range(Subtasks.NUM_SUBTASKS):
+        for i in [3]: #range(Subtasks.NUM_SUBTASKS):
             print(f'Starting subtask {i} - {Subtasks.IDS_TO_SUBTASKS[i]}')
             # RL single subtask agents trained with teammeates
             # Make necessary envs
 
             # Don't bother training an agent on a subtask if that subtask is useless for that layout
             layouts_to_use = deepcopy(original_layout_names)
-            if Subtasks.IDS_TO_SUBTASKS[i] in ['put_soup_closer', 'put_onion_closer', 'put_plate_closer',
-                                               'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']:
+            if Subtasks.IDS_TO_SUBTASKS[i] in ['put_soup_closer', 'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']:
                 layouts_to_use.remove('asymmetric_advantages')
             args.layout_names = layouts_to_use
             n_layouts = len(args.layout_names)
@@ -172,6 +174,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         path = args.base_dir / 'agent_models' / model.name
         Path(path).mkdir(parents=True, exist_ok=True)
         model.save(path / args.exp_name)
+        return model
 
 class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''

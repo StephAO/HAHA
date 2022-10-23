@@ -158,9 +158,8 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
     # The player is holding an onion, so it can only accomplish tasks that involve putting the onion somewhere
     elif state.players[p_idx].held_object.name == 'onion':
         # There must be an empty counter to put something down
-        if len(state.objects.values()) < n_counters:
-            if layout_name != 'asymmetric_advantages':
-                subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_closer']] = 1
+        if len(state.objects.values()) < n_counters  or layout_name == 'asymmetric_advantages':
+            subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_closer']] = 1
         # There must be an empty pot to put an onion into
         if not (layout_name == 'forced_coordination' and p_idx == 1):
             if non_full_pot_exists(state, terrain):
@@ -168,9 +167,8 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
     # The player is holding a plate, so it can only accomplish tasks that involve putting the plate somewhere
     elif state.players[p_idx].held_object.name == 'dish':
         # There must be an empty counter to put something down
-        if len(state.objects.values()) < n_counters:
-            if layout_name != 'asymmetric_advantages':
-                subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_plate_closer']] = 1
+        if len(state.objects.values()) < n_counters or layout_name == 'asymmetric_advantages':
+            subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_plate_closer']] = 1
         if not (layout_name == 'forced_coordination' and p_idx == 1):
             # Can only grab the soup using the plate if a soup is currently cooking
             for obj in state.objects.values():

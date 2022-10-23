@@ -213,8 +213,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 self.p_idx = np.random.randint(2)
         elif self.layout_name == 'asymmetric_advantages':
             self.p_idx = np.random.randint(2)
-            useless_subtasks = ['put_soup_closer', 'put_onion_closer', 'put_plate_closer',
-                                'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']
+            useless_subtasks = ['put_soup_closer', 'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']
             if self.goal_subtask in useless_subtasks:
                 raise ValueError(f"{useless_subtasks} are not valid subtasks for asymmetric_advantages")
         else:
