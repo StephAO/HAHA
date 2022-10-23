@@ -149,7 +149,6 @@ class OvercookedGymEnv(Env):
                 obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
             obs['visual_obs'] = obs['visual_obs'].squeeze()
         if self.return_completed_subtasks:
-            obs['subtask_mask'] = self.action_masks()
             # If this isn't the first step of the game, see if a subtask has been completed
             comp_st = None
             if self.prev_state is not None:
@@ -159,8 +158,11 @@ class OvercookedGymEnv(Env):
                     self.completed_tasks[p_idx][comp_st] += 1
                     if p_idx == self.p_idx:
                         self.prev_st = comp_st
+                else:
+                    self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
             obs['player_completed_subtasks'] = np.eye(Subtasks.NUM_SUBTASKS)[comp_st] if comp_st is not None else np.zeros(Subtasks.NUM_SUBTASKS) #self.completed_tasks[p_idx]
             obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
+            obs['subtask_mask'] = self.action_masks()
             if p_idx == self.t_idx:
                 obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}
 

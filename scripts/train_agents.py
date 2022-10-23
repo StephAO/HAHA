@@ -69,7 +69,7 @@ def get_eval_teammates(args):
 def get_selfplay_agent(args, training_steps=1e7):
     self_play_trainer = MultipleAgentsTrainer(args, name='selfplay', num_agents=1)
     try:
-        self_play_trainer.load_agents()
+        self_play_trainer.load_agents(tag='final')
     except FileNotFoundError as e:
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
         self_play_trainer.train_agents(total_timesteps=training_steps)
@@ -83,7 +83,7 @@ def get_bc_and_human_proxy(args):
     for layout_name in all_layouts:
         bct = BehavioralCloningTrainer(args.dataset, args, name=f'bc_{layout_name}', layout_names=[layout_name])
         try:
-            bct.load_agents()
+            bct.load_agents(tag='final')
         except FileNotFoundError as e:
             print(f'Could not find saved BC and human proxy, creating them from scratch...\nFull Error: {e}')
             bct.train_agents(epochs=300)
@@ -121,7 +121,7 @@ def get_population_play_agent(args, pop_size=8, training_steps=1e7):
 def get_fcp_population(args, training_steps=1e7):
     try:
         mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
-        fcp_pop = mat.load_agents()
+        fcp_pop = mat.load_agents(tag='final')
         print(f'Loaded fcp_pop with {len(fcp_pop)} agents.')
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
@@ -151,15 +151,15 @@ def get_fcp_agent(args, training_steps=1e7):
     return fcp_trainer.get_agents()[0]
 
 def get_hrl_worker(args):
-    eval_tms = get_eval_teammates(args)
-    teammates = get_fcp_population(args, 1e7)
     # Create subtask worker
     name = 'multi_agent_subtask_worker'
     try:
-        worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
+        worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / 'final'), args)
     except FileNotFoundError as e:
         print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
-        # worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
+        #worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
+        eval_tms = get_eval_teammates(args)
+        teammates = get_fcp_population(args, 1e7)
         worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
     return worker
 
@@ -167,6 +167,7 @@ def get_hrl_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)[:1]
     worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
+    args.layout_names = ['forced_coordination']
     # Create manager
     rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=True, name='hrl_manager')
     rlmt.train_agents(total_timesteps=training_steps)
@@ -223,25 +224,37 @@ def create_test_population(args, training_steps=1e7):
         # tms = mat.load_agents()
         # inc_sp = False
 
-
         from oai_agents.common.subtasks import Subtasks
         from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
+        name = 'multi_agent_subtask_worker'
+        worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
         tms = get_eval_teammates(args)
+        total_f = 0
         for env_idx, ln in enumerate(args.layout_names):
+            print('--------------------')
+            print(f'layout: {ln}')
+            print('--------------------')
             for i in range(Subtasks.NUM_SUBTASKS - 1):
+                if ln == 'asymmetric_advantages' and  Subtasks.IDS_TO_SUBTASKS[i] in ['put_soup_closer', 'put_onion_closer', 'put_plate_closer', 'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']:
+                    continue
+
                 print(f"Subtask {i}: {Subtasks.IDS_TO_SUBTASKS[i]}, layout: {ln}")
                 env_kwargs = {'single_subtask_id': i, 'stack_frames': False, 'full_init': True, 'args': args}
                 eval_env1 = OvercookedSubtaskGymEnv(**{'env_index': env_idx, 'is_eval_env': True, **env_kwargs})
+                # eval_env1.setup_visualization()
                 tms = tms[ln] if type(tms) == dict else tms
                 for tm in tms:
+                # tm = DummyAgent('random')
                     eval_env1.set_teammate(tm)
                     # print("Running with determinism")
-                    eval_env1.evaluate(worker.agents[i])
+                    # w = SB3Wrapper.load(Path(f'/home/miguel/Documents/projects/oai_agents/agent_models/subtask_worker_{i}/best/agents_dir/agent_0'), args)
+                    _, tot_f = eval_env1.evaluate(worker.agents[i]) #
+                    total_f += tot_f
                 # eval_env2 = OvercookedSubtaskGymEnv(**{'env_index': 0, 'is_eval_env': False, **env_kwargs})
                 # eval_env2.set_teammate(tms)
                 # print("Running without determinism")
                 # eval_env2.evaluate(worker.agents[i])
-
+        print(total_f)
         exit(0)
 
         # b = True
@@ -260,11 +273,12 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
+    get_hrl_agent(args, 1e7)
+
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
     #get_fcp_agent(args, training_steps=1e7)
     # teammates = get_fcp_population(args, 1e3)
-    get_hrl_worker(args)
+    # get_hrl_worker(args)
     # get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)
-    # get_hrl_agent(args, 1e7)

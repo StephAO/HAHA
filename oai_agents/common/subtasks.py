@@ -147,6 +147,8 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
             # These are only possible if the respective objects exist on a counter somewhere
             for obj in state.objects.values():
                 x, y = obj.position
+                if layout_name == 'forced_coordination' and obj.position not in [(2, 1), (2, 2), (2, 3)]: # Only valid counter tops in forced coord
+                    continue
                 if obj.name == 'onion' and prev_subtask != 'put_onion_closer':
                     subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']] = 1
                 elif obj.name == 'dish' and prev_subtask != 'put_plate_closer':

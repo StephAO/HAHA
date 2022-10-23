@@ -34,7 +34,7 @@ class DummyPolicy:
 
 class DummyAgent:
     def __init__(self, action=Action.STAY):
-        self.action = action if action == 'random' else Action.ACTION_TO_INDEX[action]
+        self.action = action if 'random' in action else Action.ACTION_TO_INDEX[action]
         self.name = f'{action}_agent'
         self.policy = DummyPolicy(spaces.Dict({'visual_obs': spaces.Box(0,1,(1,))}))
         self.encoding_fn = lambda *args, **kwargs: {}
@@ -43,6 +43,8 @@ class DummyAgent:
     def predict(self, x, state=None, episode_start=None, deterministic=False):
         if self.action == 'random':
             action = np.random.randint(0, Action.NUM_ACTIONS)
+        elif self.action == 'random_dir':
+            action = np.random.randing(0, 4)
         else:
             action = self.action
         return action, None
@@ -54,7 +56,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         super(MultiAgentSubtaskWorker, self).__init__('multi_agent_subtask_worker', args)
         assert len(agents) == Subtasks.NUM_SUBTASKS - 1
         self.agents = agents
-        self.agents.append( DummyAgent(action=Action.STAY) ) # Make unknown subtask equivalent to stay
+        self.agents.append( DummyAgent('random_dir') ) # Make unknown subtask equivalent to stay
 
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False):
         assert 'curr_subtask' in obs.keys()
