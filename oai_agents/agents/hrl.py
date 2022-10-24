@@ -1,7 +1,7 @@
-from oai_agents.agents.base_agent import OAIAgent, load_agent
+from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehavioralCloningTrainer
 from oai_agents.agents.rl import MultipleAgentsTrainer, SingleAgentTrainer, SB3Wrapper, SB3LSTMWrapper, VEC_ENV_CLS
-from oai_agents.agents.agent_utils import DummyAgent, is_held_obj
+from oai_agents.agents.agent_utils import DummyAgent, is_held_obj, load_agent
 from oai_agents.common.arguments import get_arguments, get_args_to_save, set_args_from_load
 from oai_agents.common.subtasks import Subtasks
 from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
