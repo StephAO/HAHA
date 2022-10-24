@@ -192,7 +192,7 @@ class HierarchicalRL(OAIAgent):
 
     def set_play_params(self, output_message, tune_subtasks):
         self.output_message = output_message
-        self.tune_subtasks = None
+        self.tune_subtasks = tune_subtasks
 
     def get_distribution(self, obs, sample=True):
         if obs['player_completed_subtasks'] != self.prev_player_comp_st:

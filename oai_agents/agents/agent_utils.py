@@ -5,7 +5,7 @@ import torch as th
 
 
 # Load any agent
-def load_agent(agent_path, args=None, is_hrl=False, output_message=True, tune_subtasks=None):
+def load_agent(agent_path, args=None):
     args = args or get_arguments()
     agent_path = Path(agent_path)
     try:
@@ -13,8 +13,6 @@ def load_agent(agent_path, args=None, is_hrl=False, output_message=True, tune_su
     except FileNotFoundError as e:
         raise ValueError(f'Could not find file:{e}')  # TODO print options
     agent = load_dict['agent_type'].load(agent_path, args)
-    if is_hrl:
-        agent.set_play_params(output_message, tune_subtasks)
     assert isinstance(agent, OAIAgent)
     return agent
 
