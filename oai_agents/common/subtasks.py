@@ -4,12 +4,12 @@ class Subtasks:
     SUBTASKS = ['get_onion_from_dispenser', 'get_onion_from_counter', 'put_onion_in_pot', 'put_onion_closer',
                 'get_plate_from_dish_rack', 'get_plate_from_counter', 'put_plate_closer', 'get_soup',
                 'get_soup_from_counter', 'put_soup_closer', 'serve_soup', 'unknown']
-    HUMAN_READABLE_ST = ['I am grabbing an onion from the dispenser', 'I am grabbing an onion from the counter',
-                         'I am putting my onion in the pot', 'I am placing my onion closer to the pot',
-                         'I am grabbing a dish from the dispenser', 'I am grabbing dish from the counter',
-                         'I am placing my dish closer to the pot', 'I am getting the soup',
-                         'I am grabbing the soup from the counter', 'I am placing the soup closer',
-                         'I am serving the soup', 'I am unsure what to do']
+    HUMAN_READABLE_ST = ['Grabbing an onion from dispenser', 'Grabbing an onion from counter',
+                         'Putting onion in pot', 'Placing onion closer to pot',
+                         'Grabbing dish from dispenser', 'Grabbing dish from counter',
+                         'Placing dish closer to pot', 'Getting the soup',
+                         'Grabbing soup from counter', 'Placing soup closer',
+                         'Serving the soup', 'Unsure']
     NUM_SUBTASKS = len(SUBTASKS)
     SUBTASKS_TO_IDS = {s: i for i, s in enumerate(SUBTASKS)}
     IDS_TO_SUBTASKS = {v: k for k, v in SUBTASKS_TO_IDS.items()}

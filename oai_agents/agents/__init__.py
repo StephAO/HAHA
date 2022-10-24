@@ -7,6 +7,8 @@ from pathlib import Path
 import torch as th
 
 def fix_save_pickle(agent_path, args=None):
+    """ Starter code if pickles has modules '__main__.xxxx' insated of 'oai_agents.xxxx. This should not be a problem is
+    scripts/train_agents is used."""
     import oai_agents
     args = args or get_arguments()
     agent_path = Path(agent_path)

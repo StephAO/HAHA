@@ -1,6 +1,7 @@
 from oai_agents.agents.base_agent import OAIAgent, load_agent
 from oai_agents.agents.il import BehavioralCloningTrainer
 from oai_agents.agents.rl import MultipleAgentsTrainer, SingleAgentTrainer, SB3Wrapper, SB3LSTMWrapper, VEC_ENV_CLS
+from oai_agents.agents.agent_utils import DummyAgent, is_held_obj
 from oai_agents.common.arguments import get_arguments, get_args_to_save, set_args_from_load
 from oai_agents.common.subtasks import Subtasks
 from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
@@ -9,46 +10,12 @@ from oai_agents.gym_environments.manager_env import OvercookedManagerGymEnv
 from overcooked_ai_py.mdp.overcooked_mdp import Action, OvercookedGridworld
 
 from copy import deepcopy
-from gym import spaces
 import numpy as np
 from pathlib import Path
 from stable_baselines3.common.env_util import make_vec_env
 import torch as th
 import torch.nn.functional as F
 from typing import Tuple, List
-
-
-# TODO Move to util
-def is_held_obj(player, object):
-    '''Returns True if the object that the "player" picked up / put down is the same as the "object"'''
-    x, y = np.array(player.position) + np.array(player.orientation)
-    return player.held_object is not None and \
-           ((object.name == player.held_object.name) or
-            (object.name == 'soup' and player.held_object.name == 'onion'))\
-           and object.position == (x, y)
-
-### UTILS ###
-class DummyPolicy:
-    def __init__(self, obs_space):
-        self.observation_space = obs_space
-
-class DummyAgent:
-    def __init__(self, action=Action.STAY):
-        self.action = action if 'random' in action else Action.ACTION_TO_INDEX[action]
-        self.name = f'{action}_agent'
-        self.policy = DummyPolicy(spaces.Dict({'visual_obs': spaces.Box(0,1,(1,))}))
-        self.encoding_fn = lambda *args, **kwargs: {}
-        self.use_hrl_obs = False
-
-    def predict(self, x, state=None, episode_start=None, deterministic=False):
-        if self.action == 'random':
-            action = np.random.randint(0, Action.NUM_ACTIONS)
-        elif self.action == 'random_dir':
-            action = np.random.randing(0, 4)
-        else:
-            action = self.action
-        return action, None
-
 
 
 class MultiAgentSubtaskWorker(OAIAgent):
@@ -220,6 +187,12 @@ class HierarchicalRL(OAIAgent):
         self.use_hrl_obs = True
         self.curr_layout = None
         self.subtask_step = 0
+        self.output_message = True
+        self.tune_subtasks = None
+
+    def set_play_params(self, output_message, tune_subtasks):
+        self.output_message = output_message
+        self.tune_subtasks = None
 
     def get_distribution(self, obs, sample=True):
         if obs['player_completed_subtasks'] != self.prev_player_comp_st:
@@ -251,40 +224,73 @@ class HierarchicalRL(OAIAgent):
             new_probs[idx] = adjusted_values[idx]
         return new_probs
 
-    def get_manually_tuned_action(self, obs):
+    def get_manually_tuned_action(self, obs, deterministic=False):
         # Currently assumes p2 for hrl agent
         dist = self.manager.get_distribution(obs)
         probs = dist.distribution.probs
         if self.curr_layout == None:
             raise ValueError("Set current layout using set_curr_layout before attempting manual adjustment")
         elif self.curr_layout == 'counter_circuit_o_1order':
-            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter'],
-                                 Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
-            subtask_weighting = [2, 2]
+            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
+            if self.tune_subtasks == 'coordinated':
+                subtask_weighting = [2 for _ in subtasks_to_weigh]
+            elif self.tune_subtasks == 'independent':
+                subtask_weighting = [0.5 for _ in subtasks_to_weigh]
+            else:
+                raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
         elif self.curr_layout == 'forced_coordination':
-            # 3 onions then one plate
-            subtask_weighting = [2]
-            if (self.subtask_step + 2) % 8 == 0:
-                subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']
-            elif (self.subtask_step + 1) % 8 == 0:
-                subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
-            else:
-                if self.subtask_step % 2 == 0:
-                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+            # NOTE: THIS ASSUMES BEING P2
+            # Since tasks are very limited, we use a different change insated of support and coordinated.
+            if self.tune_subtasks == 'coordinated':
+                # "coordinated", we do 3 onions then 1 plate
+                if (self.subtask_step + 2) % 8 == 0:
+                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']
+                elif (self.subtask_step + 1) % 8 == 0:
+                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
                 else:
-                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
-                subtask_weighting = [2]
+                    if self.subtask_step % 2 == 0:
+                        subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+                    else:
+                        subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
+                subtask_weighting = [2 for _ in subtasks_to_weigh]
+            elif self.tune_subtasks == 'independent':
+                # "independent", we do 6 onions then two plates
+                if (self.subtask_step + 4) % 16 == 0:
+                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']
+                elif (self.subtask_step + 3) % 16 == 0:
+                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
+                elif (self.subtask_step + 2) % 16 == 0:
+                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']
+                elif (self.subtask_step + 1) % 16 == 0:
+                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
+                else:
+                    if self.subtask_step % 2 == 0:
+                        subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+                    else:
+                        subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
+                subtask_weighting = [2 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+            else:
+                raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, [2, 2])
         elif self.curr_layout == 'asymmetric_advantages':
+            # NOTE: THIS ASSUMES BEING P2
             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'],
                                  Subtasks.SUBTASKS_TO_IDS['get_soup'],
                                  Subtasks.SUBTASKS_TO_IDS['serve_soup']]
-            new_probs = self.adjust_distributions(probs, subtasks_to_weigh, [2, 2, 2])
+            if self.tune_subtasks == 'coordinated':
+                subtask_weighting = [2 for _ in subtasks_to_weigh]
+            elif self.tune_subtasks == 'independent':
+                subtask_weighting = [1 for _ in subtasks_to_weigh]
+            else:
+                raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
+            new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
         else:
             new_probs = probs
-        new_dist = Categorical(probs=new_probs)
-        return new_dist.sample()
+
+        print(f"Previous probs: {probs} -> New probs: {new_probs}", flush=True)
+        return th.argmax(self.forward(new_probs), dim=-1) if deterministic else Categorical(probs=new_probs).sample()
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         # TODO consider forcing new subtask if none has been completed in x timesteps
@@ -292,8 +298,11 @@ class HierarchicalRL(OAIAgent):
         if (obs['player_completed_subtasks'] != self.prev_player_comp_st).any() or \
                 self.num_steps_since_new_subtask > 25 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
             # Completed previous subtask, set new subtask
-            self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
-                                                        deterministic=deterministic)[0]
+            if self.tune_subtasks is None:
+                self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
+                                                            deterministic=deterministic)[0]
+            else:
+                self.curr_subtask_id = self.get_manually_tuned_action(obs, deterministic=deterministic)
             self.prev_player_comp_st = deepcopy(obs['player_completed_subtasks'])
             self.num_steps_since_new_subtask = 0
         obs['curr_subtask'] = self.curr_subtask_id
@@ -301,7 +310,7 @@ class HierarchicalRL(OAIAgent):
         return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=False)
 
     def get_agent_output(self):
-        return Subtasks.IDS_TO_HR_SUBTASKS[int(self.curr_subtask_id)]
+        return Subtasks.IDS_TO_HR_SUBTASKS[int(self.curr_subtask_id)] if self.output_message else ' '
 
     def save(self, path: Path) -> None:
         """
@@ -337,6 +346,41 @@ class HierarchicalRL(OAIAgent):
         model = cls(manager=manager, worker=worker, args=args)  # pytype: disable=not-instantiable
         model.to(device)
         return model
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ### EVERYTHING BELOW IS A DRAFT AT BEST
