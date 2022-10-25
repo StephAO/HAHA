@@ -61,7 +61,7 @@ class OAIAgent(nn.Module, ABC):
 
     def set_idx(self, p_idx, layout_name, is_hrl=False, output_message=True, tune_subtasks=None):
         self.p_idx = p_idx
-        self.agent.layout_name = layout_name
+        self.layout_name = layout_name
         self.prev_state = None
         self.stack_frames = self.policy.observation_space['visual_obs'].shape[0] == (26 * self.args.num_stack)
         self.stackedobs = StackedObservations(1, self.args.num_stack, self.policy.observation_space['visual_obs'], 'first')
