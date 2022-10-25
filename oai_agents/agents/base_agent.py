@@ -66,7 +66,7 @@ class OAIAgent(nn.Module, ABC):
         self.stack_frames = self.policy.observation_space['visual_obs'].shape[0] == (26 * self.args.num_stack)
         self.stackedobs = StackedObservations(1, self.args.num_stack, self.policy.observation_space['visual_obs'], 'first')
         if is_hrl:
-            agent.set_play_params(output_message, tune_subtasks)
+            self.set_play_params(output_message, tune_subtasks)
 
     def set_encoding_params(self, mdp, horizon):
         self.mdp = mdp
