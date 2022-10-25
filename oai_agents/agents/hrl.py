@@ -238,6 +238,7 @@ class HierarchicalRL(OAIAgent):
                 subtask_weighting = [0.5 for _ in subtasks_to_weigh]
             else:
                 raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
+            print(probs, subtasks_to_weigh, subtask_weighting)
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
         elif self.layout_name == 'forced_coordination':
             # NOTE: THIS ASSUMES BEING P2
@@ -290,7 +291,7 @@ class HierarchicalRL(OAIAgent):
             new_probs = probs
 
         print(f"Previous probs: {probs} -> New probs: {new_probs}", flush=True)
-        return np.argmax(new_probs, dim=-1) if deterministic else Categorical(probs=new_probs).sample()
+        return np.argmax(new_probs, axis=-1) if deterministic else Categorical(probs=new_probs).sample()
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         # TODO consider forcing new subtask if none has been completed in x timesteps
