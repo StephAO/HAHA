@@ -61,6 +61,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
 
             self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
             next_state, r, done, info = self.env.step(joint_action)
+            self.state = deepcopy(next_state)
             if self.shape_rewards and not self.is_eval_env:
                 ratio = min(self.step_count * self.args.n_envs / 2.5e6, 1)
                 sparse_r = sum(info['sparse_r_by_agent'])
@@ -70,7 +71,6 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 reward += r
             self.step_count += 1
             worker_steps += 1
-            self.state = self.env.state
 
             if worker_steps % 5 == 0:
                 if not get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[self.curr_subtask]:

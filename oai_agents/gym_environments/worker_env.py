@@ -79,7 +79,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                     smallest_dist = dist
 
         if smallest_dist == float('inf'): # No other place to pick it up -> i.e. useless
-            return -0.5
+            return -0.1
 
         # Impossible to reach the feature from our curr spot,
         # Reward should scale by how close the best pickup spot is to the feature
@@ -147,13 +147,12 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
-        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(
-                joint_action) == self.prev_actions:
+        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
             joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
 
-        self.prev_state, self.prev_actions = deepcopy(self.state), joint_action
+        self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
         next_state, _, done, info = self.env.step(joint_action)
-        self.state = self.env.state
+        self.state = deepcopy(next_state)
 
         reward = -0.01  # existence penalty
         if joint_action[self.p_idx] == Action.INTERACT:

@@ -183,7 +183,7 @@ class OvercookedGymEnv(Env):
         if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
             joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
 
-        self.prev_state, self.prev_actions = deepcopy(self.state), joint_action
+        self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
 
         next_state, reward, done, info = self.env.step(joint_action)
         self.state = self.env.state

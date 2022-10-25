@@ -87,9 +87,6 @@ class OAIAgent(nn.Module, ABC):
             else:
                 obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([False]), [{}])
             obs['visual_obs'] = obs['visual_obs'].squeeze()
-        if 'subtask_mask' in self.policy.observation_space.keys():
-            obs['subtask_mask'] = \
-                get_doable_subtasks(state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] - 1).astype(bool)
         if 'player_completed_subtasks' in self.policy.observation_space.keys():
             # If this isn't the first step of the game, see if a subtask has been completed
             if self.prev_state is not None:
@@ -97,29 +94,36 @@ class OAIAgent(nn.Module, ABC):
                 for i in range(2):
                     try:
                         cst = calculate_completed_subtask(self.terrain, self.prev_state, state, i)
-                    except ValueError:
+                    except ValueError as e:
+                        print('???', e, flush=True)
                         cst = None
                     comp_st.append(cst)
                 # If a subtask has been completed, update counts
                 if comp_st[self.p_idx] is not None:
                     self.player_completed_tasks[comp_st[self.p_idx]] += 1
                     self.prev_st = comp_st[self.p_idx]
+                    print(f'Agent completed: {comp_st[self.p_idx]}')
                 if comp_st[1 - self.p_idx] is not None:
                     self.player_completed_tasks[comp_st[1 - self.p_idx]] += 1
+                    print(f'Teammate completed: {comp_st[1 - self.p_idx]}')
                 # If this is the first step of the game, reset subtask counts to 0
             else:
                 self.player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
                 self.tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
-            obs['player_completed_subtasks'] = self.player_completed_tasks
+            obs['player_completed_subtasks'] = np.eye(Subtasks.NUM_SUBTASKS)[comp_st] if comp_st is not None else np.zeros(Subtasks.NUM_SUBTASKS) #self.player_completed_tasks
             obs['teammate_completed_subtasks'] = self.tm_completed_tasks
+        if 'subtask_mask' in self.policy.observation_space.keys():
+            obs['subtask_mask'] = get_doable_subtasks(state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] - 1).astype(bool)
 
-        self.prev_state = state
+        print(f'DOABLE SUBTASKS: {[Subtasks.IDS_TO_SUBTASKS[i] for i in obs["subtask_mask"]]}', flush=True)
+
+        self.prev_state = deepcopy(state)
         obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
 
         try:
             agent_msg = self.get_agent_output()
         except AttributeError as e:
-            print(e, flush=True)
+            # print(e, flush=True)
             agent_msg = ' '
 
         action, _ = self.predict(obs, deterministic=deterministic)
