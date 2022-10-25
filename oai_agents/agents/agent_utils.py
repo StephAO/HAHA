@@ -17,7 +17,6 @@ def load_agent(agent_path, args=None):
     except FileNotFoundError as e:
         raise ValueError(f'Could not find file:{e}')  # TODO print options
     agent = load_dict['agent_type'].load(agent_path, args)
-    assert isinstance(agent, OAIAgent)
     return agent
 
 def is_held_obj(player, object):
