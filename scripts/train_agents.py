@@ -273,13 +273,13 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
-    create_test_population(args, 1e3)
+    # create_test_population(args, 1e3)
     # get_hrl_agent(args, 1e7)
 
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
     #get_fcp_agent(args, training_steps=1e7)
     # teammates = get_fcp_population(args, 1e3)
-    # get_hrl_worker(args)
+    get_hrl_worker(args)
     # get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)
