@@ -17,7 +17,7 @@ VEC_ENV_CLS = DummyVecEnv #SubprocVecEnv
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, teammates, args, eval_tms=None, name=None, env=None, eval_envs=None, use_lstm=False,
-                 use_frame_stack=False, use_subtask_counts=False, use_maskable_ppo=False, inc_sp=False, hidden_dim=64,
+                 use_frame_stack=False, use_subtask_counts=False, use_maskable_ppo=False, inc_sp=False, hidden_dim=128,
                  use_subtask_eval=False, use_hrl=False, seed=None):
         name = name or 'rl_singleagent'
         super(SingleAgentTrainer, self).__init__(name, args, seed=seed)
@@ -154,7 +154,7 @@ class MultipleAgentsTrainer(OAITrainer):
     ''' Train two independent RL agents to play with each other '''
 
     def __init__(self, args, name=None, eval_tms=None,num_agents=1, use_lstm=False, use_frame_stack=False,
-                 use_subtask_counts=False, hidden_dim=64, use_policy_clone=False, fcp_ck_rate=None, seed=None):
+                 use_subtask_counts=False, hidden_dim=128, use_policy_clone=False, fcp_ck_rate=None, seed=None):
         '''
         Train multiple agents with each other.
         :param num_agents: Number of agents to train. num_agents=1 mean self-play, num_agents > 1 is population play

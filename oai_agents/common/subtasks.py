@@ -137,7 +137,7 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
     # physically capable of moving to the required feature
     subtask_mask = np.zeros(Subtasks.NUM_SUBTASKS)
     # Objects that are on counters
-    loose_objects = [obj for obj in state.objects.values() if terrain[obj.position[1]][obj.position[2]] == 'X']
+    loose_objects = [obj for obj in state.objects.values() if terrain[obj.position[1]][obj.position[0]] == 'X']
     # The player is not holding any objects, so it can only accomplish tasks that require getting an object
     if state.players[p_idx].held_object is None:
         # These are always possible if the player is not holding an object

@@ -262,7 +262,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                     invalid_trial = True
                     break
 
-                action = agent.predict(obs, deterministic=True)[0]
+                action = agent.predict(obs, deterministic=False)[0]
                 obs, reward, done, info = self.step(action)
                 cum_reward += reward
                 n_steps += 1

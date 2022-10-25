@@ -1,3 +1,4 @@
+from oai_agents.agents.agent_utils import load_agent
 from oai_agents.common.arguments import get_args_to_save, set_args_from_load, get_arguments
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
 from oai_agents.common.subtasks import calculate_completed_subtask, get_doable_subtasks, Subtasks
@@ -363,14 +364,16 @@ class OAITrainer(ABC):
         timestep = timestep if timestep is not None else eval_agent.num_timesteps
         for i, env in enumerate(self.eval_envs):
             tms = self.eval_teammates[env.get_layout_name()] if use_layout_specific_tms else self.eval_teammates
+            mean_reward_for_layout = []
             for tm in tms:
                 env.set_teammate(tm)
                 mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_eps_per_layout_per_tm,
                                                           deterministic=deterministic, warn=False, render=visualize)
                 tot_mean_reward.append(mean_reward)
+                mean_reward_for_layout.append(mean_reward)
                 print(f'Eval at timestep {timestep} for layout {env.layout_name} with tm {tm.name}: {mean_reward}')
-                # if log_wandb:
-                    # wandb.log({f'eval_mean_reward_{env.layout_name}_{tm.name}': mean_reward, 'timestep': timestep})
+            if log_wandb:
+                wandb.log({f'eval_mean_reward_{env.layout_name}': np.mean(mean_reward_for_layout), 'timestep': timestep})
 
         print(f'Eval at timestep {timestep}: {np.mean(tot_mean_reward)}')
         if log_wandb:

@@ -48,7 +48,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         ready_for_next_subtask = False
         worker_steps = 0
         while (not ready_for_next_subtask and not done):
-            joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(self.p_idx), deterministic=True)[0]
+            joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(self.p_idx), deterministic=False)[0]
             tm_obs = self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn) if self.teammate.use_hrl_obs else \
                      self.get_low_level_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
             joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=False)[0] # self.is_eval_env
@@ -75,7 +75,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             if worker_steps % 5 == 0:
                 if not get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 2)[self.curr_subtask]:
                     ready_for_next_subtask = True
-            if worker_steps > 25:
+            if worker_steps > 40:
                 ready_for_next_subtask = True
             # If subtask equals unknown, HRL agent will just STAY. This essentially forces a recheck every timestep
             # to see if any other task is possible
