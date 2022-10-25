@@ -115,7 +115,7 @@ class OAIAgent(nn.Module, ABC):
                                                np.zeros(Subtasks.NUM_SUBTASKS) #self.player_completed_tasks
             obs['teammate_completed_subtasks'] = self.tm_completed_tasks
         if 'subtask_mask' in self.policy.observation_space.keys():
-            obs['subtask_mask'] = get_doable_subtasks(state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] - 1).astype(bool)
+            obs['subtask_mask'] = get_doable_subtasks(state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 2).astype(bool)
 
         print(f'DOABLE SUBTASKS: {[Subtasks.IDS_TO_SUBTASKS[i] for i in obs["subtask_mask"]]}', flush=True)
 

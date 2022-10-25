@@ -20,7 +20,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
     def get_worker_failures(self):
         failures = self.worker_failures
         self.worker_failures = {k: 0 for k in range(Subtasks.NUM_SUBTASKS)}
-        return failures
+        return (self.layout_name, failures)
 
     def get_low_level_obs(self, p_idx, done=False, enc_fn=None):
         enc_fn = enc_fn or self.encoding_fn
@@ -38,7 +38,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return obs
 
     def action_masks(self):
-        return get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] - 1).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 2).astype(bool)
 
     def step(self, action):
         # Action is the subtask for subtask agent to perform
@@ -63,7 +63,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             next_state, r, done, info = self.env.step(joint_action)
             self.state = deepcopy(next_state)
             if self.shape_rewards and not self.is_eval_env:
-                ratio = min(self.step_count * self.args.n_envs / 2.5e6, 1)
+                ratio = min(self.step_count * self.args.n_envs / 5e5, 1)
                 sparse_r = sum(info['sparse_r_by_agent'])
                 shaped_r = info['shaped_r_by_agent'][self.p_idx] if self.p_idx else sum(info['shaped_r_by_agent'])
                 reward += sparse_r * ratio + shaped_r * (1 - ratio)
@@ -73,7 +73,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             worker_steps += 1
 
             if worker_steps % 5 == 0:
-                if not get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[self.curr_subtask]:
+                if not get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 2)[self.curr_subtask]:
                     ready_for_next_subtask = True
             if worker_steps > 25:
                 ready_for_next_subtask = True
@@ -84,9 +84,9 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
                 self.unknowns_in_a_row += 1
                 # If no new subtask becomes available after 25 timesteps, end round
-                if self.unknowns_in_a_row > 25 and not self.is_eval_env:
+                if self.unknowns_in_a_row > 40 and not self.is_eval_env:
                     done = True
-                    reward -= 0.1
+                    # reward -= 0.1
             else:
                 self.unknowns_in_a_row = 0
 
@@ -95,17 +95,15 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 if completed_subtask != self.curr_subtask:
                     self.worker_failures[self.curr_subtask] += 1
                 ready_for_next_subtask = True
-                if not self.is_eval_env:
-                    reward -= 0.1
 
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self):
-        if self.is_eval_env:
-            ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
-        else:
-            random_pos = (self.layout_name == 'counter_circuit_o_1order')
-            ss_kwargs = {'random_pos': random_pos, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
+        # if self.is_eval_env:
+        ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
+        # else:
+        #     random_pos = (self.layout_name == 'counter_circuit_o_1order')
+        #     ss_kwargs = {'random_pos': random_pos, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name] + 1}
         self.env.reset(start_state_kwargs=ss_kwargs)
         self.state = self.env.state
         self.prev_state = None

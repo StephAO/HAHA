@@ -167,7 +167,7 @@ def get_hrl_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)[:1]
     worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
-    args.layout_names = ['forced_coordination']
+    # args.layout_names = ['forced_coordination']
     # Create manager
     rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=True, name='hrl_manager')
     rlmt.train_agents(total_timesteps=training_steps)
@@ -216,8 +216,8 @@ def create_test_population(args, training_steps=1e7):
     else:
         # args.layout_names = ['counter_circuit_o_1order']
         # # get subtask worker
-        name = 'multi_agent_subtask_worker'
-        worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
+        # name = 'multi_agent_subtask_worker'
+        # worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
         #
         # name = 'hrl_default'
         # mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
@@ -235,7 +235,7 @@ def create_test_population(args, training_steps=1e7):
             print(f'layout: {ln}')
             print('--------------------')
             for i in range(Subtasks.NUM_SUBTASKS - 1):
-                if ln == 'asymmetric_advantages' and  Subtasks.IDS_TO_SUBTASKS[i] in ['put_soup_closer', 'put_onion_closer', 'put_plate_closer', 'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']:
+                if ln == 'asymmetric_advantages' and  Subtasks.IDS_TO_SUBTASKS[i] in ['put_soup_closer', 'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']:
                     continue
 
                 print(f"Subtask {i}: {Subtasks.IDS_TO_SUBTASKS[i]}, layout: {ln}")
@@ -273,7 +273,8 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
-    get_hrl_agent(args, 1e7)
+    create_test_population(args, 1e3)
+    # get_hrl_agent(args, 1e7)
 
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)

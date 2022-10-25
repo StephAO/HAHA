@@ -135,7 +135,7 @@ class OvercookedGymEnv(Env):
         pygame.display.flip()
 
     def action_masks(self):
-        return get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 2).astype(bool)
 
     def get_obs(self, p_idx, done=False, enc_fn=None):
         enc_fn = enc_fn or self.encoding_fn
@@ -205,11 +205,11 @@ class OvercookedGymEnv(Env):
                                             (self.enc_num_channels * self.args.num_stack)
         self.stack_frames_need_reset = [True, True]
 
-        if self.is_eval_env:
-            ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
-        else:
-            random_pos = (self.layout_name == 'counter_circuit_o_1order')
-            ss_kwargs = {'random_pos': random_pos, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
+        # if self.is_eval_env:
+        ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
+        # else:
+        #     random_pos = (self.layout_name == 'counter_circuit_o_1order')
+        #     ss_kwargs = {'random_pos': random_pos, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
         self.env.reset(start_state_kwargs=ss_kwargs)
         self.prev_state = None
         self.state = self.env.state

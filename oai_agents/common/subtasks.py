@@ -131,9 +131,13 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
     :param p_idx: player idx
     :return: a np array of length NUM_SUBTASKS holding a 1 if the corresponding subtask is doable, otherwise a 0
     '''
+    if not type(prev_subtask) == str:
+        prev_subtask = Subtasks.IDS_TO_SUBTASKS[prev_subtask]
     # TODO instead of making exceptions per layout, we could generalize this to any layout by seeing if agents are
     # physically capable of moving to the required feature
     subtask_mask = np.zeros(Subtasks.NUM_SUBTASKS)
+    # Objects that are on counters
+    loose_objects = [obj for obj in state.objects.values() if terrain[obj.position[1]][obj.position[2]] == 'X']
     # The player is not holding any objects, so it can only accomplish tasks that require getting an object
     if state.players[p_idx].held_object is None:
         # These are always possible if the player is not holding an object
@@ -145,20 +149,19 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
         # The following subtasks are only possible on some configurations for some players (this filters useless tasks)
         if layout_name != 'asymmetric_advantages':
             # These are only possible if the respective objects exist on a counter somewhere
-            for obj in state.objects.values():
-                x, y = obj.position
+            for obj in loose_objects:
                 if layout_name == 'forced_coordination' and obj.position not in [(2, 1), (2, 2), (2, 3)]: # Only valid counter tops in forced coord
                     continue
                 if obj.name == 'onion' and prev_subtask != 'put_onion_closer':
                     subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']] = 1
                 elif obj.name == 'dish' and prev_subtask != 'put_plate_closer':
                     subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']] = 1
-                elif obj.name == 'soup' and obj.is_ready and terrain[y][x] != 'P' and prev_subtask != 'put_soup_closer':
+                elif obj.name == 'soup' and prev_subtask != 'put_soup_closer':
                     subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_soup_from_counter']] = 1
     # The player is holding an onion, so it can only accomplish tasks that involve putting the onion somewhere
     elif state.players[p_idx].held_object.name == 'onion':
         # There must be an empty counter to put something down
-        if len(state.objects.values()) < n_counters  or layout_name == 'asymmetric_advantages':
+        if len(loose_objects) < n_counters:
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_closer']] = 1
         # There must be an empty pot to put an onion into
         if not (layout_name == 'forced_coordination' and p_idx == 1):
@@ -167,7 +170,7 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
     # The player is holding a plate, so it can only accomplish tasks that involve putting the plate somewhere
     elif state.players[p_idx].held_object.name == 'dish':
         # There must be an empty counter to put something down
-        if len(state.objects.values()) < n_counters or layout_name == 'asymmetric_advantages':
+        if len(loose_objects) < n_counters:
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_plate_closer']] = 1
         if not (layout_name == 'forced_coordination' and p_idx == 1):
             # Can only grab the soup using the plate if a soup is currently cooking
@@ -181,7 +184,7 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
         if not (layout_name == 'forced_coordination' and p_idx == 1):
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['serve_soup']] = 1
         # There must be an empty counter to put something down
-        if len(state.objects.values()) < n_counters:
+        if len(loose_objects) < n_counters:
             if layout_name != 'asymmetric_advantages':
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_soup_closer']] = 1
 

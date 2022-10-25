@@ -194,7 +194,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 # nothing past curr level can be selected
                 subtask_probs[self.curr_lvl + 1:] = 0
             subtask_mask = get_doable_subtasks(self.env.state, Subtasks.SUBTASKS_TO_IDS['unknown'], self.layout_name,
-                                               self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 1)
+                                               self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 2)
             subtask_probs = subtask_mask / np.sum(subtask_mask)
             self.goal_subtask = np.random.choice(Subtasks.SUBTASKS, p=subtask_probs)
         self.goal_subtask_id = Subtasks.SUBTASKS_TO_IDS[self.goal_subtask]
@@ -240,7 +240,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         self.prev_state = None
         if self.goal_subtask != 'unknown':
             unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-            assert get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 1)[
+            assert get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 2)[
                 self.goal_subtask_id]
         return self.get_obs(self.p_idx)
 
@@ -248,15 +248,16 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         results = np.zeros((Subtasks.NUM_SUBTASKS, 2))
         mean_reward = []
         curr_trial, tot_trials = 0, 100
+        avg_steps = []
         while curr_trial < tot_trials:
             invalid_trial = False
-            cum_reward, reward, done = 0, 0, False
+            cum_reward, reward, done, n_steps = 0, 0, False, 0
             obs = self.reset(evaluation_trial_num=curr_trial)
             while not done:
                 # If the subtask is no longer possible (e.g. other agent picked the only onion up from the counter)
                 # then stop the trial and don't count it
                 unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-                if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 1)[
+                if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 2)[
                     self.goal_subtask_id]:
                     invalid_trial = True
                     break
@@ -264,6 +265,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 action = agent.predict(obs, deterministic=True)[0]
                 obs, reward, done, info = self.step(action)
                 cum_reward += reward
+                n_steps += 1
 
             if invalid_trial:
                 tot_trials -= 1
@@ -272,6 +274,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             thresh = 0.4 if (self.layout_name == 'forced_coordination' and self.p_idx == 0 and self.goal_subtask_id in [3, 6, 9]) else 1
             if reward >= thresh:
                 results[self.goal_subtask_id][0] += 1
+                avg_steps.append(n_steps)
             else:
                 results[self.goal_subtask_id][1] += 1
             mean_reward.append(cum_reward)
@@ -281,6 +284,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         num_succ = np.sum(results[:, 0])
 
         print(f'Subtask eval results on layout {self.layout_name} with teammate {self.teammate.name}.')
+        print(f'Steps taken, avg: {np.mean(avg_steps)}, min: {np.min(avg_steps)}, max: {np.max(avg_steps)}')
         # for subtask in Subtasks.SUBTASKS:
         subtask_id = self.goal_subtask_id
         print(f'Mean reward: {mean_reward}')

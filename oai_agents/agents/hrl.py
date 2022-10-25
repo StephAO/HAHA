@@ -209,6 +209,8 @@ class HierarchicalRL(OAIAgent):
 
     def adjust_distributions(self, probs, indices, weights):
         new_probs = np.copy(probs)
+        if np.sum(probs[indices]) > 0.999 or np.sum(probs[indices]) < 0.001:
+            return new_probs
         original_values = np.zeros_like(new_probs)
         adjusted_values = np.zeros_like(new_probs)
         for i, idx in enumerate(indices):
@@ -258,7 +260,7 @@ class HierarchicalRL(OAIAgent):
             if self.tune_subtasks == 'coordinated':
                 # "coordinated", we do 3 onions then 1 plate
                 if (self.subtask_step + 2) % 8 == 0:
-                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']
+                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
                 elif (self.subtask_step + 1) % 8 == 0:
                     subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
                 else:
@@ -269,11 +271,11 @@ class HierarchicalRL(OAIAgent):
             elif self.tune_subtasks == 'independent':
                 # "independent", we do 6 onions then two plates
                 if (self.subtask_step + 4) % 16 == 0:
-                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']
+                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
                 elif (self.subtask_step + 3) % 16 == 0:
                     subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
                 elif (self.subtask_step + 2) % 16 == 0:
-                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']
+                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
                 elif (self.subtask_step + 1) % 16 == 0:
                     subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
                 else:
