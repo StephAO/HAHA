@@ -11,7 +11,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
-EPOCH_TIMESTEPS = 10000
+EPOCH_TIMESTEPS = 1000
 VEC_ENV_CLS = DummyVecEnv #SubprocVecEnv
 
 class SingleAgentTrainer(OAITrainer):

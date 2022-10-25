@@ -117,8 +117,7 @@ class OAIAgent(nn.Module, ABC):
             obs['teammate_completed_subtasks'] = self.tm_completed_tasks
         if 'subtask_mask' in self.policy.observation_space.keys():
             obs['subtask_mask'] = get_doable_subtasks(state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
-
-        print(f'DOABLE SUBTASKS: {[Subtasks.IDS_TO_SUBTASKS[i] for i in obs["subtask_mask"]]}', flush=True)
+            print(f'DOABLE SUBTASKS: {[Subtasks.IDS_TO_SUBTASKS[i] for i in obs["subtask_mask"]]}', flush=True)
 
         self.prev_state = deepcopy(state)
         obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}

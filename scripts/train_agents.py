@@ -157,8 +157,8 @@ def get_hrl_worker(args):
     except FileNotFoundError as e:
         print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
         #worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
-        eval_tms = get_eval_teammates(args)
-        teammates = get_fcp_population(args, 1e7)
+        eval_tms = [DummyAgent('random')] #get_eval_teammates(args)
+        teammates = [DummyAgent('random')] #get_fcp_population(args, 1e7)
         worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
     return worker
 
