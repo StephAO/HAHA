@@ -233,9 +233,9 @@ class HierarchicalRL(OAIAgent):
         elif self.layout_name == 'counter_circuit_o_1order':
             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
             if self.tune_subtasks == 'coordinated':
-                subtask_weighting = [2 for _ in subtasks_to_weigh]
+                subtask_weighting = [10 for _ in subtasks_to_weigh]
             elif self.tune_subtasks == 'independent':
-                subtask_weighting = [0.5 for _ in subtasks_to_weigh]
+                subtask_weighting = [0.1 for _ in subtasks_to_weigh]
             else:
                 raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
             print(probs, subtasks_to_weigh, subtask_weighting)
@@ -272,7 +272,7 @@ class HierarchicalRL(OAIAgent):
             else:
                 raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
             subtasks_to_weigh = [subtasks_to_weigh]
-            subtask_weighting = [2 for _ in subtasks_to_weigh]
+            subtask_weighting = [10 for _ in subtasks_to_weigh]
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
             self.subtask_step += 1
         elif self.layout_name == 'asymmetric_advantages':
@@ -281,7 +281,7 @@ class HierarchicalRL(OAIAgent):
                                  Subtasks.SUBTASKS_TO_IDS['get_soup'],
                                  Subtasks.SUBTASKS_TO_IDS['serve_soup']]
             if self.tune_subtasks == 'coordinated':
-                subtask_weighting = [2 for _ in subtasks_to_weigh]
+                subtask_weighting = [10 for _ in subtasks_to_weigh]
             elif self.tune_subtasks == 'independent':
                 subtask_weighting = [1 for _ in subtasks_to_weigh]
             else:
