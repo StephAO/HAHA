@@ -14,6 +14,7 @@ import numpy as np
 from pathlib import Path
 from stable_baselines3.common.env_util import make_vec_env
 import torch as th
+from torch.distributions.categorical import Categorical
 import torch.nn.functional as F
 from typing import Tuple, List
 
@@ -185,7 +186,7 @@ class HierarchicalRL(OAIAgent):
         self.policy = self.manager.policy
         self.num_steps_since_new_subtask = 0
         self.use_hrl_obs = True
-        self.curr_layout = None
+        self.layout_name = None
         self.subtask_step = 0
         self.output_message = True
         self.tune_subtasks = None
@@ -203,7 +204,7 @@ class HierarchicalRL(OAIAgent):
         return self.worker.get_distribution(obs, sample=sample)
 
     def set_curr_layout(self, layout_name):
-        self.curr_layout = layout_name
+        self.layout_name = layout_name
         self.subtask_step = 0
 
     def adjust_distributions(self, probs, indices, weights):
@@ -228,9 +229,9 @@ class HierarchicalRL(OAIAgent):
         # Currently assumes p2 for hrl agent
         dist = self.manager.get_distribution(obs)
         probs = dist.distribution.probs
-        if self.curr_layout == None:
+        if self.layout_name == None:
             raise ValueError("Set current layout using set_curr_layout before attempting manual adjustment")
-        elif self.curr_layout == 'counter_circuit_o_1order':
+        elif self.layout_name == 'counter_circuit_o_1order':
             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
             if self.tune_subtasks == 'coordinated':
                 subtask_weighting = [2 for _ in subtasks_to_weigh]
@@ -239,7 +240,7 @@ class HierarchicalRL(OAIAgent):
             else:
                 raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-        elif self.curr_layout == 'forced_coordination':
+        elif self.layout_name == 'forced_coordination':
             # NOTE: THIS ASSUMES BEING P2
             # Since tasks are very limited, we use a different change insated of support and coordinated.
             if self.tune_subtasks == 'coordinated':
@@ -274,7 +275,7 @@ class HierarchicalRL(OAIAgent):
             else:
                 raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, [2, 2])
-        elif self.curr_layout == 'asymmetric_advantages':
+        elif self.layout_name == 'asymmetric_advantages':
             # NOTE: THIS ASSUMES BEING P2
             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'],
                                  Subtasks.SUBTASKS_TO_IDS['get_soup'],
