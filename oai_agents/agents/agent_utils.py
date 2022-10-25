@@ -3,6 +3,8 @@ from oai_agents.common.arguments import get_arguments
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
 from gym import spaces
+import numpy as np
+from pathlib import Path
 import torch as th
 
 
@@ -42,7 +44,7 @@ class DummyAgent:
         if self.action == 'random':
             action = np.random.randint(0, Action.NUM_ACTIONS)
         elif self.action == 'random_dir':
-            action = np.random.randing(0, 4)
+            action = np.random.randint(0, 4)
         else:
             action = self.action
         return action, None
