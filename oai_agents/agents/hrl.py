@@ -226,8 +226,8 @@ class HierarchicalRL(OAIAgent):
         # Currently assumes p2 for hrl agent
         dist = self.manager.get_distribution(obs)
         probs = dist.distribution.probs
-        print(f"Previous probs: {probs}?", flush=True)
         probs = probs[0]
+        print('layout_name:', self.layout_name)
         if self.layout_name == None:
             raise ValueError("Set current layout using set_curr_layout before attempting manual adjustment")
         elif self.layout_name == 'counter_circuit_o_1order':
@@ -290,7 +290,7 @@ class HierarchicalRL(OAIAgent):
             new_probs = probs
 
         print(f"Previous probs: {probs} -> New probs: {new_probs}", flush=True)
-        return th.argmax(new_probs, dim=-1) if deterministic else Categorical(probs=new_probs).sample()
+        return np.argmax(new_probs, dim=-1) if deterministic else Categorical(probs=new_probs).sample()
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         # TODO consider forcing new subtask if none has been completed in x timesteps
