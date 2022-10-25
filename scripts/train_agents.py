@@ -164,7 +164,7 @@ def get_hrl_worker(args):
     return worker
 
 def get_hrl_agent(args, training_steps=1e7):
-    teammates = get_fcp_population(args, training_steps)[:1]
+    teammates = get_fcp_population(args, training_steps)
     worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
     # args.layout_names = ['forced_coordination']

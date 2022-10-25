@@ -45,7 +45,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         env = OvercookedEnv.from_mdp(self.mdp, horizon=100, start_state_fn=ss_fn)
         super(OvercookedSubtaskGymEnv, self).init_base_env(env_index=env_index, base_env=env, **kwargs)
 
-    def get_obs(self, p_idx, done=False, enc_fn=None):
+    def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False):
         enc_fn = enc_fn or self.encoding_fn
         obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
         if p_idx == self.p_idx:
@@ -194,7 +194,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 # nothing past curr level can be selected
                 subtask_probs[self.curr_lvl + 1:] = 0
             subtask_mask = get_doable_subtasks(self.env.state, Subtasks.SUBTASKS_TO_IDS['unknown'], self.layout_name,
-                                               self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 2)
+                                               self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])
             subtask_probs = subtask_mask / np.sum(subtask_mask)
             self.goal_subtask = np.random.choice(Subtasks.SUBTASKS, p=subtask_probs)
         self.goal_subtask_id = Subtasks.SUBTASKS_TO_IDS[self.goal_subtask]
@@ -228,21 +228,19 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         if evaluation_trial_num >= 0:
             counters = evaluation_trial_num % max(USEABLE_COUNTERS[self.layout_name], 1)
-            random_pos = (self.layout_name == 'counter_circuit_o_1order')
-            ss_kwargs = {'p_idx': self.p_idx, 'random_pos': random_pos, 'random_dir': True,
+            ss_kwargs = {'p_idx': self.p_idx, 'random_pos': True, 'random_dir': True,
                          'curr_subtask': self.goal_subtask, 'num_random_objects': counters}
         else:
-            random_pos = (self.layout_name == 'counter_circuit_o_1order')
-            ss_kwargs = {'p_idx': self.p_idx, 'random_pos': random_pos, 'random_dir': True,
+            ss_kwargs = {'p_idx': self.p_idx, 'random_pos': True, 'random_dir': True,
                          'curr_subtask': self.goal_subtask, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
         self.env.reset(start_state_kwargs=ss_kwargs)
         self.state = self.env.state
         self.prev_state = None
         if self.goal_subtask != 'unknown':
             unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-            assert get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 2)[
+            assert get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[
                 self.goal_subtask_id]
-        return self.get_obs(self.p_idx)
+        return self.get_obs(self.p_idx, on_reset=True)
 
     def evaluate(self, agent):
         results = np.zeros((Subtasks.NUM_SUBTASKS, 2))
@@ -257,7 +255,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 # If the subtask is no longer possible (e.g. other agent picked the only onion up from the counter)
                 # then stop the trial and don't count it
                 unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-                if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 2)[
+                if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[
                     self.goal_subtask_id]:
                     invalid_trial = True
                     break

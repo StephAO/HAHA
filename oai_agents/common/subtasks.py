@@ -39,6 +39,7 @@ def calculate_completed_subtask(layout, prev_state, curr_state, p_idx):
     prev_obj = prev_state.players[p_idx].held_object.name if prev_state.players[p_idx].held_object else None
     curr_obj = curr_state.players[p_idx].held_object.name if curr_state.players[p_idx].held_object else None
     tile_in_front = facing(layout, prev_state.players[p_idx])
+    print('CCS',prev_obj, curr_obj, tile_in_front)
     # Object held didn't change -- This interaction didn't actually transition to a new subtask
     if prev_obj == curr_obj:
         subtask = None

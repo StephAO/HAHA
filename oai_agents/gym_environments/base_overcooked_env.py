@@ -16,11 +16,9 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env.stacked_observations import StackedObservations
 
-# For counter circuit, trained workers with 8, but trained manager with 4. Only 4 spots are useful add
+# DEPRECATED NOTE: For counter circuit, trained workers with 8, but trained manager with 4. Only 4 spots are useful add
 # more during subtask worker training for robustness
-USEABLE_COUNTERS = {'counter_circuit_o_1order': 4,
-                    'forced_coordination': 3,
-                    'asymmetric_advantages': 0} # Max number of counters the agents should use
+USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 5, 'asymmetric_advantages': 2} # Max number of counters the agents should use
 
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
@@ -135,9 +133,9 @@ class OvercookedGymEnv(Env):
         pygame.display.flip()
 
     def action_masks(self):
-        return get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name] + 2).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
 
-    def get_obs(self, p_idx, done=False, enc_fn=None):
+    def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False):
         enc_fn = enc_fn or self.encoding_fn
         obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
         if self.stack_frames[p_idx]:
@@ -151,7 +149,9 @@ class OvercookedGymEnv(Env):
         if self.return_completed_subtasks:
             # If this isn't the first step of the game, see if a subtask has been completed
             comp_st = None
-            if self.prev_state is not None:
+            if on_reset:
+                comp_st = Subtasks.NUM_SUBTASKS - 1
+            elif self.prev_state is not None:
                 comp_st = calculate_completed_subtask(self.terrain, self.prev_state, self.state, p_idx)
                 # If a subtask has been completed, update counts
                 if comp_st is not None:
@@ -205,17 +205,16 @@ class OvercookedGymEnv(Env):
                                             (self.enc_num_channels * self.args.num_stack)
         self.stack_frames_need_reset = [True, True]
 
-        # if self.is_eval_env:
-        ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
-        # else:
-        #     random_pos = (self.layout_name == 'counter_circuit_o_1order')
-        #     ss_kwargs = {'random_pos': random_pos, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
+        if self.is_eval_env:
+            ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
+        else:
+            ss_kwargs = {'random_pos': True, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
         self.env.reset(start_state_kwargs=ss_kwargs)
         self.prev_state = None
         self.state = self.env.state
         # Reset subtask counts
         self.completed_tasks = [np.zeros(Subtasks.NUM_SUBTASKS), np.zeros(Subtasks.NUM_SUBTASKS)]
-        return self.get_obs(self.p_idx)
+        return self.get_obs(self.p_idx, on_reset=True)
 
     def render(self, mode='human', close=False):
         if self.visualization_enabled:

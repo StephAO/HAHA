@@ -98,7 +98,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
-        for i in [3]: #range(Subtasks.NUM_SUBTASKS):
+        for i in [0, 2, 3]: # [0, 2, 3] [1, 4] [5, 7, 6] [10, 8, 9]
             print(f'Starting subtask {i} - {Subtasks.IDS_TO_SUBTASKS[i]}')
             # RL single subtask agents trained with teammeates
             # Make necessary envs
@@ -185,7 +185,6 @@ class HierarchicalRL(OAIAgent):
         super(HierarchicalRL, self).__init__(name, args)
         self.worker = worker
         self.manager = manager
-        self.prev_player_comp_st = None
         self.policy = self.manager.policy
         self.num_steps_since_new_subtask = 0
         self.use_hrl_obs = True
@@ -193,6 +192,7 @@ class HierarchicalRL(OAIAgent):
         self.subtask_step = 0
         self.output_message = True
         self.tune_subtasks = None
+        self.curr_subtask_id = Subtasks.SUBTASKS_TO_IDS['unknown']
 
     def set_play_params(self, output_message, tune_subtasks):
         self.output_message = output_message
@@ -200,10 +200,9 @@ class HierarchicalRL(OAIAgent):
         self.subtask_step = 0
 
     def get_distribution(self, obs, sample=True):
-        if obs['player_completed_subtasks'] != self.prev_player_comp_st:
+        if np.sum(obs['player_completed_subtasks']) == 1:
             # Completed previous subtask, set new subtask
             self.curr_subtask_id = self.manager.predict(obs, sample=sample)[0]
-            self.prev_player_comp_st = obs['player_completed_subtasks']
         obs['curr_subtask'] = self.curr_subtask_id
         return self.worker.get_distribution(obs, sample=sample)
 
@@ -310,7 +309,7 @@ class HierarchicalRL(OAIAgent):
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         # TODO consider forcing new subtask if none has been completed in x timesteps
         # print(obs['player_completed_subtasks'],  self.prev_player_comp_st, (obs['player_completed_subtasks'] != self.prev_player_comp_st).any(), flush=True)
-        if (obs['player_completed_subtasks'] != self.prev_player_comp_st).any() or \
+        if np.sum(obs['player_completed_subtasks']) == 1 or \
                 self.num_steps_since_new_subtask > 25 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
             # Completed previous subtask, set new subtask
             if self.tune_subtasks is None:
@@ -318,7 +317,6 @@ class HierarchicalRL(OAIAgent):
                                                             deterministic=deterministic)[0]
             else:
                 self.curr_subtask_id = self.get_manually_tuned_action(obs, deterministic=deterministic)
-            self.prev_player_comp_st = deepcopy(obs['player_completed_subtasks'])
             self.num_steps_since_new_subtask = 0
         obs['curr_subtask'] = self.curr_subtask_id
         self.num_steps_since_new_subtask += 1
