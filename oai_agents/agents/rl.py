@@ -97,26 +97,29 @@ class SingleAgentTrainer(OAITrainer):
         best_score = -1
         best_training_rew = float('-inf')
 
-        epoch = 0
-        while self.learning_agent.num_timesteps < total_timesteps:
+        epoch, curr_timesteps = 0, 0
+        while curr_timesteps < total_timesteps:
             # Set new env distribution if training on multiple envs
             if self.n_layouts > 1 and self.args.multi_env_mode != 'uniform':
                 self.set_new_envs()
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
             if self.using_hrl:
+                curr_timesteps = np.sum(self.env.env_method('get_worker_failures'))
                 failure_dicts = self.env.env_method('get_worker_failures')
                 tot_failure_dict = {ln: {k: 0 for k in failure_dicts[0][1].keys()} for ln in self.args.layout_names}
                 for ln, fd in failure_dicts:
                     for k in tot_failure_dict[ln]:
                         tot_failure_dict[ln][k] += fd[k]
                 for ln in self.args.layout_names:
-                    wandb.log({f'num_worker_failures_{ln}': sum(tot_failure_dict[ln].values()), 'timestep': self.learning_agent.num_timesteps})
+                    wandb.log({f'num_worker_failures_{ln}': sum(tot_failure_dict[ln].values()), 'timestep': curr_timesteps})
                     print(f'Number of worker failures on {ln}: {tot_failure_dict[ln]}')
+            else:
+                curr_timesteps = self.learning_agent.num_timesteps
 
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.learning_agent.agent.ep_info_buffer])
-            best_training_rew *= 0.99
-            if epoch % 20 == 0 or (mean_training_rew > best_training_rew and self.learning_agent.num_timesteps > 2e5):
+            best_training_rew *= 0.995
+            if epoch % 20 == 0 or (mean_training_rew > best_training_rew and curr_timesteps > 5e5):
                 if mean_training_rew >= best_training_rew:
                     best_training_rew = mean_training_rew
                 if self.use_subtask_eval:
@@ -131,7 +134,7 @@ class SingleAgentTrainer(OAITrainer):
                             tot_failures += num_failures
                             env_success.append(fully_successful)
                     wandb.log({f'num_tm_layout_successes': np.sum(env_success), 'total_failures': tot_failures,
-                               'timestep': self.learning_agent.num_timesteps})
+                               'timestep': curr_timesteps})
                     if tot_failures <= fewest_failures:
                         best_path, best_tag = self.save_agents(tag='best')
                         fewest_failures = tot_failures
@@ -139,7 +142,7 @@ class SingleAgentTrainer(OAITrainer):
                     if all(env_success):
                         break
                 else:
-                    mean_reward = self.evaluate(self.learning_agent)
+                    mean_reward = self.evaluate(self.learning_agent, timestep=curr_timesteps)
                     if mean_reward >= best_score:
                         best_path, best_tag = self.save_agents(tag='best')
                         print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')

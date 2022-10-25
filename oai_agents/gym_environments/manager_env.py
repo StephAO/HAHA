@@ -16,6 +16,10 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
         self.worker = worker
         self.worker_failures = {k: 0 for k in range(Subtasks.NUM_SUBTASKS)}
+        self.base_env_timesteps = 0
+
+    def get_base_env_timesteps(self):
+        return self.base_env_timesteps
 
     def get_worker_failures(self):
         failures = self.worker_failures
@@ -61,6 +65,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
 
             self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
             next_state, r, done, info = self.env.step(joint_action)
+            self.base_env_timesteps += 1
             self.state = deepcopy(next_state)
             if self.shape_rewards and not self.is_eval_env:
                 ratio = min(self.step_count * self.args.n_envs / 5e5, 1)
@@ -101,8 +106,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         if self.is_eval_env:
             ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
         else:
-            random_pos = (self.layout_name == 'counter_circuit_o_1order')
-            ss_kwargs = {'random_pos': random_pos, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
+            ss_kwargs = {'random_pos': True, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
         self.env.reset(start_state_kwargs=ss_kwargs)
         self.state = self.env.state
         self.prev_state = None
