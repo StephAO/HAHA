@@ -194,6 +194,7 @@ class HierarchicalRL(OAIAgent):
     def set_play_params(self, output_message, tune_subtasks):
         self.output_message = output_message
         self.tune_subtasks = tune_subtasks
+        self.subtask_step = 0
 
     def get_distribution(self, obs, sample=True):
         if obs['player_completed_subtasks'] != self.prev_player_comp_st:
@@ -202,10 +203,6 @@ class HierarchicalRL(OAIAgent):
             self.prev_player_comp_st = obs['player_completed_subtasks']
         obs['curr_subtask'] = self.curr_subtask_id
         return self.worker.get_distribution(obs, sample=sample)
-
-    def set_curr_layout(self, layout_name):
-        self.layout_name = layout_name
-        self.subtask_step = 0
 
     def adjust_distributions(self, probs, indices, weights):
         new_probs = np.copy(probs)
@@ -229,6 +226,8 @@ class HierarchicalRL(OAIAgent):
         # Currently assumes p2 for hrl agent
         dist = self.manager.get_distribution(obs)
         probs = dist.distribution.probs
+        print(f"Previous probs: {probs}?", flush=True)
+        probs = probs[0]
         if self.layout_name == None:
             raise ValueError("Set current layout using set_curr_layout before attempting manual adjustment")
         elif self.layout_name == 'counter_circuit_o_1order':
@@ -251,10 +250,9 @@ class HierarchicalRL(OAIAgent):
                     subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
                 else:
                     if self.subtask_step % 2 == 0:
-                        subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+                        subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']
                     else:
-                        subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
-                subtask_weighting = [2 for _ in subtasks_to_weigh]
+                        subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_onion_closer']
             elif self.tune_subtasks == 'independent':
                 # "independent", we do 6 onions then two plates
                 if (self.subtask_step + 4) % 16 == 0:
@@ -267,14 +265,15 @@ class HierarchicalRL(OAIAgent):
                     subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
                 else:
                     if self.subtask_step % 2 == 0:
-                        subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+                        subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']
                     else:
-                        subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
-                subtask_weighting = [2 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+                        subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_onion_closer']
             else:
                 raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
-            new_probs = self.adjust_distributions(probs, subtasks_to_weigh, [2, 2])
+            subtasks_to_weigh = [subtasks_to_weigh]
+            subtask_weighting = [2 for _ in subtasks_to_weigh]
+            new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+            self.subtask_step += 1
         elif self.layout_name == 'asymmetric_advantages':
             # NOTE: THIS ASSUMES BEING P2
             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'],
@@ -291,7 +290,7 @@ class HierarchicalRL(OAIAgent):
             new_probs = probs
 
         print(f"Previous probs: {probs} -> New probs: {new_probs}", flush=True)
-        return th.argmax(self.forward(new_probs), dim=-1) if deterministic else Categorical(probs=new_probs).sample()
+        return th.argmax(new_probs, dim=-1) if deterministic else Categorical(probs=new_probs).sample()
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         # TODO consider forcing new subtask if none has been completed in x timesteps
