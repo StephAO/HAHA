@@ -52,7 +52,6 @@ def combine_populations(args, pop_names):
         print(len(mat.agents))
         mat.save_agents()
 
-
 ### EVALUATION AGENTS ###
 def get_eval_teammates(args):
     sp = get_selfplay_agent(args, training_steps=1e7)
@@ -154,7 +153,7 @@ def get_hrl_worker(args):
     # Create subtask worker
     name = 'multi_agent_subtask_worker'
     try:
-        worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / 'final'), args)
+        worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
     except FileNotFoundError as e:
         print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
         #worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
@@ -167,7 +166,6 @@ def get_hrl_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
-    # args.layout_names = ['forced_coordination']
     # Create manager
     rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=True, name='hrl_manager')
     rlmt.train_agents(total_timesteps=training_steps)

@@ -282,7 +282,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         num_succ = np.sum(results[:, 0])
 
         print(f'Subtask eval results on layout {self.layout_name} with teammate {self.teammate.name}.')
-        print(f'Steps taken, avg: {np.mean(avg_steps)}, min: {np.min(avg_steps)}, max: {np.max(avg_steps)}')
+        #print(f'Steps taken, avg: {np.mean(avg_steps)}, min: {np.min(avg_steps)}, max: {np.max(avg_steps)}')
         # for subtask in Subtasks.SUBTASKS:
         subtask_id = self.goal_subtask_id
         print(f'Mean reward: {mean_reward}')
