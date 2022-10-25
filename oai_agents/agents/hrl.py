@@ -56,7 +56,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
                      'const_params': self._get_constructor_parameters(), 'args': args}
         for i, agent in enumerate(self.agents):
             # Don't save dummy unknown agent
-            if not isinstance(OAIAgent):
+            if not isinstance(agent, OAIAgent):
                 continue
             agent_path_i = agent_dir / f'subtask_{i}_agent'
             agent.save(agent_path_i)
@@ -161,19 +161,22 @@ class RLManagerTrainer(SingleAgentTrainer):
         super(RLManagerTrainer, self).__init__(teammates, args, eval_tms=eval_tms, name=name, env=env,
                                                eval_envs=eval_envs, inc_sp=False, use_subtask_counts=use_subtask_counts,
                                                use_hrl=True, use_maskable_ppo=True)
-        if inc_sp:
-            playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
-            self.teammates.append(playable_self)
+        # COMMENTED CODE BELOW IS TO ADD SELFPLAY
+        # However, currently it's just a reference to the agent, so the "self-teammate" could update the main agents subtask
+        # To do this correctly, the "self-teammate" would have to be cloned before every epoch
+        # if inc_sp:
+        #     playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
+        #     self.teammates.append(playable_self)
 
-        if type(self.eval_teammates) == dict:
-            playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
-            for k in self.eval_teammates:
-                self.eval_teammates[k].append(playable_self)
-        elif self.eval_teammates is not None:
-            playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
-            self.eval_teammates.append(playable_self)
-        else:
-            self.eval_teammates = self.teammates
+        # if type(self.eval_teammates) == dict:
+        #     playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
+        #     for k in self.eval_teammates:
+        #         self.eval_teammates[k].append(playable_self)
+        # elif self.eval_teammates is not None:
+        #     playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
+        #     self.eval_teammates.append(playable_self)
+        # else:
+        #     self.eval_teammates = self.teammates
 
 
 class HierarchicalRL(OAIAgent):

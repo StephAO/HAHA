@@ -106,12 +106,13 @@ class SingleAgentTrainer(OAITrainer):
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
             if self.using_hrl:
                 failure_dicts = self.env.env_method('get_worker_failures')
-                tot_failure_dict = {k: 0 for k in failure_dicts[0].keys()}
-                for fd in failure_dicts:
-                    for k in tot_failure_dict:
-                        tot_failure_dict[k] += fd[k]
-                wandb.log({f'num_worker_failures': sum(tot_failure_dict.values()), 'timestep': self.learning_agent.num_timesteps})
-                print(f'Number of worker failures: {tot_failure_dict}')
+                tot_failure_dict = {ln: {k: 0 for k in failure_dicts[0][1].keys()} for ln in self.args.layout_names}
+                for ln, fd in failure_dicts:
+                    for k in tot_failure_dict[ln]:
+                        tot_failure_dict[ln][k] += fd[k]
+                for ln in self.args.layout_names:
+                    wandb.log({f'num_worker_failures_{ln}': sum(tot_failure_dict[ln].values()), 'timestep': self.learning_agent.num_timesteps})
+                    print(f'Number of worker failures on {ln}: {tot_failure_dict[ln]}')
 
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.learning_agent.agent.ep_info_buffer])
             best_training_rew *= 0.99
