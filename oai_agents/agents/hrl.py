@@ -208,7 +208,7 @@ class HierarchicalRL(OAIAgent):
 
     def adjust_distributions(self, probs, indices, weights):
         new_probs = np.copy(probs)
-        if np.sum(probs[indices]) > 0.999 or np.sum(probs[indices]) < 0.001:
+        if np.sum(new_probs[indices]) > 0.999 or np.sum(new_probs[indices]) < 0.001:
             return new_probs
         original_values = np.zeros_like(new_probs)
         adjusted_values = np.zeros_like(new_probs)
