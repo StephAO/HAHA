@@ -209,7 +209,7 @@ class HierarchicalRL(OAIAgent):
     def adjust_distributions(self, probs, indices, weights):
         new_probs = np.copy(probs)
         if np.sum(new_probs[indices]) > 0.99999 or np.sum(new_probs[indices]) < 0.00001:
-            print("Agent is too decisive, no behvaior changed", flush=True)
+            # print("Agent is too decisive, no behavior changed", flush=True)
             return new_probs
         original_values = np.zeros_like(new_probs)
         adjusted_values = np.zeros_like(new_probs)
@@ -232,89 +232,93 @@ class HierarchicalRL(OAIAgent):
         dist = self.manager.get_distribution(obs)
         probs = dist.distribution.probs
         probs = probs[0]
-        print('layout_name:', self.layout_name)
         if self.layout_name == None:
             raise ValueError("Set current layout using set_curr_layout before attempting manual adjustment")
         elif self.layout_name == 'counter_circuit_o_1order':
             # Up weight supporting tasks
             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
-            if self.tune_subtasks == 'coordinated':
-                subtask_weighting = [50 for _ in subtasks_to_weigh]
-            elif self.tune_subtasks == 'independent':
-                subtask_weighting = [0.05 for _ in subtasks_to_weigh]
-            else:
-                raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
+            # if self.tune_subtasks == 'coordinated':
+            subtask_weighting = [100 for _ in subtasks_to_weigh]
+            # elif self.tune_subtasks == 'independent':
+            #     subtask_weighting = [0.05 for _ in subtasks_to_weigh]
+            # else:
+            #     raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+
             # Down weight complementary tasks
             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
-            if self.tune_subtasks == 'coordinated':
-                subtask_weighting = [0.1 for _ in subtasks_to_weigh]
-            elif self.tune_subtasks == 'independent':
-                subtask_weighting = [10 for _ in subtasks_to_weigh]
-            else:
-                raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
+            # if self.tune_subtasks == 'coordinated':
+            subtask_weighting = [0.01 for _ in subtasks_to_weigh]
+            # elif self.tune_subtasks == 'independent':
+            #     subtask_weighting = [10 for _ in subtasks_to_weigh]
+            # else:
+            #     raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
             new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
         elif self.layout_name == 'forced_coordination':
             # NOTE: THIS ASSUMES BEING P2
             # Since tasks are very limited, we use a different change insated of support and coordinated.
-            if self.tune_subtasks == 'coordinated':
+            # if self.tune_subtasks == 'coordinated':
                 # "coordinated", we do 3 onions then 1 plate
-                if (self.subtask_step + 2) % 8 == 0:
-                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
-                elif (self.subtask_step + 1) % 8 == 0:
-                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
-                else:
-                    if self.subtask_step % 2 == 0:
-                        subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']
-                    else:
-                        subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_onion_closer']
-            elif self.tune_subtasks == 'independent':
-                # "independent", we do 6 onions then two plates
-                if (self.subtask_step + 4) % 16 == 0:
-                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
-                elif (self.subtask_step + 3) % 16 == 0:
-                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
-                elif (self.subtask_step + 2) % 16 == 0:
-                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
-                elif (self.subtask_step + 1) % 16 == 0:
-                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
-                else:
-                    if self.subtask_step % 2 == 0:
-                        subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']
-                    else:
-                        subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_onion_closer']
+            if (self.subtask_step + 2) % 8 == 0:
+                subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
+            elif (self.subtask_step + 1) % 8 == 0:
+                subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
             else:
-                raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
+                if self.subtask_step % 2 == 0:
+                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']
+                else:
+                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_onion_closer']
+            # elif self.tune_subtasks == 'independent':
+            #     # "independent", we do 6 onions then two plates
+            #     if (self.subtask_step + 4) % 16 == 0:
+            #         subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
+            #     elif (self.subtask_step + 3) % 16 == 0:
+            #         subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
+            #     elif (self.subtask_step + 2) % 16 == 0:
+            #         subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
+            #     elif (self.subtask_step + 1) % 16 == 0:
+            #         subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
+            #     else:
+            #         if self.subtask_step % 2 == 0:
+            #             subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']
+            #         else:
+            #             subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_onion_closer']
+            # else:
+            #     raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
             subtasks_to_weigh = [subtasks_to_weigh]
             subtask_weighting = [10 for _ in subtasks_to_weigh]
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
             self.subtask_step += 1
         elif self.layout_name == 'asymmetric_advantages':
             # NOTE: THIS ASSUMES BEING P2
+            # Up weight all plate related tasks
             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'],
                                  Subtasks.SUBTASKS_TO_IDS['get_soup'],
                                  Subtasks.SUBTASKS_TO_IDS['serve_soup']]
-            if self.tune_subtasks == 'coordinated':
-                subtask_weighting = [10 for _ in subtasks_to_weigh]
-            elif self.tune_subtasks == 'independent':
-                subtask_weighting = [1 for _ in subtasks_to_weigh]
-            else:
-                raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
-
-            # NOTE: THIS ASSUMES BEING P2
-            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'],
-                                 Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']]
-            if self.tune_subtasks == 'coordinated':
-                subtask_weighting = [0.1 for _ in subtasks_to_weigh]
-            elif self.tune_subtasks == 'independent':
-                subtask_weighting = [1 for _ in subtasks_to_weigh]
-            else:
-                raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
+            # if self.tune_subtasks == 'coordinated':
+            subtask_weighting = [10 for _ in subtasks_to_weigh]
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+            # elif self.tune_subtasks == 'independent':
+            #     subtask_weighting = [1 for _ in subtasks_to_weigh]
+            # else:
+            #     raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
+
+            # Down weight any task related to onions (and put down plate to avoid side issues)
+            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'],
+                                 Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot'],
+                                 Subtasks.SUBTASKS_TO_IDS['put_onion_closer'],
+                                 Subtasks.SUBTASKS_TO_IDS['put_plate_closer']]
+            # if self.tune_subtasks == 'coordinated':
+            subtask_weighting = [0.01 for _ in subtasks_to_weigh]
+            # elif self.tune_subtasks == 'independent':
+            #     subtask_weighting = [1 for _ in subtasks_to_weigh]
+            # else:
+            #     raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
+            new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
         else:
             new_probs = probs
 
-        print(f"Previous probs: {probs} -> New probs: {new_probs}", flush=True)
+        # print(f"Previous probs: {probs} -> New probs: {new_probs}", flush=True)
         return np.argmax(new_probs, axis=-1) if deterministic else Categorical(probs=new_probs).sample()
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
@@ -323,11 +327,11 @@ class HierarchicalRL(OAIAgent):
         if np.sum(obs['player_completed_subtasks']) == 1 or \
                 self.num_steps_since_new_subtask > 25 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
             # Completed previous subtask, set new subtask
-            if self.tune_subtasks is None:
+            if self.tune_subtasks:
+                self.curr_subtask_id = self.get_manually_tuned_action(obs, deterministic=deterministic)
+            else:
                 self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
                                                             deterministic=deterministic)[0]
-            else:
-                self.curr_subtask_id = self.get_manually_tuned_action(obs, deterministic=deterministic)
             self.num_steps_since_new_subtask = 0
         obs['curr_subtask'] = self.curr_subtask_id
         self.num_steps_since_new_subtask += 1

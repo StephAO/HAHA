@@ -60,7 +60,7 @@ class OAIAgent(nn.Module, ABC):
         https://stable-baselines3.readthedocs.io/en/master/modules/base.html#stable_baselines3.common.base_class.BaseAlgorithm.predict
         """
 
-    def set_idx(self, p_idx, layout_name, is_hrl=False, output_message=True, tune_subtasks=None):
+    def set_idx(self, p_idx, layout_name, is_hrl=False, output_message=True, tune_subtasks=False):
         self.p_idx = p_idx
         self.layout_name = layout_name
         self.prev_state = None
@@ -96,17 +96,17 @@ class OAIAgent(nn.Module, ABC):
                     try:
                         cst = calculate_completed_subtask(self.terrain, self.prev_state, state, i)
                     except ValueError as e:
-                        print('???', e, flush=True)
+                        # print('???', e, flush=True)
                         cst = None
                     comp_st[i] = cst
                 # If a subtask has been completed, update counts
                 if comp_st[self.p_idx] is not None:
                     self.player_completed_tasks[comp_st[self.p_idx]] += 1
                     self.prev_st = comp_st[self.p_idx]
-                    print(f'Agent completed: {comp_st[self.p_idx]}')
+                    # print(f'Agent completed: {comp_st[self.p_idx]}')
                 if comp_st[1 - self.p_idx] is not None:
                     self.player_completed_tasks[comp_st[1 - self.p_idx]] += 1
-                    print(f'Teammate completed: {comp_st[1 - self.p_idx]}')
+                    # print(f'Teammate completed: {comp_st[1 - self.p_idx]}')
                 # If this is the first step of the game, reset subtask counts to 0
             else:
                 self.player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
@@ -117,7 +117,7 @@ class OAIAgent(nn.Module, ABC):
             obs['teammate_completed_subtasks'] = self.tm_completed_tasks
         if 'subtask_mask' in self.policy.observation_space.keys():
             obs['subtask_mask'] = get_doable_subtasks(state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
-            print(f'DOABLE SUBTASKS: {[Subtasks.IDS_TO_SUBTASKS[i] for i in obs["subtask_mask"]]}', flush=True)
+            # print(f'DOABLE SUBTASKS: {[Subtasks.IDS_TO_SUBTASKS[i] for i in obs["subtask_mask"]]}', flush=True)
 
         self.prev_state = deepcopy(state)
         obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
