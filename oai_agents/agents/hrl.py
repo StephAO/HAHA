@@ -208,7 +208,8 @@ class HierarchicalRL(OAIAgent):
 
     def adjust_distributions(self, probs, indices, weights):
         new_probs = np.copy(probs)
-        if np.sum(new_probs[indices]) > 0.999 or np.sum(new_probs[indices]) < 0.001:
+        if np.sum(new_probs[indices]) > 0.99999 or np.sum(new_probs[indices]) < 0.00001:
+            print("Agent is too decisive, no behvaior changed", flush=True)
             return new_probs
         original_values = np.zeros_like(new_probs)
         adjusted_values = np.zeros_like(new_probs)
@@ -238,9 +239,9 @@ class HierarchicalRL(OAIAgent):
             # Up weight supporting tasks
             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
             if self.tune_subtasks == 'coordinated':
-                subtask_weighting = [10 for _ in subtasks_to_weigh]
+                subtask_weighting = [50 for _ in subtasks_to_weigh]
             elif self.tune_subtasks == 'independent':
-                subtask_weighting = [0.1 for _ in subtasks_to_weigh]
+                subtask_weighting = [0.05 for _ in subtasks_to_weigh]
             else:
                 raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
@@ -295,6 +296,16 @@ class HierarchicalRL(OAIAgent):
                                  Subtasks.SUBTASKS_TO_IDS['serve_soup']]
             if self.tune_subtasks == 'coordinated':
                 subtask_weighting = [10 for _ in subtasks_to_weigh]
+            elif self.tune_subtasks == 'independent':
+                subtask_weighting = [1 for _ in subtasks_to_weigh]
+            else:
+                raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
+
+            # NOTE: THIS ASSUMES BEING P2
+            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'],
+                                 Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']]
+            if self.tune_subtasks == 'coordinated':
+                subtask_weighting = [0.1 for _ in subtasks_to_weigh]
             elif self.tune_subtasks == 'independent':
                 subtask_weighting = [1 for _ in subtasks_to_weigh]
             else:
