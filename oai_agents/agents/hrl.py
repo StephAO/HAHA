@@ -286,7 +286,7 @@ class HierarchicalRL(OAIAgent):
             # else:
             #     raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
             subtasks_to_weigh = [subtasks_to_weigh]
-            subtask_weighting = [10 for _ in subtasks_to_weigh]
+            subtask_weighting = [100 for _ in subtasks_to_weigh]
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
             self.subtask_step += 1
         elif self.layout_name == 'asymmetric_advantages':
@@ -296,7 +296,7 @@ class HierarchicalRL(OAIAgent):
                                  Subtasks.SUBTASKS_TO_IDS['get_soup'],
                                  Subtasks.SUBTASKS_TO_IDS['serve_soup']]
             # if self.tune_subtasks == 'coordinated':
-            subtask_weighting = [10 for _ in subtasks_to_weigh]
+            subtask_weighting = [100 for _ in subtasks_to_weigh]
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
             # elif self.tune_subtasks == 'independent':
             #     subtask_weighting = [1 for _ in subtasks_to_weigh]
@@ -309,7 +309,7 @@ class HierarchicalRL(OAIAgent):
                                  Subtasks.SUBTASKS_TO_IDS['put_onion_closer'],
                                  Subtasks.SUBTASKS_TO_IDS['put_plate_closer']]
             # if self.tune_subtasks == 'coordinated':
-            subtask_weighting = [0.01 for _ in subtasks_to_weigh]
+            subtask_weighting = [0.001 for _ in subtasks_to_weigh]
             # elif self.tune_subtasks == 'independent':
             #     subtask_weighting = [1 for _ in subtasks_to_weigh]
             # else:

@@ -18,7 +18,7 @@ from stable_baselines3.common.vec_env.stacked_observations import StackedObserva
 
 # DEPRECATED NOTE: For counter circuit, trained workers with 8, but trained manager with 4. Only 4 spots are useful add
 # more during subtask worker training for robustness
-USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 5, 'asymmetric_advantages': 2} # Max number of counters the agents should use
+USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 5, 'asymmetric_advantages': 1} # Max number of counters the agents should use
 
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
