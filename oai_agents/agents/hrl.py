@@ -122,7 +122,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
             rl_sat = SingleAgentTrainer(tms, args, eval_tms=eval_tms, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
             # Train if it makes sense to (can't train on an unknown task)
             if i != Subtasks.SUBTASKS_TO_IDS['unknown']:
-                rl_sat.train_agents(total_timesteps=1e3)
+                rl_sat.train_agents(total_timesteps=3e6)
                 agents.extend(rl_sat.get_agents())
 
         args.layout_names = original_layout_names

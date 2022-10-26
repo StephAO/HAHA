@@ -11,7 +11,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
-EPOCH_TIMESTEPS = 1000
+EPOCH_TIMESTEPS = 10000
 VEC_ENV_CLS = DummyVecEnv #SubprocVecEnv
 
 class SingleAgentTrainer(OAITrainer):
@@ -31,7 +31,7 @@ class SingleAgentTrainer(OAITrainer):
         self.seed = seed
         self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
         self.teammates = teammates
-        self.eval_teammates = eval_tms
+        self.eval_teammates = eval_tms if eval_tms is not None else self.teammates
         if env is None:
             env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts,
                           'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
