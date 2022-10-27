@@ -43,6 +43,8 @@ def get_arguments(additional_args=[]):
                         help='Wandb entity to log to.')
     parser.add_argument('-c', type=str, default='for stupid reasons, but dont delete',
                         help='Wandb entity to log to.')
+    parser.add_argument('gunicorn_config', type=str, default='for stupid reasons, but dont delete',
+                        help='Wandb entity to log to.')
     for parser_arg, parser_kwargs in additional_args:
         parser.add_argument(parser_arg, **parser_kwargs)
 
