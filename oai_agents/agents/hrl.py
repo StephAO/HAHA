@@ -249,7 +249,6 @@ class HierarchicalRL(OAIAgent):
                 subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
                 subtask_weighting = [100 for _ in subtasks_to_weigh]
                 new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-    
                 # Down weight complementary tasks
                 subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
                 subtask_weighting = [0.01 for _ in subtasks_to_weigh]

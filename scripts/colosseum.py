@@ -31,6 +31,7 @@ def eval_agents_with_various_teammates(agents_to_evaluate, teammates):
                     score_matrices[eval_env.layout_name][i][j] = mean_reward
                     pbar.update(1)
     pbar.close()
+
     return score_matrices
 
 def load_agents_population(filepaths, args):
@@ -52,6 +53,7 @@ if __name__ == "__main__":
 
     # Load main agents again to avoid issues with hrl object
     tms = [*load_agents_population(main_agents_fns, args)] # DummyAgent('random'), human_proxy
+
 
     score_matrices = eval_agents_with_various_teammates(main_agents, tms)
     for layout in args.layout_names:
