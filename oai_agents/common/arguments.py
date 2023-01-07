@@ -41,6 +41,10 @@ def get_arguments(additional_args=[]):
                         help='Wandb mode. One of ["online", "offline", "disabled"')
     parser.add_argument('--wandb-ent', type=str, default='stephaneao',
                         help='Wandb entity to log to.')
+    parser.add_argument('-c', type=str, default='for stupid reasons, but dont delete',
+                        help='Wandb entity to log to.')
+    parser.add_argument('gunicorn_config', type=str, default='for stupid reasons, but dont delete',
+                        help='Wandb entity to log to.')
     for parser_arg, parser_kwargs in additional_args:
         parser.add_argument(parser_arg, **parser_kwargs)
 
