@@ -146,7 +146,7 @@ class OvercookedGymEnv(Env):
             else:
                 obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
             obs['visual_obs'] = obs['visual_obs'].squeeze()
-        if self.return_completed_subtasks:
+        if self.return_completed_subtasks or (self.teammate is not None and p_idx == self.t_idx and 'player_completed_subtasks' in self.teammate.policy.observation_space.keys()):
             # If this isn't the first step of the game, see if a subtask has been completed
             comp_st = None
             if on_reset:
@@ -176,7 +176,7 @@ class OvercookedGymEnv(Env):
         joint_action[self.p_idx] = action
         tm_obs = self.get_obs(p_idx=self.t_idx, enc_fn=self.teammate.encoding_fn)
         joint_action[self.t_idx] = self.teammate.predict(tm_obs)[0]
-        joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
+        joint_action = [Action.INDEX_TO_ACTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
@@ -196,7 +196,7 @@ class OvercookedGymEnv(Env):
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self):
-        self.p_idx = np.random.randint(2)
+        self.p_idx = 0 #np.random.randint(2)
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it
         self.stack_frames[self.p_idx] = self.main_agent_stack_frames

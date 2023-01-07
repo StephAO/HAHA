@@ -31,7 +31,7 @@ class SingleAgentTrainer(OAITrainer):
         self.seed = seed
         self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
         self.teammates = teammates
-        self.eval_teammates = eval_tms
+        self.eval_teammates = eval_tms if eval_tms is not None else self.teammates
         if env is None:
             env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts,
                           'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
@@ -64,10 +64,10 @@ class SingleAgentTrainer(OAITrainer):
         self.learning_agent = self.wrap_agent(sb3_agent, agent_name)
         self.agents = [self.learning_agent]
 
-        if inc_sp:
+        if False and inc_sp:
             self.teammates.append(self.learning_agent)
 
-        if not self.use_subtask_eval and not self.using_hrl:
+        if False and not self.use_subtask_eval and not self.using_hrl:
             if type(self.eval_teammates) == dict:
                 for k in self.eval_teammates:
                     self.eval_teammates[k].append(self.learning_agent)
@@ -105,7 +105,7 @@ class SingleAgentTrainer(OAITrainer):
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
             if self.using_hrl:
-                curr_timesteps = np.sum(self.env.env_method('get_worker_failures'))
+                curr_timesteps = np.sum(self.env.env_method('get_base_env_timesteps'))
                 failure_dicts = self.env.env_method('get_worker_failures')
                 tot_failure_dict = {ln: {k: 0 for k in failure_dicts[0][1].keys()} for ln in self.args.layout_names}
                 for ln, fd in failure_dicts:
@@ -118,8 +118,8 @@ class SingleAgentTrainer(OAITrainer):
                 curr_timesteps = self.learning_agent.num_timesteps
 
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.learning_agent.agent.ep_info_buffer])
-            best_training_rew *= 0.995
-            if epoch % 20 == 0 or (mean_training_rew > best_training_rew and curr_timesteps > 5e5):
+            best_training_rew *= 0.99
+            if epoch % 10 == 0 or (mean_training_rew > best_training_rew and curr_timesteps > 5e5):
                 if mean_training_rew >= best_training_rew:
                     best_training_rew = mean_training_rew
                 if self.use_subtask_eval:
@@ -208,6 +208,7 @@ class MultipleAgentsTrainer(OAITrainer):
                 self.agents.append(SB3Wrapper(sb3_agent, agent_name, args))
 
         self.teammates = [PolicyClone(agent, args) for agent in self.agents] if self.use_policy_clones else self.agents
+        self.eval_teammates = eval_tms if eval_tms is not None else self.teammates
         self.agents_in_training = np.ones(len(self.agents))
         self.agents_timesteps = np.zeros(len(self.agents))
 
@@ -234,6 +235,7 @@ class MultipleAgentsTrainer(OAITrainer):
                                   reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
 
         epoch = 0
+        best_training_rew = float('-inf')
         # Each agent should learn for `total_timesteps` steps. Keep training until all agents hit this threshold
         while any(self.agents_in_training):
             # Set new env distribution if training on multiple envs
@@ -251,7 +253,11 @@ class MultipleAgentsTrainer(OAITrainer):
             if self.use_policy_clones:
                 self.teammates[learner_idx].update_policy(self.agents[learner_idx])
             # Evaluate
-            if epoch % 10 == 0:
+            mean_training_rew = np.mean([ep_info["r"] for ep_info in self.agents[learner_idx].agent.ep_info_buffer])
+            best_training_rew *= 0.995
+            if epoch % 20 == 0 or (mean_training_rew > best_training_rew and np.sum(self.agents_timesteps) > 5e5):
+                if mean_training_rew >= best_training_rew:
+                    best_training_rew = mean_training_rew
                 mean_reward = self.evaluate(self.agents[learner_idx], timestep=np.sum(self.agents_timesteps))
                 # FCP checkpoint saving
                 if self.fcp_ck_rate and len(self.agents) == 1:

@@ -190,20 +190,22 @@ class BehavioralCloningTrainer(OAITrainer):
                          reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
 
         best_rew, best_path = [float('-inf'), float('-inf')], [None, None]
-
+        best_loss = float('inf')
         for epoch in range(epochs):
             for i in range(2):
                 train_loss = self.run_epoch(i)
                 self.eval_teammates = [self.agents[i]]
-                mean_sp_reward = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=1, timestep=epoch, deterministic=False)
-                wandb.log({f'train_loss_{i}': train_loss, 'timestep': epoch})
-                if mean_sp_reward > best_rew[i]:
-                    print(f'Saving new best BC model for agent {i} on epoch {epoch} with reward {mean_sp_reward}')
-                    path = self.args.base_dir / 'agent_models' / self.name / self.args.exp_name / 'agents_dir'
-                    Path(path).mkdir(parents=True, exist_ok=True)
-                    self.agents[i].save(path / f'agent_{i}')
-                    best_path[i] = path / f'agent_{i}'
-                    best_rew[i] = mean_sp_reward
+                if best_loss < train_loss or epoch % 10 == 0:
+                    best_loss = train_loss
+                    mean_sp_reward = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=10, timestep=epoch, deterministic=False)
+                    wandb.log({f'train_loss_{i}': train_loss, 'timestep': epoch})
+                    if mean_sp_reward > best_rew[i]:
+                        print(f'Saving new best BC model for agent {i} on epoch {epoch} with reward {mean_sp_reward}')
+                        path = self.args.base_dir / 'agent_models' / self.name / self.args.exp_name / 'agents_dir'
+                        Path(path).mkdir(parents=True, exist_ok=True)
+                        self.agents[i].save(path / f'agent_{i}')
+                        best_path[i] = path / f'agent_{i}'
+                        best_rew[i] = mean_sp_reward
 
         rewards = [0, 0]
         for i in range(2):
@@ -223,7 +225,7 @@ class BehavioralCloningTrainer(OAITrainer):
             rewards = [-1, -1]
             for i in range(2):
                 self.eval_teammates = [self.agents[i]]
-                rewards[i] = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=1, deterministic=False, log_wandb=False)
+                rewards[i] = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=10, deterministic=False, log_wandb=False)
             self.bc, self.human_proxy = (self.agents[0], self.agents[1]) if rewards[1] > rewards[0] else \
                                         (self.agents[1], self.agents[0])
         return self.bc, self.human_proxy

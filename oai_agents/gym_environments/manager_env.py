@@ -67,7 +67,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             next_state, r, done, info = self.env.step(joint_action)
             self.base_env_timesteps += 1
             self.state = deepcopy(next_state)
-            if self.shape_rewards and not self.is_eval_env:
+            if False and self.shape_rewards and not self.is_eval_env:
                 ratio = min(self.step_count * self.args.n_envs / 5e5, 1)
                 sparse_r = sum(info['sparse_r_by_agent'])
                 shaped_r = info['shaped_r_by_agent'][self.p_idx] if self.p_idx else sum(info['shaped_r_by_agent'])
@@ -80,7 +80,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             if worker_steps % 5 == 0:
                 if not get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[self.curr_subtask]:
                     ready_for_next_subtask = True
-            if worker_steps > 30: # longest task is getting soup if soup needs to cook for the full 20 timsteps. Add some extra lewway
+            if worker_steps > 50: # longest task is getting soup if soup needs to cook for the full 20 timsteps. Add some extra lewway
                 ready_for_next_subtask = True
             # If subtask equals unknown, HRL agent will just STAY. This essentially forces a recheck every timestep
             # to see if any other task is possible
@@ -89,7 +89,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
                 self.unknowns_in_a_row += 1
                 # If no new subtask becomes available after 25 timesteps, end round
-                if self.unknowns_in_a_row > 20 and not self.is_eval_env:
+                if self.unknowns_in_a_row > 50 and not self.is_eval_env:
                     done = True
             else:
                 self.unknowns_in_a_row = 0

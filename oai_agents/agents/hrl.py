@@ -32,11 +32,20 @@ class MultiAgentSubtaskWorker(OAIAgent):
         try: # curr_subtask is iterable because this is a training batch
             preds = [self.agents[st].predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
                      for st in obs['curr_subtask']]
+            #action_shape = preds[0][0].shape
             actions, states = zip(*preds)
+            
+            actions, states = np.array(actions), np.array(states)
+            #actions = actions.reshape((-1,) + action_shape)
+
+            #if len(preds) == 1:
+            #actions, states = actions.squeeze(), states.squeeze()
+
 
         except TypeError: # curr_subtask is not iterable because this is regular run
             actions, states = self.agents[obs['curr_subtask']].predict(obs, state=state, episode_start=episode_start,
                                                                        deterministic=deterministic)
+        #rint(actions)
         return actions, states
 
     def get_distribution(self, obs: th.Tensor):
@@ -98,7 +107,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
-        for i in [1, 4]: # [0, 2, 3] [1, 4] [5, 7, 6] [10, 8, 9]
+        for i in [10, 8, 9]: # [0, 2, 3] [1, 4] [5, 7, 6] [10, 8, 9]
             print(f'Starting subtask {i} - {Subtasks.IDS_TO_SUBTASKS[i]}')
             # RL single subtask agents trained with teammeates
             # Make necessary envs
@@ -207,8 +216,8 @@ class HierarchicalRL(OAIAgent):
         return self.worker.get_distribution(obs, sample=sample)
 
     def adjust_distributions(self, probs, indices, weights):
-        new_probs = np.copy(probs)
-        if np.sum(probs[indices]) > 0.999 or np.sum(probs[indices]) < 0.001:
+        new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
+        if np.sum(new_probs[indices]) > 0.999 or np.sum(new_probs[indices]) < 0.001:
             return new_probs
         original_values = np.zeros_like(new_probs)
         adjusted_values = np.zeros_like(new_probs)
@@ -235,24 +244,26 @@ class HierarchicalRL(OAIAgent):
         if self.layout_name == None:
             raise ValueError("Set current layout using set_curr_layout before attempting manual adjustment")
         elif self.layout_name == 'counter_circuit_o_1order':
-            # Up weight supporting tasks
-            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
-            if self.tune_subtasks == 'coordinated':
-                subtask_weighting = [10 for _ in subtasks_to_weigh]
-            elif self.tune_subtasks == 'independent':
-                subtask_weighting = [0.1 for _ in subtasks_to_weigh]
+            if self.p_idx == 0:
+                # Up weight supporting tasks
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
+                subtask_weighting = [100 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+    
+                # Down weight complementary tasks
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
+                subtask_weighting = [0.01 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
             else:
-                raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
-            new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-            # Down weight complementary tasks
-            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
-            if self.tune_subtasks == 'coordinated':
-                subtask_weighting = [0.1 for _ in subtasks_to_weigh]
-            elif self.tune_subtasks == 'independent':
-                subtask_weighting = [10 for _ in subtasks_to_weigh]
-            else:
-                raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
-            new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
+                # Down weight supporting tasks
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
+                subtask_weighting = [0.01 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+
+                # Up weight complementary tasks
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
+                subtask_weighting = [100 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
         elif self.layout_name == 'forced_coordination':
             # NOTE: THIS ASSUMES BEING P2
             # Since tasks are very limited, we use a different change insated of support and coordinated.
@@ -303,8 +314,7 @@ class HierarchicalRL(OAIAgent):
         else:
             new_probs = probs
 
-        print(f"Previous probs: {probs} -> New probs: {new_probs}", flush=True)
-        return np.argmax(new_probs, axis=-1) if deterministic else Categorical(probs=new_probs).sample()
+        return np.argmax(new_probs, axis=-1) if deterministic else Categorical(probs=th.tensor(new_probs)).sample()
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         # TODO consider forcing new subtask if none has been completed in x timesteps
