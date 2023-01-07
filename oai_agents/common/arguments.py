@@ -10,7 +10,7 @@ def get_arguments(additional_args=[]):
     :return:
     """
     parser = argparse.ArgumentParser(description='PyTorch Soft Actor-Critic Args')
-    parser.add_argument('--layout-names', default='counter_circuit_o_1order,forced_coordination,asymmetric_advantages',  help='Overcooked maps to use')
+    parser.add_argument('--layout-names', default='counter_circuit_o_1order,forced_coordination,asymmetric_advantages,cramped_room,coordination_ring',  help='Overcooked maps to use')
     parser.add_argument('--policy-selection', type=str, default='CEM',
                         help='Which policy selection algorithm to use. Options: "CEM", "PLASTIC". Default: "CEM"')
     parser.add_argument('--multi-env-mode', type=str, default='uniform',
@@ -41,8 +41,8 @@ def get_arguments(additional_args=[]):
                         help='Wandb mode. One of ["online", "offline", "disabled"')
     parser.add_argument('--wandb-ent', type=str, default='stephaneao',
                         help='Wandb entity to log to.')
-    parser.add_argument('-c', type=str, default='for stupid reasons, but dont delete',
-                        help='Wandb entity to log to.')
+    parser.add_argument('-c', type=str, default='for stupid reasons, but dont delete', help='Wandb entity to log to.')
+    parser.add_argument('args', nargs='?', type=str, default='', help='')
     for parser_arg, parser_kwargs in additional_args:
         parser.add_argument(parser_arg, **parser_kwargs)
 

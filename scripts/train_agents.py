@@ -117,7 +117,7 @@ def get_population_play_agent(args, pop_size=8, training_steps=1e7):
     return best_agent
 
 # FCP
-def get_fcp_population(args, training_steps=1e7):
+def get_fcp_population(args, training_steps=2e7):
     try:
         mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
         fcp_pop = mat.load_agents(tag='final')
@@ -125,17 +125,17 @@ def get_fcp_population(args, training_steps=1e7):
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
         agents = []
-        for use_fs in [False, True]:
-            for h_dim in [16, 256]: # 16, 64, 128, 256
-                seed = 4 # 64, 1024, 16384
-                ck_rate = training_steps / 20
-                name = f'fs_{h_dim}' if use_fs else f'no_fs_{h_dim}'
-                print(f'Starting training for: {name}')
-                mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, use_frame_stack=use_fs,
-                                            fcp_ck_rate=ck_rate, seed=seed)
-                mat.train_agents(total_timesteps=training_steps)
-                mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp'), tag=name)
-                agents.extend(mat.get_fcp_agents())
+        use_fs = False
+        for h_dim in [8, 16]: # [32, 64], [128, 256], [512, 1024]
+            seed = h_dim # 64, 1024, 16384
+            ck_rate = training_steps // 20
+            name = f'fs_{h_dim}' if use_fs else f'no_fs_{h_dim}'
+            print(f'Starting training for: {name}')
+            mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, use_frame_stack=use_fs,
+                                        fcp_ck_rate=ck_rate, seed=seed)
+            mat.train_agents(total_timesteps=training_steps)
+            mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp'), tag=name)
+            agents.extend(mat.get_fcp_agents())
         pop = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
         pop.set_agents(agents)
         pop.save_agents()
@@ -277,7 +277,7 @@ if __name__ == '__main__':
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
     #get_fcp_agent(args, training_steps=1e7)
-    # teammates = get_fcp_population(args, 1e3)
-    get_hrl_worker(args)
+    teammates = get_fcp_population(args, 2e7)
+    # get_hrl_worker(args)
     # get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)

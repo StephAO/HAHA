@@ -235,25 +235,28 @@ class HierarchicalRL(OAIAgent):
         if self.layout_name == None:
             raise ValueError("Set current layout using set_curr_layout before attempting manual adjustment")
         elif self.layout_name == 'counter_circuit_o_1order':
-            # Up weight supporting tasks
-            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
-            # if self.tune_subtasks == 'coordinated':
-            subtask_weighting = [100 for _ in subtasks_to_weigh]
-            # elif self.tune_subtasks == 'independent':
-            #     subtask_weighting = [0.05 for _ in subtasks_to_weigh]
-            # else:
-            #     raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
-            new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+            if self.p_idx == 0:
+                # Up weight supporting tasks
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
+                subtask_weighting = [100 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
 
-            # Down weight complementary tasks
-            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
-            # if self.tune_subtasks == 'coordinated':
-            subtask_weighting = [0.01 for _ in subtasks_to_weigh]
-            # elif self.tune_subtasks == 'independent':
-            #     subtask_weighting = [10 for _ in subtasks_to_weigh]
-            # else:
-            #     raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
-            new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
+                # Down weight complementary tasks
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
+                subtask_weighting = [0.01 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
+            else:
+                # Down weight supporting tasks
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
+                subtask_weighting = [0.01 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+
+                # Up weight complementary tasks
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
+                subtask_weighting = [100 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
+
+
         elif self.layout_name == 'forced_coordination':
             # NOTE: THIS ASSUMES BEING P2
             # Since tasks are very limited, we use a different change insated of support and coordinated.
