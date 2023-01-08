@@ -187,9 +187,9 @@ class MultipleAgentsTrainer(OAITrainer):
         self.eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(self.n_layouts)]
 
         policy_kwargs = dict(
-            # features_extractor_class=OAISinglePlayerFeatureExtractor,
-            # features_extractor_kwargs=dict(hidden_dim=hidden_dim),
-            net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
+            #features_extractor_class=OAISinglePlayerFeatureExtractor,
+            #features_extractor_kwargs=dict(hidden_dim=hidden_dim),
+            net_arch=[dict(pi=[hidden_dim, hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim, hidden_dim])]
         )
 
         self.agents = []
@@ -255,7 +255,7 @@ class MultipleAgentsTrainer(OAITrainer):
             # Evaluate
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.agents[learner_idx].agent.ep_info_buffer])
             best_training_rew *= 0.995
-            if epoch % 20 == 0 or (mean_training_rew > best_training_rew and np.sum(self.agents_timesteps) > 5e5):
+            if epoch % 20 == 0 or (mean_training_rew > best_training_rew and np.sum(self.agents_timesteps) > 2.5e6):
                 if mean_training_rew >= best_training_rew:
                     best_training_rew = mean_training_rew
                 mean_reward = self.evaluate(self.agents[learner_idx], timestep=np.sum(self.agents_timesteps))

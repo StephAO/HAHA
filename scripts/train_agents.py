@@ -126,7 +126,7 @@ def get_fcp_population(args, training_steps=2e7):
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
         agents = []
         use_fs = False
-        for h_dim in [512, 1024]: # [8,16], [32, 64], [128, 256], [512, 1024]
+        for h_dim in [64]: # [8,16], [32, 64], [128, 256], [512, 1024]
             seed = h_dim # 64, 1024, 16384
             ck_rate = training_steps // 20
             name = f'fs_{h_dim}' if use_fs else f'no_fs_{h_dim}'
