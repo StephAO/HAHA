@@ -352,6 +352,7 @@ class OAITrainer(ABC):
         for split_size in range(self.n_layouts):
             for split in combinations(range(self.n_layouts), split_size + 1):
                 self.splits.append(split)
+        self.env_setup_idx, self.weighted_ratio = 0, 1.0
 
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
@@ -401,6 +402,22 @@ class OAITrainer(ABC):
                 indices = list(range(n_envs_per_layout * i, n_envs_per_layout * (i + 1)))
                 self.env.env_method('init_base_env', indices=indices, env_index=env_idx)
             self.curr_split = (self.curr_split + 1) % len(self.splits)
+        elif self.args.multi_env_mode == 'weighted_decay':
+            weighted_layout = self.env_setup_idx
+            if weighted_layout >= self.n_layouts:
+                self.weighted_ratio = max(1 / len(self.args.layout_names), self.weighted_ratio - 0.1)
+                weighted_layout = 0
+            num_envs_for_weighted_layout = int(self.args.n_envs * self.weighted_ratio)
+            j = 0
+            for i in range(self.args.n_envs):
+                if i < num_envs_for_weighted_layout:
+                    self.env.env_method('init_base_env', indices=i, env_index=weighted_layout)
+                else:
+                    if j == weighted_layout:
+                        j = (j + 1) % self.args.n_envs
+                    self.env.env_method('init_base_env', indices=i, env_index=j)
+                    j = (j + 1) % self.args.n_envs
+            self.env_setup_idx += 1
         elif self.args.multi_env_mode == 'random':
             for i in range(self.args.n_envs):
                 env_idx = np.random.randint(self.n_layouts)

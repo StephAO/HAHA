@@ -203,7 +203,9 @@ class MultipleAgentsTrainer(OAITrainer):
                 self.agents.append(SB3LSTMWrapper(sb3_agent, agent_name, args))
         else:
             for i in range(num_agents):
-                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1)
+                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=1024,
+                                n_epochs=5, learning_rate=0.0001, batch_size=32, ent_coef=0.1, vf_coef=0.5,
+                                max_grad_norm=0.1, gae_lambda=0.98, clip_range=0.1)
                 agent_name = f'{name}_{i + 1}'
                 self.agents.append(SB3Wrapper(sb3_agent, agent_name, args))
 
