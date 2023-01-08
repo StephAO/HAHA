@@ -22,7 +22,7 @@ class GridEncoder(nn.Module):
         super(GridEncoder, self).__init__()
         self.kernels = (5, 3, 3)
         self.strides = (1, 1, 1)
-        self.channels = (32, 32, 32)
+        self.channels = (25, 25, 25)
         self.padding = (1, 1)
 
         layers = []
@@ -48,7 +48,7 @@ class MLP(nn.Module):
             layers = [nn.Linear(input_dim, hidden_dim), act()]
         else:
             layers = [nn.Linear(input_dim, output_dim), act()]
-        for i in range(num_layers - 2):
+        for _ in range(num_layers - 2):
             layers += [nn.Linear(hidden_dim, hidden_dim), act()]
         if num_layers > 1:
             layers += [nn.Linear(hidden_dim, output_dim), act()]
@@ -64,8 +64,8 @@ class OAISinglePlayerFeatureExtractor(BaseFeaturesExtractor):
             This corresponds to the number of unit for the last layer.
         """
 
-    def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 256):
-        super(OAISinglePlayerFeatureExtractor, self).__init__(observation_space, features_dim)
+    def __init__(self, observation_space: gym.spaces.Dict, hidden_dim: int = 256):
+        super(OAISinglePlayerFeatureExtractor, self).__init__(observation_space, hidden_dim)
         self.use_visual_obs = 'visual_obs' in observation_space.keys()
         self.use_vector_obs = 'agent_obs' in observation_space.keys()
         self.use_subtask_obs = 'curr_subtask' in observation_space.keys()
@@ -86,7 +86,7 @@ class OAISinglePlayerFeatureExtractor(BaseFeaturesExtractor):
             input_dim += np.prod(observation_space['teammate_completed_subtasks'].shape)
 
         # Define MLP for vector/feature based observations
-        self.vector_encoder = MLP(input_dim=input_dim, output_dim=features_dim, num_layers=1)
+        self.vector_encoder = MLP(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=hidden_dim, num_layers=3)
         self.apply(weights_init_)
 
     def forward(self, observations: th.Tensor) -> th.Tensor:

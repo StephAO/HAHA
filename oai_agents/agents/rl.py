@@ -188,7 +188,7 @@ class MultipleAgentsTrainer(OAITrainer):
 
         policy_kwargs = dict(
             # features_extractor_class=OAISinglePlayerFeatureExtractor,
-            # features_extractor_kwargs=dict(features_dim=hidden_dim),
+            # features_extractor_kwargs=dict(hidden_dim=hidden_dim),
             net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
         )
 
