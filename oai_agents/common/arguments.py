@@ -44,7 +44,7 @@ def get_arguments(additional_args=[]):
 
     parser.add_argument('-c', type=str, default='', help='for stupid reasons, but dont delete')
     parser.add_argument('args', nargs='?', type=str, default='', help='')
-    parser.add_argument('gunicorn_config', type=str, default='', help='for stupid reasons, but dont delete')
+    #parser.add_argument('gunicorn_config', type=str, default='', help='for stupid reasons, but dont delete')
 
     for parser_arg, parser_kwargs in additional_args:
         parser.add_argument(parser_arg, **parser_kwargs)

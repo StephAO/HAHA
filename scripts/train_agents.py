@@ -120,13 +120,13 @@ def get_population_play_agent(args, pop_size=8, training_steps=1e7):
 def get_fcp_population(args, training_steps=2e7):
     try:
         mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
-        fcp_pop = mat.load_agents(tag='final')
+        fcp_pop = mat.load_agents(tag='ijcai')
         print(f'Loaded fcp_pop with {len(fcp_pop)} agents.')
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
         agents = []
         use_fs = False
-        for h_dim in [8, 16]: # [32, 64], [128, 256], [512, 1024]
+        for h_dim in [512, 1024]: # [8,16], [32, 64], [128, 256], [512, 1024]
             seed = h_dim # 64, 1024, 16384
             ck_rate = training_steps // 20
             name = f'fs_{h_dim}' if use_fs else f'no_fs_{h_dim}'
@@ -273,7 +273,7 @@ def create_test_population(args, training_steps=1e7):
 if __name__ == '__main__':
     args = get_arguments()
     # create_test_population(args, 1e3)
-    get_hrl_agent(args, 2e7)
+    #get_hrl_agent(args, 2e7)
 
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
