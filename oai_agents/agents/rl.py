@@ -189,10 +189,12 @@ class MultipleAgentsTrainer(OAITrainer):
         policy_kwargs = dict(
             #features_extractor_class=OAISinglePlayerFeatureExtractor,
             #features_extractor_kwargs=dict(hidden_dim=hidden_dim),
-            net_arch=[dict(pi=[hidden_dim, hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim, hidden_dim])]
+            net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
         )
 
         self.agents = []
+        self.agents_in_training = np.ones(num_agents)
+        self.agents_timesteps = np.zeros(num_agents)
         if use_lstm:
             policy_kwargs['n_lstm_layers'] = 2
             policy_kwargs['lstm_hidden_size'] = hidden_dim
@@ -202,17 +204,17 @@ class MultipleAgentsTrainer(OAITrainer):
                 agent_name = f'{name}_lstm_{i + 1}'
                 self.agents.append(SB3LSTMWrapper(sb3_agent, agent_name, args))
         else:
+            lr_sched = self.get_linear_schedule(3e-4, 5e-5, 0.8, 'lr')
+            clip_sched = self.get_linear_schedule(0.3, 0.05, 0.5, 'clip')
             for i in range(num_agents):
-                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=1024,
-                                n_epochs=5, learning_rate=0.0001, batch_size=32, ent_coef=0.1, vf_coef=0.5,
-                                max_grad_norm=0.1, gae_lambda=0.98, clip_range=0.1)
+                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=1600,
+                                n_epochs=8, learning_rate=lr_sched, batch_size=512, ent_coef=0.01, vf_coef=0.1,
+                                max_grad_norm=0.3, gamma=0.995, gae_lambda=0.98, clip_range=clip_sched)#, clip_range_vf=clip_sched)
                 agent_name = f'{name}_{i + 1}'
                 self.agents.append(SB3Wrapper(sb3_agent, agent_name, args))
 
         self.teammates = [PolicyClone(agent, args) for agent in self.agents] if self.use_policy_clones else self.agents
         self.eval_teammates = eval_tms if eval_tms is not None else self.teammates
-        self.agents_in_training = np.ones(len(self.agents))
-        self.agents_timesteps = np.zeros(len(self.agents))
 
     def _get_constructor_parameters(self):
         return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, use_frame_stack=self.use_frame_stack,
@@ -241,7 +243,7 @@ class MultipleAgentsTrainer(OAITrainer):
         # Each agent should learn for `total_timesteps` steps. Keep training until all agents hit this threshold
         while any(self.agents_in_training):
             # Set new env distribution if training on multiple envs
-            if self.n_layouts > 1 and self.args.multi_env_mode != 'uniform':
+            if epoch > 1 and epoch % 2 == 0 and self.n_layouts > 1 and self.args.multi_env_mode != 'uniform':
                 self.set_new_envs()
             # Randomly select new teammates from population (can include learner)
             self.set_new_teammates()
@@ -256,8 +258,8 @@ class MultipleAgentsTrainer(OAITrainer):
                 self.teammates[learner_idx].update_policy(self.agents[learner_idx])
             # Evaluate
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.agents[learner_idx].agent.ep_info_buffer])
-            best_training_rew *= 0.995
-            if epoch % 20 == 0 or (mean_training_rew > best_training_rew and np.sum(self.agents_timesteps) > 2.5e6):
+            #best_training_rew *= 0.995
+            if epoch % 10 == 0 or (mean_training_rew > best_training_rew and np.sum(self.agents_timesteps) > 1e6):
                 if mean_training_rew >= best_training_rew:
                     best_training_rew = mean_training_rew
                 mean_reward = self.evaluate(self.agents[learner_idx], timestep=np.sum(self.agents_timesteps))

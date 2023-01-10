@@ -352,10 +352,24 @@ class OAITrainer(ABC):
         for split_size in range(self.n_layouts):
             for split in combinations(range(self.n_layouts), split_size + 1):
                 self.splits.append(split)
-        self.env_setup_idx, self.weighted_ratio = 0, 1.0
+        self.env_setup_idx, self.weighted_ratio = 0, 0.9
 
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
+
+    def get_linear_schedule(self, start_lr=1e-3, end_lr=1e-4, end_fraction=0.8, name='default'):
+        def linear_anneal(progress_remaining: float) -> float:
+            training_completed = self.agents_timesteps[0] / 2e7
+            if training_completed > end_fraction:
+                lr = end_lr
+            else:
+                lr = start_lr + training_completed * (end_lr - start_lr) / end_fraction
+            if self.agents_timesteps[0] > 0:
+                wandb.log({'timestep': self.agents_timesteps[0], name: lr})
+            return lr
+            
+
+        return linear_anneal
 
     def evaluate(self, eval_agent, num_eps_per_layout_per_tm=10, visualize=False, timestep=None, log_wandb=True,
                  deterministic=False):
@@ -405,8 +419,11 @@ class OAITrainer(ABC):
         elif self.args.multi_env_mode == 'weighted_decay':
             weighted_layout = self.env_setup_idx
             if weighted_layout >= self.n_layouts:
+                if self.weighted_ratio <= 1 / self.n_layouts:
+                    return
                 self.weighted_ratio = max(1 / len(self.args.layout_names), self.weighted_ratio - 0.1)
-                weighted_layout = 0
+                self.env_setup_idx, weighted_layout = 0, 0
+                print(f'DECAY NOW AT: {self.weighted_ratio}')
             num_envs_for_weighted_layout = int(self.args.n_envs * self.weighted_ratio)
             j = 0
             for i in range(self.args.n_envs):
@@ -414,9 +431,9 @@ class OAITrainer(ABC):
                     self.env.env_method('init_base_env', indices=i, env_index=weighted_layout)
                 else:
                     if j == weighted_layout:
-                        j = (j + 1) % self.args.n_envs
+                        j = (j + 1) % self.n_layouts
                     self.env.env_method('init_base_env', indices=i, env_index=j)
-                    j = (j + 1) % self.args.n_envs
+                    j = (j + 1) % self.n_layouts
             self.env_setup_idx += 1
         elif self.args.multi_env_mode == 'random':
             for i in range(self.args.n_envs):
