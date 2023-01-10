@@ -9,6 +9,12 @@ import torch.nn.functional as F
 def get_output_shape(model, image_dim):
     return model(th.rand(*(image_dim))).data.shape[1:]
 
+def calc_activation_shape(dim, ksize, dilation=(1, 1), stride=(1, 1), padding=(1, 1)):
+    def shape_each_dim(i):
+        odim_i = dim[i] + 2 * padding[i] - dilation[i] * (ksize[i] - 1) - 1
+        return (odim_i / stride[i]) + 1
+    return shape_each_dim(0), shape_each_dim(1)
+
 
 def weights_init_(m):
     if hasattr(m, 'weight') and m.weight is not None and len(m.weight.shape) > 2:
@@ -22,13 +28,16 @@ class GridEncoder(nn.Module):
         super(GridEncoder, self).__init__()
         self.kernels = (5, 3, 3)
         self.strides = (1, 1, 1)
-        self.channels = (25, 25, 25)
+        self.channels = (16, 32, 64)
         self.padding = (1, 1)
 
         layers = []
         current_channels = grid_shape[0]
+        ln_shape = grid_shape[1:]
         for i, (k, s, c) in enumerate(zip(self.kernels, self.strides, self.channels)):
             layers.append(nn.Conv2d(current_channels, c, k, stride=s, padding=1))#self.padding))
+            ln_shape = calc_activation_shape(ln_shape, k)
+            layers.append(nn.LayerNorm([current_channels, *ln_shape]))
             # layers.append(nn.GroupNorm(1, depth))
             layers.append(act())
             current_channels = c
@@ -45,13 +54,13 @@ class MLP(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim=256, num_layers=2, act=nn.ReLU):
         super(MLP, self).__init__()
         if num_layers > 1:
-            layers = [nn.Linear(input_dim, hidden_dim), act()]
+            layers = [nn.Linear(input_dim, hidden_dim), nn.LayerNorm(hidden_dim), act()]
         else:
-            layers = [nn.Linear(input_dim, output_dim), act()]
+            layers = [nn.Linear(input_dim, output_dim), nn.LayerNorm(output_dim), act()]
         for _ in range(num_layers - 2):
-            layers += [nn.Linear(hidden_dim, hidden_dim), act()]
+            layers += [nn.Linear(hidden_dim, hidden_dim), nn.LayerNorm(hidden_dim), act()]
         if num_layers > 1:
-            layers += [nn.Linear(hidden_dim, output_dim), act()]
+            layers += [nn.Linear(hidden_dim, output_dim), nn.LayerNorm(output_dim), act()]
         self.mlp = nn.Sequential(*layers)
 
     def forward(self, obs):
@@ -86,7 +95,7 @@ class OAISinglePlayerFeatureExtractor(BaseFeaturesExtractor):
             input_dim += np.prod(observation_space['teammate_completed_subtasks'].shape)
 
         # Define MLP for vector/feature based observations
-        self.vector_encoder = MLP(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=hidden_dim, num_layers=3)
+        self.vector_encoder = MLP(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=hidden_dim, num_layers=1)
         self.apply(weights_init_)
 
     def forward(self, observations: th.Tensor) -> th.Tensor:

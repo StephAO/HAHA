@@ -189,7 +189,7 @@ class MultipleAgentsTrainer(OAITrainer):
         policy_kwargs = dict(
             #features_extractor_class=OAISinglePlayerFeatureExtractor,
             #features_extractor_kwargs=dict(hidden_dim=hidden_dim),
-            net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])]
+            net_arch=[hidden_dim, hidden_dim, dict(pi=[hidden_dim], vf=[hidden_dim])]
         )
 
         self.agents = []
@@ -204,7 +204,7 @@ class MultipleAgentsTrainer(OAITrainer):
                 agent_name = f'{name}_lstm_{i + 1}'
                 self.agents.append(SB3LSTMWrapper(sb3_agent, agent_name, args))
         else:
-            lr_sched = self.get_linear_schedule(3e-4, 5e-5, 0.8, 'lr')
+            lr_sched = self.get_linear_schedule(3e-4, 5e-5, 0.6, 'lr')
             clip_sched = self.get_linear_schedule(0.3, 0.05, 0.5, 'clip')
             for i in range(num_agents):
                 sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=1600,
