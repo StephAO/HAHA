@@ -14,7 +14,7 @@ def get_arguments(additional_args=[]):
     parser.add_argument('--policy-selection', type=str, default='CEM',
                         help='Which policy selection algorithm to use. Options: "CEM", "PLASTIC". Default: "CEM"')
     parser.add_argument('--multi-env-mode', type=str, default='uniform',
-                        help='What distributions to use when training on multiple environments. Options: "uniform", "random", "splits", "weighted_decay". Default: "uniform"')
+                        help='What distributions to use when training on multiple environments. Options: "uniform", "random", "splits". Default: "uniform"')
     parser.add_argument('--subtask-selection', type=str, default='value_based',
                         help='Which subtask selection algorithm to use. Options: "value_based", "dist". Default: "value_based"')
     parser.add_argument('--horizon', type=int, default=1200, help='Max timesteps in a rollout')
@@ -23,7 +23,7 @@ def get_arguments(additional_args=[]):
     parser.add_argument('--encoding-fn', type=str, default='OAI_egocentric',
                         help='Encoding scheme to use. '
                              'Options: "dense_lossless", "OAI_lossless", "OAI_feats", "OAI_egocentric"')
-    parser.add_argument('--lr', type=float, default=0.0005, help='learning rate')
+    parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
     parser.add_argument('--batch-size', type=int, default=32, help='batch size')
     parser.add_argument('--eta', type=float, default=0.1, help='eta used in plastic policy update.')
     parser.add_argument('--exp-name', type=str, default='default_exp',

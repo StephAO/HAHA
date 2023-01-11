@@ -198,7 +198,7 @@ class OvercookedGymEnv(Env):
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self):
-        self.p_idx = 0 #np.random.randint(2)
+        self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it
         self.stack_frames[self.p_idx] = self.main_agent_stack_frames

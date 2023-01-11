@@ -357,21 +357,19 @@ class OAITrainer(ABC):
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
 
-    def get_linear_schedule(self, start_lr=1e-3, end_lr=1e-4, end_fraction=0.8, name='default'):
+    def get_linear_schedule(self, start=1e-3, end=1e-4, end_fraction=0.8, name='lr'):
         def linear_anneal(progress_remaining: float) -> float:
             training_completed = self.agents_timesteps[0] / 2e7
             if training_completed > end_fraction:
-                lr = end_lr
+                lr = end
             else:
-                lr = start_lr + training_completed * (end_lr - start_lr) / end_fraction
+                lr = start + training_completed * (end - start) / end_fraction
             if self.agents_timesteps[0] > 0:
                 wandb.log({'timestep': self.agents_timesteps[0], name: lr})
             return lr
-            
-
         return linear_anneal
 
-    def evaluate(self, eval_agent, num_eps_per_layout_per_tm=10, visualize=False, timestep=None, log_wandb=True,
+    def evaluate(self, eval_agent, num_eps_per_layout_per_tm=4, visualize=False, timestep=None, log_wandb=True,
                  deterministic=False):
         tot_mean_reward = []
         use_layout_specific_tms = type(self.eval_teammates) == dict
@@ -416,25 +414,6 @@ class OAITrainer(ABC):
                 indices = list(range(n_envs_per_layout * i, n_envs_per_layout * (i + 1)))
                 self.env.env_method('init_base_env', indices=indices, env_index=env_idx)
             self.curr_split = (self.curr_split + 1) % len(self.splits)
-        elif self.args.multi_env_mode == 'weighted_decay':
-            weighted_layout = self.env_setup_idx
-            if weighted_layout >= self.n_layouts:
-                if self.weighted_ratio <= 1 / self.n_layouts:
-                    return
-                self.weighted_ratio = max(1 / len(self.args.layout_names), self.weighted_ratio - 0.1)
-                self.env_setup_idx, weighted_layout = 0, 0
-                print(f'DECAY NOW AT: {self.weighted_ratio}')
-            num_envs_for_weighted_layout = int(self.args.n_envs * self.weighted_ratio)
-            j = 0
-            for i in range(self.args.n_envs):
-                if i < num_envs_for_weighted_layout:
-                    self.env.env_method('init_base_env', indices=i, env_index=weighted_layout)
-                else:
-                    if j == weighted_layout:
-                        j = (j + 1) % self.n_layouts
-                    self.env.env_method('init_base_env', indices=i, env_index=j)
-                    j = (j + 1) % self.n_layouts
-            self.env_setup_idx += 1
         elif self.args.multi_env_mode == 'random':
             for i in range(self.args.n_envs):
                 env_idx = np.random.randint(self.n_layouts)
@@ -442,19 +421,6 @@ class OAITrainer(ABC):
         elif self.args.multi_env_mode == 'uniform':
             for i in range(self.args.n_envs):
                 self.env.env_method('init_base_env', indices=i, env_index= i % self.n_layouts)
-        elif self.args.multi_env_mode == 'add_on':
-            if self.agents_timesteps[0] > self.env_setup_idx * 1e6:
-                for i in range(self.args.n_envs):
-                    if self.env_setup_idx == 0:
-                        self.env.env_method('init_base_env', indices=i, env_index=0)
-                    elif self.env_setup_idx < self.n_layouts:
-                        if i < int(0.6 * self.args.n_envs):
-                            self.env.env_method('init_base_env', indices=i, env_index=self.env_setup_idx)
-                        else:
-                            self.env.env_method('init_base_env', indices=i, env_index=i % self.n_layouts)
-                    else:
-                        self.env.env_method('init_base_env', indices=i, env_index=i % self.n_layouts)
-                self.env_setup_idx += 1
         else:
             raise NotImplementedError(f"{self.args.multi_env_mode} has not been implemented. try: splits, random, or uniform")
 

@@ -23,7 +23,7 @@ class GridEncoder(nn.Module):
         super(GridEncoder, self).__init__()
         self.kernels = (5, 3, 3)
         self.strides = (1, 1, 1)
-        self.channels = (16, 32, 64)
+        self.channels = (16, 32, 32)
         self.padding = (1, 1)
 
         layers = []

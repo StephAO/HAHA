@@ -204,12 +204,10 @@ class MultipleAgentsTrainer(OAITrainer):
                 agent_name = f'{name}_lstm_{i + 1}'
                 self.agents.append(SB3LSTMWrapper(sb3_agent, agent_name, args))
         else:
-            lr_sched = self.get_linear_schedule(3e-4, 5e-5, 0.6, 'lr')
-            clip_sched = self.get_linear_schedule(0.3, 0.05, 0.5, 'clip')
             for i in range(num_agents):
-                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=3200,
-                                n_epochs=16, learning_rate=lr_sched, batch_size=2048, ent_coef=0.01, vf_coef=0.4,
-                                max_grad_norm=0.5, gamma=0.99, gae_lambda=0.98, clip_range=clip_sched)#, clip_range_vf=clip_sched)
+                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=1600,
+                                n_epochs=8, learning_rate=3e-4, batch_size=2048, ent_coef=0.1, vf_coef=0.5,
+                                gamma=0.99, gae_lambda=0.98)#, clip_range_vf=clip_sched)
                 agent_name = f'{name}_{i + 1}'
                 self.agents.append(SB3Wrapper(sb3_agent, agent_name, args))
 
@@ -259,7 +257,7 @@ class MultipleAgentsTrainer(OAITrainer):
             # Evaluate
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.agents[learner_idx].agent.ep_info_buffer])
             #best_training_rew *= 0.995
-            if epoch % 10 == 0 or (mean_training_rew > best_training_rew and np.sum(self.agents_timesteps) > 1e6):
+            if epoch % 5 == 0 or (mean_training_rew > best_training_rew and np.sum(self.agents_timesteps) > 5e6):
                 if mean_training_rew >= best_training_rew:
                     best_training_rew = mean_training_rew
                 mean_reward = self.evaluate(self.agents[learner_idx], timestep=np.sum(self.agents_timesteps))
