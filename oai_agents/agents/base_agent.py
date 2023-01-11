@@ -442,6 +442,19 @@ class OAITrainer(ABC):
         elif self.args.multi_env_mode == 'uniform':
             for i in range(self.args.n_envs):
                 self.env.env_method('init_base_env', indices=i, env_index= i % self.n_layouts)
+        elif self.args.multi_env_mode == 'add_on':
+            if self.agents_timesteps[0] > self.env_setup_idx * 1e6:
+                for i in range(self.args.n_envs):
+                    if self.env_setup_idx == 0:
+                        self.env.env_method('init_base_env', indices=i, env_index=0)
+                    elif self.env_setup_idx < self.n_layouts:
+                        if i < int(0.6 * self.args.n_envs):
+                            self.env.env_method('init_base_env', indices=i, env_index=self.env_setup_idx)
+                        else:
+                            self.env.env_method('init_base_env', indices=i, env_index=i % self.n_layouts)
+                    else:
+                        self.env.env_method('init_base_env', indices=i, env_index=i % self.n_layouts)
+                self.env_setup_idx += 1
         else:
             raise NotImplementedError(f"{self.args.multi_env_mode} has not been implemented. try: splits, random, or uniform")
 
