@@ -189,7 +189,7 @@ class MultipleAgentsTrainer(OAITrainer):
         policy_kwargs = dict(
             #features_extractor_class=OAISinglePlayerFeatureExtractor,
             #features_extractor_kwargs=dict(hidden_dim=hidden_dim),
-            net_arch=[hidden_dim, hidden_dim, dict(pi=[hidden_dim], vf=[hidden_dim])]
+            net_arch=[hidden_dim, dict(pi=[hidden_dim], vf=[hidden_dim])] # hidden_dim, hidden_dim, 
         )
 
         self.agents = []
@@ -207,9 +207,9 @@ class MultipleAgentsTrainer(OAITrainer):
             lr_sched = self.get_linear_schedule(3e-4, 5e-5, 0.6, 'lr')
             clip_sched = self.get_linear_schedule(0.3, 0.05, 0.5, 'clip')
             for i in range(num_agents):
-                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=1600,
-                                n_epochs=8, learning_rate=lr_sched, batch_size=512, ent_coef=0.01, vf_coef=0.1,
-                                max_grad_norm=0.3, gamma=0.995, gae_lambda=0.98, clip_range=clip_sched)#, clip_range_vf=clip_sched)
+                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=3200,
+                                n_epochs=16, learning_rate=lr_sched, batch_size=2048, ent_coef=0.01, vf_coef=0.4,
+                                max_grad_norm=0.5, gamma=0.99, gae_lambda=0.98, clip_range=clip_sched)#, clip_range_vf=clip_sched)
                 agent_name = f'{name}_{i + 1}'
                 self.agents.append(SB3Wrapper(sb3_agent, agent_name, args))
 
