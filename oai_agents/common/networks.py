@@ -21,9 +21,9 @@ def weights_init_(m):
 class GridEncoder(nn.Module):
     def __init__(self, grid_shape, act=nn.ReLU):
         super(GridEncoder, self).__init__()
-        self.kernels = (5, 3, 3)
+        self.kernels = (3, 3, 3)
         self.strides = (1, 1, 1)
-        self.channels = (16, 32, 32)
+        self.channels = (8, 16, 32)
         self.padding = (1, 1)
 
         layers = []

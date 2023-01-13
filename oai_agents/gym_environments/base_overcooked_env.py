@@ -22,6 +22,16 @@ from stable_baselines3.common.vec_env.stacked_observations import StackedObserva
 USEABLE_COUNTERS = {'counter_circuit_o_1order': 8, 'forced_coordination': 5, 'asymmetric_advantages': 2, 'cramped_room': 5, 'coordination_ring': 5} # FOR TRAINING
 # USEABLE_COUNTERS = {'counter_circuit_o_1order': 4, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 5, 'coordination_ring': 5}  # FOR EVALUATION
 
+
+# Calculated by dividing the average overall reward by the average reward on each layout in the 2019 human trials
+scaling_factors = {
+    'asymmetric_advantages': 0.612,
+    'coordination_ring': 1.116,
+    'cramped_room': 0.946,
+    'forced_coordination': 1.374,
+    'counter_circuit': 1.461
+}
+
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
 
@@ -194,6 +204,11 @@ class OvercookedGymEnv(Env):
             sparse_r = sum(info['sparse_r_by_agent'])
             shaped_r = info['shaped_r_by_agent'][self.p_idx] if self.p_idx else sum(info['shaped_r_by_agent'])
             reward = sparse_r * ratio + shaped_r * (1 - ratio)
+
+        # Scale rewards
+        if not self.is_eval_env:
+            reward *= scaling_factors[self.layout_name]
+
         self.step_count += 1
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
