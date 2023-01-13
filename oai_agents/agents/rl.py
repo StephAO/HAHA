@@ -11,8 +11,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
-EPOCH_TIMESTEPS = 10000
-VEC_ENV_CLS = DummyVecEnv #SubprocVecEnv
+EPOCH_TIMESTEPS = 100000
+VEC_ENV_CLS = DummyVecEnv #
 
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
@@ -189,7 +189,7 @@ class MultipleAgentsTrainer(OAITrainer):
         policy_kwargs = dict(
             #features_extractor_class=OAISinglePlayerFeatureExtractor,
             #features_extractor_kwargs=dict(hidden_dim=hidden_dim),
-            net_arch=[hidden_dim, dict(pi=[hidden_dim], vf=[hidden_dim])] # hidden_dim, hidden_dim, 
+            net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])] # hidden_dim, hidden_dim, 
         )
 
         self.agents = []
@@ -205,8 +205,8 @@ class MultipleAgentsTrainer(OAITrainer):
                 self.agents.append(SB3LSTMWrapper(sb3_agent, agent_name, args))
         else:
             for i in range(num_agents):
-                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=1600,
-                                n_epochs=8, learning_rate=3e-4, batch_size=2048, ent_coef=0.1, vf_coef=0.5,
+                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=80000,
+                                n_epochs=10, learning_rate=0.0003, batch_size=200, ent_coef=0.01, vf_coef=0.3,
                                 gamma=0.99, gae_lambda=0.98)#, clip_range_vf=clip_sched)
                 agent_name = f'{name}_{i + 1}'
                 self.agents.append(SB3Wrapper(sb3_agent, agent_name, args))
