@@ -28,8 +28,8 @@ scaling_factors = {
     'asymmetric_advantages': 0.612,
     'coordination_ring': 1.116,
     'cramped_room': 0.946,
-    'forced_coordination': 1.374,
-    'counter_circuit': 1.461
+    'forced_coordination': 1.6,
+    'counter_circuit_o_1order': 1.461
 }
 
 class OvercookedGymEnv(Env):
@@ -200,13 +200,13 @@ class OvercookedGymEnv(Env):
         next_state, reward, done, info = self.env.step(joint_action)
         self.state = self.env.state
         if self.shape_rewards and not self.is_eval_env:
-            ratio = min(self.step_count * self.args.n_envs / 2.5e6, 1)
+            ratio = min(self.step_count * self.args.n_envs / 5e6, 1)
             sparse_r = sum(info['sparse_r_by_agent'])
             shaped_r = info['shaped_r_by_agent'][self.p_idx] if self.p_idx else sum(info['shaped_r_by_agent'])
             reward = sparse_r * ratio + shaped_r * (1 - ratio)
 
         # Scale rewards
-        if not self.is_eval_env:
+        if not self.is_eval_env and reward > 0:
             reward *= scaling_factors[self.layout_name]
 
         self.step_count += 1

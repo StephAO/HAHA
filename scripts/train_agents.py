@@ -125,9 +125,9 @@ def get_fcp_population(args, training_steps=2e7):
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
         agents = []
-        use_fs = False
-        for h_dim in [128]: # [8,16], [32, 64], [128, 256], [512, 1024]
-            seed = h_dim # 64, 1024, 16384
+        use_fs = False 
+        for h_dim in [64]: # [8,16], [32, 64], [128, 256], [512, 1024]
+            seed = 1997 # 64, 1024, 16384
             ck_rate = training_steps // 20
             name = f'fs_{h_dim}' if use_fs else f'no_fs_{h_dim}'
             print(f'Starting training for: {name}')
@@ -136,7 +136,7 @@ def get_fcp_population(args, training_steps=2e7):
             mat.train_agents(total_timesteps=training_steps)
             mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp'), tag=name)
             agents.extend(mat.get_fcp_agents())
-        pop = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
+        pop = MultipleAgentsTrainer(args, name='fcp_pop_1s1e_s1997', num_agents=0)
         pop.set_agents(agents)
         pop.save_agents()
         fcp_pop = pop.get_agents()
@@ -278,7 +278,7 @@ if __name__ == '__main__':
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
     #get_fcp_agent(args, training_steps=1e7)
-    teammates = get_fcp_population(args, 2e7)
+    teammates = get_fcp_population(args, 2.5e7)
     # get_hrl_worker(args)
     # get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)

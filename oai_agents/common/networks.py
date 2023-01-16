@@ -21,16 +21,16 @@ def weights_init_(m):
 class GridEncoder(nn.Module):
     def __init__(self, grid_shape, act=nn.ReLU):
         super(GridEncoder, self).__init__()
-        self.kernels = (3, 3, 3)
-        self.strides = (1, 1, 1)
-        self.channels = (8, 16, 32)
-        self.padding = (1, 1)
+        self.kernels = (5, 3)
+        self.strides = (1, 1)
+        self.channels = (8, 16)
+        self.padding = (2, 1)
 
         layers = []
         current_channels = grid_shape[0]
         ln_shape = grid_shape[1:]
-        for i, (k, s, c) in enumerate(zip(self.kernels, self.strides, self.channels)):
-            layers.append(spectral_norm(nn.Conv2d(current_channels, c, k, stride=s, padding=1)))#self.padding))
+        for i, (k, s, p, c) in enumerate(zip(self.kernels, self.strides, self.padding, self.channels)):
+            layers.append((nn.Conv2d(current_channels, c, k, stride=s, padding=p)))#self.padding))
             # layers.append(nn.GroupNorm(1, depth))
             layers.append(act())
             current_channels = c
@@ -47,13 +47,13 @@ class MLP(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim=256, num_layers=2, act=nn.ReLU):
         super(MLP, self).__init__()
         if num_layers > 1:
-            layers = [spectral_norm(nn.Linear(input_dim, hidden_dim)), act()]
+            layers = [nn.Linear(input_dim, hidden_dim), act()]
         else:
-            layers = [spectral_norm(nn.Linear(input_dim, output_dim)), act()]
+            layers = [nn.Linear(input_dim, output_dim), act()]
         for _ in range(num_layers - 2):
-            layers += [spectral_norm(nn.Linear(hidden_dim, hidden_dim)), act()]
+            layers += [nn.Linear(hidden_dim, hidden_dim), act()]
         if num_layers > 1:
-            layers += [spectral_norm(nn.Linear(hidden_dim, output_dim)), act()]
+            layers += [nn.Linear(hidden_dim, output_dim), act()]
         self.mlp = nn.Sequential(*layers)
 
     def forward(self, obs):

@@ -35,8 +35,8 @@ class SingleAgentTrainer(OAITrainer):
         if env is None:
             env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts,
                           'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
-            self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs,
-                                    vec_env_cls=VEC_ENV_CLS, vec_env_kwargs={'seed': seed}, env_kwargs=env_kwargs)
+            self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, seed=seed,
+                                    vec_env_cls=VEC_ENV_CLS, env_kwargs=env_kwargs)
 
             eval_envs_kwargs = {'is_eval_env': True, 'ret_completed_subtasks': use_subtask_counts,
                                 'stack_frames': use_frame_stack, 'horizon': 400, 'args': args}
@@ -178,8 +178,8 @@ class MultipleAgentsTrainer(OAITrainer):
 
         env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts,
                       'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
-        self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs,
-                                vec_env_cls=VEC_ENV_CLS, vec_env_kwargs={'seed': seed}, env_kwargs=env_kwargs)
+        self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, seed=seed,
+                                vec_env_cls=VEC_ENV_CLS, env_kwargs=env_kwargs)
         self.set_new_envs()
 
         eval_envs_kwargs = {'ret_completed_subtasks': use_subtask_counts, 'stack_frames': use_frame_stack,
@@ -189,7 +189,7 @@ class MultipleAgentsTrainer(OAITrainer):
         policy_kwargs = dict(
             #features_extractor_class=OAISinglePlayerFeatureExtractor,
             #features_extractor_kwargs=dict(hidden_dim=hidden_dim),
-            net_arch=[dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])] # hidden_dim, hidden_dim, 
+            net_arch=[hidden_dim, dict(pi=[hidden_dim], vf=[hidden_dim])] # hidden_dim, hidden_dim, 
         )
 
         self.agents = []
@@ -205,8 +205,8 @@ class MultipleAgentsTrainer(OAITrainer):
                 self.agents.append(SB3LSTMWrapper(sb3_agent, agent_name, args))
         else:
             for i in range(num_agents):
-                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=40000,
-                                n_epochs=10, learning_rate=0.0004, batch_size=200, ent_coef=0.01, vf_coef=0.3,
+                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=400,
+                                n_epochs=4, learning_rate=0.0001, batch_size=400, ent_coef=0.1, vf_coef=0.3,
                                 gamma=0.99, gae_lambda=0.98)#, clip_range_vf=clip_sched)
                 agent_name = f'{name}_{i + 1}'
                 self.agents.append(SB3Wrapper(sb3_agent, agent_name, args))
