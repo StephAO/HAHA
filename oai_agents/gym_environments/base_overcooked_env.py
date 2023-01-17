@@ -28,7 +28,7 @@ scaling_factors = {
     'asymmetric_advantages': 0.612,
     'coordination_ring': 1.116,
     'cramped_room': 0.946,
-    'forced_coordination': 1.6,
+    'forced_coordination': 1.371,
     'counter_circuit_o_1order': 1.461
 }
 

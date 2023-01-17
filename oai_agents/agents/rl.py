@@ -189,7 +189,7 @@ class MultipleAgentsTrainer(OAITrainer):
         policy_kwargs = dict(
             #features_extractor_class=OAISinglePlayerFeatureExtractor,
             #features_extractor_kwargs=dict(hidden_dim=hidden_dim),
-            net_arch=[hidden_dim, dict(pi=[hidden_dim], vf=[hidden_dim])] # hidden_dim, hidden_dim, 
+            net_arch=[hidden_dim, dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])] # hidden_dim, hidden_dim, 
         )
 
         self.agents = []
@@ -205,8 +205,8 @@ class MultipleAgentsTrainer(OAITrainer):
                 self.agents.append(SB3LSTMWrapper(sb3_agent, agent_name, args))
         else:
             for i in range(num_agents):
-                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=400,
-                                n_epochs=4, learning_rate=0.0001, batch_size=400, ent_coef=0.1, vf_coef=0.3,
+                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=1200,
+                                n_epochs=10, learning_rate=0.0003, batch_size=200, ent_coef=0.01, vf_coef=0.3,
                                 gamma=0.99, gae_lambda=0.98)#, clip_range_vf=clip_sched)
                 agent_name = f'{name}_{i + 1}'
                 self.agents.append(SB3Wrapper(sb3_agent, agent_name, args))
@@ -257,7 +257,7 @@ class MultipleAgentsTrainer(OAITrainer):
             # Evaluate
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.agents[learner_idx].agent.ep_info_buffer])
             #best_training_rew *= 0.995
-            if epoch % 5 == 0 or (mean_training_rew > best_training_rew and np.sum(self.agents_timesteps) > 5e6):
+            if (epoch + 1) % 5 == 0 or (mean_training_rew > best_training_rew and np.sum(self.agents_timesteps) > 2e7):
                 if mean_training_rew >= best_training_rew:
                     best_training_rew = mean_training_rew
                 mean_reward = self.evaluate(self.agents[learner_idx], timestep=np.sum(self.agents_timesteps))
