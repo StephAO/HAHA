@@ -126,17 +126,26 @@ def get_fcp_population(args, training_steps=2e7):
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
         agents = []
         use_fs = False
+        use_cnn = False
+        taper_layers = False
+        use_policy_clone= False
+        num_layers = 2
         for h_dim in [128]: # [8,16], [32, 64], [128, 256], [512, 1024]
             seed = 1997 # 64, 1024, 16384
             ck_rate = training_steps // 20
-            name = f'fs_{h_dim}' if use_fs else f'no_fs_{h_dim}'
+            name = f'cnn_{num_layers}l_' if use_cnn else f'{num_layers}l_'
+            name += 'pc_' if use_policy_clone else ''
+            name += 'tpl_' if taper_layers else ''
+            name += f'fs_' if use_fs else ''
+            name += f'hd{h_dim}_'
             print(f'Starting training for: {name}')
             mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, use_frame_stack=use_fs,
-                                        fcp_ck_rate=ck_rate, seed=seed)
+                                        fcp_ck_rate=ck_rate, seed=seed, use_cnn=use_cnn, taper_layers=taper_layers,
+                                        use_policy_clone=use_policy_clone, num_layers=num_layers)
             mat.train_agents(total_timesteps=training_steps)
             mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp'), tag=name)
             agents.extend(mat.get_fcp_agents())
-        pop = MultipleAgentsTrainer(args, name='fcp_pop_3e_128_s1997', num_agents=0)
+        pop = MultipleAgentsTrainer(args, name=f'fcp_pop_{name}', num_agents=0)
         pop.set_agents(agents)
         pop.save_agents()
         fcp_pop = pop.get_agents()

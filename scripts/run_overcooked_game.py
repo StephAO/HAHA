@@ -82,7 +82,7 @@ class App:
         self._running = True
         self._display_surf = None
         self.args = args
-        self.layout_name = 'forced_coordination' # counter_circuit_o_1order,forced_coordination,asymmetric_advantages # args.layout_names[0]
+        self.layout_name = 'counter_circuit_o_1order' # counter_circuit_o_1order,forced_coordination,asymmetric_advantages # args.layout_names[0]
 
         self.use_subtask_env = False
         if self.use_subtask_env:
@@ -90,7 +90,7 @@ class App:
             self.t_idx = (self.p_idx + 1) % 2
             tm = BehaviouralCloningAgent.load('/home/miguel/Documents/projects/overcooked_ai/agent_models/bc/counter_circuit_o_1order/st3_p2', args)
             p_kwargs = {'p1': tm} if self.t_idx == 0 else {'p2': tm}
-            kwargs = {'single_subtask_id': 10, 'shape_rewards': True, 'args': args, 'is_eval_env': False}
+            kwargs = {'single_subtask_id': 10, 'shape_rewards': True, 'args': args, 'is_eval_env': True}
             self.env = OvercookedSubtaskGymEnv(**p_kwargs, **kwargs)
             agents = ['human', tm]
         else:
@@ -107,10 +107,10 @@ class App:
             # self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
             # # To ensure that an agent is on both sides of the counter, remove random starts for forced coord
             # ss_fn = self.mdp.get_fully_random_start_state_fn(self.mlam)
-            self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True)
-            print(self.env.mdp.get_valid_player_positions())
+            self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True, is_eval_env=True)
+            # print(self.env.mdp.get_valid_player_positions())
             # teammate if teammate is not None else agent
-            self.env.set_teammate(teammate or agent)
+            self.env.set_teammate(teammate)
 
         # ss_kwargs = {'p_idx': 0, 'random_pos': True, 'random_dir': True,
         #              'curr_subtask': 0, 'max_random_objs': 5}
@@ -126,7 +126,7 @@ class App:
             self.mode = 'collect_data'
         self.agent = agent
         self.slowmo_rate = slowmo_rate
-        self.fps = 30 // slowmo_rate
+        self.fps = 1 #30 // slowmo_rate
         self.score = 0
         self.curr_tick = 0
         self.joint_action = [None, None]
@@ -185,6 +185,8 @@ class App:
         else:
             obs, reward, done, info = self.env.step(joint_action)
         new_state = self.env.state
+
+        pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
         # prev_state, joint_action, info = super(OvercookedPsiturk, self).apply_actions()
 
         # Log data to send to psiturk client
@@ -379,6 +381,33 @@ class HumanManagerHRL(OAIAgent):
         obs.pop('teammate_completed_subtasks')
         return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=True)
 
+from oai_agents.agents.agent_utils import DummyPolicy
+from gym import spaces
+class HumanPlayer(OAIAgent):
+    def __init__(self, name, args):
+        super(HumanPlayer, self).__init__(name, args)
+        self.policy = DummyPolicy(spaces.Dict({'visual_obs': spaces.Box(0,1,(1,))}))
+
+    def get_distribution(self, obs, sample=True):
+        key = input(f'{self.name} enter action:')
+        if key == 'w':
+            action = Direction.NORTH
+        elif key == 'd':
+            action = Direction.EAST
+        elif key == 's':
+            action = Direction.SOUTH
+        elif key == 'a':
+            action = Direction.WEST
+        elif key == ' ':
+            action = Action.INTERACT
+        else:
+            action = Action.STAY
+        # self.joint_action[pidx] = Action.ACTION_TO_INDEX[action]
+        return np.array([Action.ACTION_TO_INDEX[action]])
+
+    def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
+        return self.get_distribution(obs)
+
 
 
 if __name__ == "__main__":
@@ -422,14 +451,15 @@ if __name__ == "__main__":
     # mat.load_agents(path=Path('./agent_models/fcp_pop/ego_pop'), tag='test')
     # teammates = mat.get_agents()
     #
-    worker = MultiAgentSubtaskWorker.load(
-            Path('./agent_models/multi_agent_subtask_worker/final/'), args)
+    # worker = MultiAgentSubtaskWorker.load(
+    #         Path('./agent_models/multi_agent_subtask_worker/final/'), args)
+    # #
+    # hm_hrl = HumanManagerHRL(worker, args)
     #
-    hm_hrl = HumanManagerHRL(worker, args)
-    #
-    # tm = teammates[1]
+    tm = HumanPlayer('tm', args)
+    agent = HumanPlayer('agent', args)
 
-    dc = App(args, agent=hm_hrl, teammate=DummyAgent('random'), slowmo_rate=8, )
+    dc = App(args, agent=agent, teammate=tm,)
     dc.on_execute()
 
 

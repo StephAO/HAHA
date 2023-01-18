@@ -157,7 +157,8 @@ class MultipleAgentsTrainer(OAITrainer):
     ''' Train two independent RL agents to play with each other '''
 
     def __init__(self, args, name=None, eval_tms=None,num_agents=1, use_lstm=False, use_frame_stack=False,
-                 use_subtask_counts=False, hidden_dim=128, use_policy_clone=False, fcp_ck_rate=None, seed=None):
+                 use_subtask_counts=False, hidden_dim=128, num_layers=2, taper_layers=False, use_cnn=False,
+                 use_policy_clone=False, fcp_ck_rate=None, seed=None):
         '''
         Train multiple agents with each other.
         :param num_agents: Number of agents to train. num_agents=1 mean self-play, num_agents > 1 is population play
@@ -186,11 +187,16 @@ class MultipleAgentsTrainer(OAITrainer):
                             'is_eval_env': True, 'horizon': 400, 'args': args}
         self.eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(self.n_layouts)]
 
+        layers = [hidden_dim // (2**i) for i in range(num_layers)] if taper_layers else [hidden_dim] * num_layers
+
         policy_kwargs = dict(
-            #features_extractor_class=OAISinglePlayerFeatureExtractor,
-            #features_extractor_kwargs=dict(hidden_dim=hidden_dim),
-            net_arch=[hidden_dim, dict(pi=[hidden_dim, hidden_dim], vf=[hidden_dim, hidden_dim])] # hidden_dim, hidden_dim, 
+            net_arch=[dict(pi=layers, vf=layers)] # hidden_dim, hidden_dim,
         )
+        if use_cnn:
+            policy_kwargs.update(
+                features_extractor_class=OAISinglePlayerFeatureExtractor,
+                features_extractor_kwargs=dict(hidden_dim=hidden_dim)
+            )
 
         self.agents = []
         self.agents_in_training = np.ones(num_agents)
@@ -205,8 +211,8 @@ class MultipleAgentsTrainer(OAITrainer):
                 self.agents.append(SB3LSTMWrapper(sb3_agent, agent_name, args))
         else:
             for i in range(num_agents):
-                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=1200,
-                                n_epochs=10, learning_rate=0.0003, batch_size=200, ent_coef=0.01, vf_coef=0.3,
+                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=25000,
+                                n_epochs=20, learning_rate=0.0003, batch_size=400, ent_coef=0.01, vf_coef=0.3,
                                 gamma=0.99, gae_lambda=0.98)#, clip_range_vf=clip_sched)
                 agent_name = f'{name}_{i + 1}'
                 self.agents.append(SB3Wrapper(sb3_agent, agent_name, args))
