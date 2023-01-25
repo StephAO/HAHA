@@ -121,7 +121,7 @@ class OvercookedGymEnv(Env):
             self.layout_name = self.env.mdp.layout_name
 
         self.terrain = self.mdp.terrain_mtx
-        self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
+        self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]
         obs = self.reset()
 
     def get_layout_name(self):
@@ -145,7 +145,7 @@ class OvercookedGymEnv(Env):
         pygame.display.flip()
 
     def action_masks(self, p_idx):
-        return get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
 
     def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False):
         enc_fn = enc_fn or self.encoding_fn
@@ -168,10 +168,9 @@ class OvercookedGymEnv(Env):
                 # If a subtask has been completed, update counts
                 if comp_st is not None:
                     self.completed_tasks[p_idx][comp_st] += 1
-                    if p_idx == self.p_idx:
-                        self.prev_st = comp_st
+                    self.prev_subtask[p_idx] = comp_st
                 else:
-                    self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
+                    self.prev_subtask[p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
             obs['player_completed_subtasks'] = np.eye(Subtasks.NUM_SUBTASKS)[comp_st] if comp_st is not None else np.zeros(Subtasks.NUM_SUBTASKS) #self.completed_tasks[p_idx]
             obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
             obs['subtask_mask'] = self.action_masks(p_idx)

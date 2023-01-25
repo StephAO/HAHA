@@ -54,7 +54,7 @@ class App:
         self._running = True
         self._display_surf = None
         self.args = args
-        self.layout_name = 'counter_circuit_o_1order' # counter_circuit_o_1order,forced_coordination,asymmetric_advantages # args.layout_names[0]
+        self.layout_name = 'asymmetric_advantages' # counter_circuit_o_1order,forced_coordination,asymmetric_advantages # args.layout_names[0]
 
         self.use_subtask_env = False
         if self.use_subtask_env:
@@ -64,7 +64,7 @@ class App:
             self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True, is_eval_env=True)
         self.env.set_teammate(teammate)
         self.env.reset(p_idx=1)
-        # self.env.teammate.set_idx(self.env.t_idx, self.layout_name, True, True, True)
+        self.env.teammate.set_idx(self.env.t_idx, self.layout_name, True, True, True)
 
         self.grid_shape = self.env.grid_shape
         self.agent = agent
@@ -209,12 +209,6 @@ class App:
                 df['layout'] = df['layout'].apply(joiner)
                 df.to_pickle(data_path / f)
 
-
-
-def setup_game(env_name, player_idx):
-    agent = None
-
-
 class HumanManagerHRL(OAIAgent):
     def __init__(self, worker, args):
         super(HumanManagerHRL, self).__init__('hierarchical_rl', args)
@@ -301,8 +295,6 @@ if __name__ == "__main__":
     # parser.add_argument('--traj-file', type=str, default=None, help='trajectory file to run') # '2019_hh_trials_all.pickle'
     # parser.add_argument('--agent-file', type=str, default=None, help='trajectory file to run')
 
-
-
     args = get_arguments(additional_args)
 
     # args.layout_names = ['tf_test_4', 'tf_test_4']
@@ -318,9 +310,7 @@ if __name__ == "__main__":
     # #
     # hm_hrl = HumanManagerHRL(worker, args)
     #
-
-
-    tm = load_agent(Path('agent_models/SP'), args)
+    tm = load_agent(Path('agent_models/HAHA'), args)
     agent = 'human' #HumanPlayer('agent', args)
 
     dc = App(args, agent=agent, teammate=tm)
