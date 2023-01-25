@@ -16,8 +16,8 @@ class Subtasks:
     HR_SUBTASKS_TO_IDS = {s: i for i, s in enumerate(HUMAN_READABLE_ST)}
     IDS_TO_HR_SUBTASKS = {v: k for k, v in HR_SUBTASKS_TO_IDS.items()}
     BASE_STS = ['get_onion_from_dispenser', 'put_onion_in_pot', 'get_plate_from_dish_rack', 'get_soup', 'serve_soup']
-    SUPP_STS = ['put_onion_closer', 'put_plate_closer', 'put_soup_closer'] # 3, 6, 9
-    COMP_STS = ['get_onion_from_counter', 'get_plate_from_counter', 'get_soup_from_counter'] # 1, 5, 8
+    SUPP_STS = ['put_onion_closer']#, 'get_soup_from_counter']#, 'put_plate_closer', 'put_soup_closer'] # 3, 6, 9
+    COMP_STS = ['get_onion_from_counter']#'get_onion_from_counter', 'get_plate_from_counter']#, 'get_soup_from_counter'] # 1, 5, 8
 
 
 def facing(layout, player):

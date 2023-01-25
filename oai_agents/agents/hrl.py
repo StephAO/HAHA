@@ -244,25 +244,27 @@ class HierarchicalRL(OAIAgent):
         if self.layout_name == None:
             raise ValueError("Set current layout using set_curr_layout before attempting manual adjustment")
         elif self.layout_name == 'counter_circuit_o_1order':
-            if self.p_idx == 0:
+            # if self.p_idx == 0:
                 # Up weight supporting tasks
-                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
-                subtask_weighting = [100 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+                # print(probs)
+            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
+            subtask_weighting = [25 for _ in subtasks_to_weigh]
+            new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
                 # Down weight complementary tasks
-                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
-                subtask_weighting = [0.01 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
-            else:
-                # Down weight supporting tasks
-                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
-                subtask_weighting = [0.01 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-
-                # Up weight complementary tasks
-                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
-                subtask_weighting = [100 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
+            #     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
+            #     subtask_weighting = [0.04 for _ in subtasks_to_weigh]
+            #     new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
+            #     print(new_probs)
+            # else:
+            #     # Down weight supporting tasks
+            #     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
+            #     subtask_weighting = [0.01 for _ in subtasks_to_weigh]
+            #     new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+            #
+            #     # Up weight complementary tasks
+            #     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
+            #     subtask_weighting = [100 for _ in subtasks_to_weigh]
+            #     new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
         elif self.layout_name == 'forced_coordination':
             # NOTE: THIS ASSUMES BEING P2
             # Since tasks are very limited, we use a different change insated of support and coordinated.
@@ -299,31 +301,38 @@ class HierarchicalRL(OAIAgent):
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
             self.subtask_step += 1
         elif self.layout_name == 'asymmetric_advantages':
-            # NOTE: THIS ASSUMES BEING P2
-            # Up weight all plate related tasks
-            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'],
-                                 Subtasks.SUBTASKS_TO_IDS['get_soup'],
-                                 Subtasks.SUBTASKS_TO_IDS['serve_soup']]
-            # if self.tune_subtasks == 'coordinated':
-            subtask_weighting = [100 for _ in subtasks_to_weigh]
-            new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-            # elif self.tune_subtasks == 'independent':
-            #     subtask_weighting = [1 for _ in subtasks_to_weigh]
-            # else:
-            #     raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
+            if self.p_idx == 0:
+                # NOTE: THIS ASSUMES BEING P2
+                # Up weight all plate related tasks
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'],
+                                     Subtasks.SUBTASKS_TO_IDS['get_soup'],
+                                     Subtasks.SUBTASKS_TO_IDS['serve_soup']]
+                subtask_weighting = [0.04 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
 
-            # Down weight any task related to onions (and put down plate to avoid side issues)
-            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'],
-                                 Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot'],
-                                 Subtasks.SUBTASKS_TO_IDS['put_onion_closer'],
-                                 Subtasks.SUBTASKS_TO_IDS['put_plate_closer']]
-            # if self.tune_subtasks == 'coordinated':
-            subtask_weighting = [0.001 for _ in subtasks_to_weigh]
-            # elif self.tune_subtasks == 'independent':
-            #     subtask_weighting = [1 for _ in subtasks_to_weigh]
-            # else:
-            #     raise NotImplementedError(f'Tune subtask mode {self.tune_subtasks} is not supported')
-            new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
+                # Down weight any task related to onions (and put down plate to avoid side issues)
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'],
+                                     Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot'],
+                                     Subtasks.SUBTASKS_TO_IDS['put_onion_closer'],
+                                     Subtasks.SUBTASKS_TO_IDS['put_plate_closer']]
+                subtask_weighting = [25 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
+            if self.p_idx == 1:
+                # NOTE: THIS ASSUMES BEING P2
+                # Up weight all plate related tasks
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'],
+                                     Subtasks.SUBTASKS_TO_IDS['get_soup'],
+                                     Subtasks.SUBTASKS_TO_IDS['serve_soup']]
+                subtask_weighting = [25 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+
+                # Down weight any task related to onions (and put down plate to avoid side issues)
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'],
+                                     Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot'],
+                                     Subtasks.SUBTASKS_TO_IDS['put_onion_closer'],
+                                     Subtasks.SUBTASKS_TO_IDS['put_plate_closer']]
+                subtask_weighting = [0.04 for _ in subtasks_to_weigh]
+                new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
         else:
             new_probs = probs
         return np.argmax(new_probs, axis=-1) if deterministic else Categorical(probs=th.tensor(new_probs)).sample()
@@ -332,7 +341,7 @@ class HierarchicalRL(OAIAgent):
         # TODO consider forcing new subtask if none has been completed in x timesteps
         # print(obs['player_completed_subtasks'],  self.prev_player_comp_st, (obs['player_completed_subtasks'] != self.prev_player_comp_st).any(), flush=True)
         if np.sum(obs['player_completed_subtasks']) == 1 or \
-                self.num_steps_since_new_subtask > 25 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
+                self.num_steps_since_new_subtask > 15 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
             # Completed previous subtask, set new subtask
             if self.tune_subtasks:
                 self.curr_subtask_id = self.get_manually_tuned_action(obs, deterministic=deterministic)
@@ -340,9 +349,10 @@ class HierarchicalRL(OAIAgent):
                 self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
                                                             deterministic=deterministic)[0]
             self.num_steps_since_new_subtask = 0
+            print("NEW SUBTASK", Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)])
         obs['curr_subtask'] = self.curr_subtask_id
         self.num_steps_since_new_subtask += 1
-        return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=False)
+        return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
 
     def get_agent_output(self):
         return Subtasks.IDS_TO_HR_SUBTASKS[int(self.curr_subtask_id)] if self.output_message else ' '

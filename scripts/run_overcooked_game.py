@@ -14,12 +14,12 @@ import re
 from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
 from oai_agents.agents.rl import MultipleAgentsTrainer
-from oai_agents.agents.hrl import MultiAgentSubtaskWorker
+from oai_agents.agents.hrl import MultiAgentSubtaskWorker, HierarchicalRL
 # from oai_agents.agents import Manager
 from oai_agents.common.arguments import get_arguments
 from oai_agents.common.subtasks import Subtasks, get_doable_subtasks
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
-from oai_agents.agents.agent_utils import DummyAgent
+from oai_agents.agents.agent_utils import load_agent, DummyAgent
 # from oai_agents.gym_environments import OvercookedSubtaskGymEnv
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
 from overcooked_ai_py.mdp.overcooked_mdp import Direction, Action, OvercookedState, OvercookedGridworld
@@ -47,38 +47,10 @@ one_counter_params = {
 }
 
 
-def str_to_actions(joint_action):
-    """
-    Convert df cell format of a joint action to a joint action as a tuple of indices.
-    Used to convert pickle files which are stored as strings into np.arrays
-    """
-    try:
-        joint_action = json.loads(joint_action)
-    except json.decoder.JSONDecodeError:
-        # Hacky fix taken from https://github.com/HumanCompatibleAI/human_aware_rl/blob/master/human_aware_rl/human/data_processing_utils.py#L29
-        joint_action = eval(joint_action)
-    for i in range(2):
-        if type(joint_action[i]) is list:
-            joint_action[i] = tuple(joint_action[i])
-        if type(joint_action[i]) is str:
-            joint_action[i] = joint_action[i].lower()
-        assert joint_action[i] in Action.ALL_ACTIONS
-    return joint_action
-
-
-def str_to_state(state):
-    """
-    Convert from a df cell format of a state to an Overcooked State
-    Used to convert pickle files which are stored as strings into overcooked states
-    """
-    if type(state) is str:
-        state = json.loads(state)
-    return OvercookedState.from_dict(state)
-
 class App:
     """Class to run an Overcooked Gridworld game, leaving one of the agents as fixed.
     Useful for debugging. Most of the code from http://pygametutorials.wikidot.com/tutorials-basic."""
-    def __init__(self, args, agent=None, teammate=None, traj_file=None, slowmo_rate=1):
+    def __init__(self, args, agent=None, teammate=None, slowmo_rate=None):
         self._running = True
         self._display_surf = None
         self.args = args
@@ -86,53 +58,25 @@ class App:
 
         self.use_subtask_env = False
         if self.use_subtask_env:
-            self.p_idx = 0
-            self.t_idx = (self.p_idx + 1) % 2
-            tm = BehaviouralCloningAgent.load('/home/miguel/Documents/projects/overcooked_ai/agent_models/bc/counter_circuit_o_1order/st3_p2', args)
-            p_kwargs = {'p1': tm} if self.t_idx == 0 else {'p2': tm}
-            kwargs = {'single_subtask_id': 10, 'shape_rewards': True, 'args': args, 'is_eval_env': True}
+            kwargs = {'single_subtask_id': 10, 'args': args, 'is_eval_env': True}
             self.env = OvercookedSubtaskGymEnv(**p_kwargs, **kwargs)
-            agents = ['human', tm]
         else:
-            # self.mdp = OvercookedGridworld.from_layout_name(self.layout_name)
-            # all_counters = self.mdp.get_counter_locations()
-            # COUNTERS_PARAMS = {
-            #     'start_orientations': False,
-            #     'wait_allowed': False,
-            #     'counter_goals': all_counters,
-            #     'counter_drop': all_counters,
-            #     'counter_pickup': all_counters,
-            #     'same_motion_goals': True
-            # }
-            # self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
-            # # To ensure that an agent is on both sides of the counter, remove random starts for forced coord
-            # ss_fn = self.mdp.get_fully_random_start_state_fn(self.mlam)
             self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True, is_eval_env=True)
-            # print(self.env.mdp.get_valid_player_positions())
-            # teammate if teammate is not None else agent
-            self.env.set_teammate(teammate)
-
-        # ss_kwargs = {'p_idx': 0, 'random_pos': True, 'random_dir': True,
-        #              'curr_subtask': 0, 'max_random_objs': 5}
-        # self.env.env.reset(start_state_kwargs=ss_kwargs)
+        self.env.set_teammate(teammate)
+        self.env.reset(p_idx=1)
+        # self.env.teammate.set_idx(self.env.t_idx, self.layout_name, True, True, True)
 
         self.grid_shape = self.env.grid_shape
-        if traj_file is not None:
-            self.mode = 'replay'
-        elif agent is not None:
-            self.mode = 'play'
-            self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
-        else:
-            self.mode = 'collect_data'
         self.agent = agent
+        self.human_action = None
         self.slowmo_rate = slowmo_rate
-        self.fps = 1 #30 // slowmo_rate
+        self.fps = 30 // slowmo_rate if slowmo_rate is not None else None
         self.score = 0
         self.curr_tick = 0
-        self.joint_action = [None, None]
         self.data_path = args.base_dir / args.data_path
         self.data_path.mkdir(parents=True, exist_ok=True)
-        self.collect_trajectory = not bool(traj_file)
+
+        self.collect_trajectory = False
         if self.collect_trajectory:
             self.trajectory = []
             trial_file = re.compile('^.*\.[0-9]+\.pickle$')
@@ -141,9 +85,6 @@ class App:
                 if isfile(join(self.data_path, file)) and trial_file.match(file):
                     trial_ids.append(int(file.split('.')[-2]))
             self.trial_id = max(trial_ids) + 1 if len(trial_ids) > 0 else 1
-        else:
-            self.trajectory = pd.read_pickle(data_path / traj_file) if traj_file else []
-            self.trajectory = self.trajectory[self.trajectory['layout_name'] == layout_name]
 
     def on_init(self):
         pygame.init()
@@ -153,7 +94,7 @@ class App:
         pygame.display.flip()
         self._running = True
 
-    def on_event(self, event, pidx):
+    def on_event(self, event):
         if event.type == pygame.KEYDOWN:
             pressed_key = event.dict['key']
             action = None
@@ -172,58 +113,40 @@ class App:
                 action = Action.STAY
             else:
                 action = Action.STAY
-            self.joint_action[pidx] = Action.ACTION_TO_INDEX[action]
+            self.human_action = Action.ACTION_TO_INDEX[action]
 
         if event.type == pygame.QUIT:
             self._running = False
 
-    def step_env(self, joint_action):
+    def step_env(self, agent_action):
         prev_state = self.env.state
 
-        if self.use_subtask_env:
-            obs, reward, done, info = self.env.step(joint_action[self.p_idx])
-        else:
-            obs, reward, done, info = self.env.step(joint_action)
-        new_state = self.env.state
+        obs, reward, done, info = self.env.step(agent_action)
 
         pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
-        # prev_state, joint_action, info = super(OvercookedPsiturk, self).apply_actions()
 
         # Log data to send to psiturk client
         curr_reward = sum(info['sparse_r_by_agent'])
         self.score += curr_reward
-        transition = {
-            "state" : json.dumps(prev_state.to_dict()),
-            "joint_action" : joint_action,#json.dumps(joint_action.item()),
-            "reward" : curr_reward,
-            "time_left" : max((1200 - self.curr_tick) / self.fps, 0),
-            "score" : self.score,
-            "time_elapsed" : self.curr_tick / self.fps,
-            "cur_gameloop" : self.curr_tick,
-            "layout" : self.env.env.mdp.terrain_mtx,
-            "layout_name" : self.layout_name,
-            "trial_id" : 100 # TODO this is just for testing self.trial_id,
-            # "player_0_id" : self.agents[0],
-            # "player_1_id" : self.agents[1],
-            # "player_0_is_human" : self.agents[0] in self.human_players,
-            # "player_1_is_human" : self.agents[1] in self.human_players
-        }
+        # transition = {
+        #     "state" : json.dumps(prev_state.to_dict()),
+        #     "joint_action" : joint_action, # TODO get teammate action from env to create joint_action json.dumps(joint_action.item()),
+        #     "reward" : curr_reward,
+        #     "time_left" : max((1200 - self.curr_tick) / self.fps, 0),
+        #     "score" : self.score,
+        #     "time_elapsed" : self.curr_tick / self.fps,
+        #     "cur_gameloop" : self.curr_tick,
+        #     "layout" : self.env.env.mdp.terrain_mtx,
+        #     "layout_name" : self.layout_name,
+        #     "trial_id" : 100 # TODO this is just for testing self.trial_id,
+        # }
         if self.collect_trajectory:
             self.trajectory.append(transition)
         return done
 
-    def on_loop(self):
-        assert(all([action is not None for action in self.joint_action]))
-        done = self.step_env(self.joint_action)
-        self.joint_action = [None, None]
-        self.curr_tick += 1
-
-        if done:
-            self._running = False
-
     def on_render(self, pidx=None):
-        p0_action = Action.ACTION_TO_INDEX[self.joint_action[0]] if pidx == 1 else None
-        surface = StateVisualizer().render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, pidx=pidx, hud_data={"timestep": self.curr_tick}, p0_action=p0_action)
+        # p0_action = Action.ACTION_TO_INDEX[self.joint_action[0]] if pidx == 1 else None # used if solo collection trajectories
+        surface = StateVisualizer().render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, pidx=pidx, hud_data={"timestep": self.curr_tick})#, p0_action=p0_action)
         self.window = pygame.display.set_mode(surface.get_size(), HWSURFACE | DOUBLEBUF | RESIZABLE)
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
@@ -234,92 +157,33 @@ class App:
     def on_cleanup(self):
         pygame.quit()
 
-    def collection_execution(self):
+    def on_execute(self):
         if self.on_init() == False:
             self._running = False
-        while (self._running):
-            self.joint_action = [None, None]
-            for i in range(2):
-                self.on_render() #pidx=i)
-                while self.joint_action[i] is None:
-                    for event in pygame.event.get():
-                        self.on_event(event, i)
-                    pygame.event.pump()
-            self.on_loop()
+        sleep_time = 1000 // (self.fps or 100)
 
-        self.save_trajectory()
-        self.on_cleanup()
-        print(f'Trial finished in {self.curr_tick} steps with total reward {self.score}')
-
-    def replay_execution(self):
-        assert self.trajectory is not None
-        if self.on_init() == False:
-            self._running = False
-        sleep_time = 1000 // self.fps
-        trial_id = self.trajectory.iloc[0]['trial_id']
-        for index, row in self.trajectory.iterrows():
-            if row['trial_id'] == trial_id and not self.env.is_done():
-                self.on_render()
-                # assert str_to_state(row['state']) == self.env.state
-                pygame.time.wait(sleep_time)
-                self.joint_action = str_to_actions(row['joint_action'])
-                self.on_loop()
-            else:
-                self.env.reset()
-                print(f'Trial finished in {self.curr_tick} steps with total reward {self.score}')
-                trial_id = row['trial_id']
-                self.score = 0
-                self.curr_tick = 0
-        self.on_cleanup()
-
-    def play_execution(self):
-        if self.on_init() == False:
-            self._running = False
-        sleep_time = 1000 // self.fps
-        # for i in range(2):
-        #     if isinstance(self.agents[i], OAIAgent):
-        #         self.agents[i].reset(self.env.state)
         on_reset = True
         while (self._running):
-            # self.joint_action = [None, None]
-            # for i in range(2):
-            #     if self.agent == 'human':
-            #
-            #         while self.joint_action[i] is None:
-            #             for event in pygame.event.get():
-            #                 self.on_event(event, i)
-            #             pygame.event.pump()
-            #     else:
-            obs = self.env.get_obs(self.env.p_idx, on_reset=on_reset)
-            on_reset = False
-            # if type(self.agent) == HumanManagerHRL:
-            self.agent_action = self.agent.predict(obs, state=self.env.state)[0]#.squeeze()#.detach().item()
-                    # else:
-                    #     obs.pop('player_completed_subtasks')
-                    #     obs.pop('teammate_completed_subtasks')
-                    #     self.joint_action[i] = self.agents[i].predict(obs)[0].squeeze()
+            if self.agent == 'human':
+                while self.human_action is None and self.fps is None:
+                    for event in pygame.event.get():
+                        self.on_event(event)
+                    pygame.event.pump()
+                action = self.human_action if self.human_action is not None else Action.ACTION_TO_INDEX[Action.STAY]
+            else:
+                obs = self.env.get_obs(self.env.p_idx, on_reset=False)
+                action = self.agent.predict(obs, state=self.env.state, deterministic=True)[0]
+            done = self.step_env(action)
+            self.human_action = None
             pygame.time.wait(sleep_time)
             self.on_render()
-
-            done = self.step_env(self.agent_action)
             self.curr_tick += 1
 
             if done:
                 self._running = False
 
-            # self.on_loop()
-
         self.on_cleanup()
         print(f'Trial finished in {self.curr_tick} steps with total reward {self.score}')
-
-    def on_execute(self):
-        print(self.mode)
-        if self.mode == 'collect_data':
-            self.collection_execution()
-        elif self.mode == 'replay':
-            self.replay_execution()
-        elif self.mode == 'play':
-            self.play_execution()
 
     def save_trajectory(self):
         df = pd.DataFrame(self.trajectory)
@@ -402,12 +266,10 @@ class HumanPlayer(OAIAgent):
             action = Action.INTERACT
         else:
             action = Action.STAY
-        # self.joint_action[pidx] = Action.ACTION_TO_INDEX[action]
         return np.array([Action.ACTION_TO_INDEX[action]])
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         return self.get_distribution(obs)
-
 
 
 if __name__ == "__main__":
@@ -456,10 +318,12 @@ if __name__ == "__main__":
     # #
     # hm_hrl = HumanManagerHRL(worker, args)
     #
-    tm = HumanPlayer('tm', args)
-    agent = HumanPlayer('agent', args)
 
-    dc = App(args, agent=agent, teammate=tm,)
+
+    tm = load_agent(Path('agent_models/SP'), args)
+    agent = 'human' #HumanPlayer('agent', args)
+
+    dc = App(args, agent=agent, teammate=tm)
     dc.on_execute()
 
 
