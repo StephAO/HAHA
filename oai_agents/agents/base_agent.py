@@ -40,7 +40,7 @@ class OAIAgent(nn.Module, ABC):
         self.p_idx = None
         self.mdp = None
         self.horizon = None
-        self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
+        self.prev_subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
         self.use_hrl_obs = False
 
     @abstractmethod
@@ -102,7 +102,7 @@ class OAIAgent(nn.Module, ABC):
                 # If a subtask has been completed, update counts
                 if comp_st[self.p_idx] is not None:
                     self.player_completed_tasks[comp_st[self.p_idx]] += 1
-                    self.prev_st = comp_st[self.p_idx]
+                    self.prev_subtask = comp_st[self.p_idx]
                     # print(f'Agent completed: {comp_st[self.p_idx]}')
                 if comp_st[1 - self.p_idx] is not None:
                     self.player_completed_tasks[comp_st[1 - self.p_idx]] += 1
@@ -116,7 +116,7 @@ class OAIAgent(nn.Module, ABC):
                                                np.zeros(Subtasks.NUM_SUBTASKS) #self.player_completed_tasks
             obs['teammate_completed_subtasks'] = self.tm_completed_tasks
         if 'subtask_mask' in self.policy.observation_space.keys():
-            obs['subtask_mask'] = get_doable_subtasks(state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
+            obs['subtask_mask'] = get_doable_subtasks(state, self.prev_subtask, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
             # print(f'DOABLE SUBTASKS: {[Subtasks.IDS_TO_SUBTASKS[i] for i in obs["subtask_mask"]]}', flush=True)
 
         self.prev_state = deepcopy(state)

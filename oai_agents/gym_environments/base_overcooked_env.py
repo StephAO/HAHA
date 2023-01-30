@@ -19,8 +19,8 @@ from stable_baselines3.common.vec_env.stacked_observations import StackedObserva
 # DEPRECATED NOTE: For counter circuit, trained workers with 8, but trained manager with 4. Only 4 spots are useful add
 # more during subtask worker training for robustness
 # Max number of counters the agents should use
-USEABLE_COUNTERS = {'counter_circuit_o_1order': 8, 'forced_coordination': 5, 'asymmetric_advantages': 2, 'cramped_room': 5, 'coordination_ring': 5} # FOR TRAINING
-# USEABLE_COUNTERS = {'counter_circuit_o_1order': 4, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 5, 'coordination_ring': 5}  # FOR EVALUATION
+# USEABLE_COUNTERS = {'counter_circuit_o_1order': 8, 'forced_coordination': 5, 'asymmetric_advantages': 2, 'cramped_room': 5, 'coordination_ring': 5} # FOR TRAINING
+USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 5, 'coordination_ring': 5}  # FOR EVALUATION
 
 
 # Calculated by dividing the average overall reward by the average reward on each layout in the 2019 human trials
@@ -121,7 +121,7 @@ class OvercookedGymEnv(Env):
             self.layout_name = self.env.mdp.layout_name
 
         self.terrain = self.mdp.terrain_mtx
-        self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
+        self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]
         obs = self.reset()
 
     def get_layout_name(self):
@@ -144,8 +144,8 @@ class OvercookedGymEnv(Env):
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
 
-    def action_masks(self):
-        return get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
+    def action_masks(self, p_idx):
+        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
 
     def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False):
         enc_fn = enc_fn or self.encoding_fn
@@ -168,13 +168,12 @@ class OvercookedGymEnv(Env):
                 # If a subtask has been completed, update counts
                 if comp_st is not None:
                     self.completed_tasks[p_idx][comp_st] += 1
-                    if p_idx == self.p_idx:
-                        self.prev_st = comp_st
+                    self.prev_subtask[p_idx] = comp_st
                 else:
-                    self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
+                    self.prev_subtask[p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
             obs['player_completed_subtasks'] = np.eye(Subtasks.NUM_SUBTASKS)[comp_st] if comp_st is not None else np.zeros(Subtasks.NUM_SUBTASKS) #self.completed_tasks[p_idx]
             obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
-            obs['subtask_mask'] = self.action_masks()
+            obs['subtask_mask'] = self.action_masks(p_idx)
             if p_idx == self.t_idx:
                 obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}
 
@@ -187,7 +186,7 @@ class OvercookedGymEnv(Env):
         joint_action = [None, None]
         joint_action[self.p_idx] = action
         tm_obs = self.get_obs(p_idx=self.t_idx, enc_fn=self.teammate.encoding_fn)
-        joint_action[self.t_idx] = self.teammate.predict(tm_obs)[0]
+        joint_action[self.t_idx] = self.teammate.predict(tm_obs,deterministic=True)[0]
         joint_action = [Action.INDEX_TO_ACTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
@@ -212,8 +211,8 @@ class OvercookedGymEnv(Env):
         self.step_count += 1
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
-    def reset(self):
-        self.p_idx = np.random.randint(2)
+    def reset(self, p_idx=None):
+        self.p_idx = np.random.randint(2) if p_idx is None else p_idx
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it
         self.stack_frames[self.p_idx] = self.main_agent_stack_frames
