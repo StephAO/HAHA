@@ -127,17 +127,18 @@ def get_fcp_population(args, training_steps=2e7):
         agents = []
         use_fs = False
         use_cnn = False
-        taper_layers = False
-        use_policy_clone= False
+        taper_layers = True
+        use_policy_clone = False
         num_layers = 2
-        for h_dim in [128]: # [8,16], [32, 64], [128, 256], [512, 1024]
-            seed = 1997 # 64, 1024, 16384
+        for h_dim in [32]: # [8,16], [32, 64], [128, 256], [512, 1024]
+            seed = 20220501#1997 # 64, 1024, 16384
             ck_rate = training_steps // 20
             name = f'cnn_{num_layers}l_' if use_cnn else f'{num_layers}l_'
             name += 'pc_' if use_policy_clone else ''
             name += 'tpl_' if taper_layers else ''
             name += f'fs_' if use_fs else ''
             name += f'hd{h_dim}_'
+            name += f'seed{seed}'
             print(f'Starting training for: {name}')
             mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, use_frame_stack=use_fs,
                                         fcp_ck_rate=ck_rate, seed=seed, use_cnn=use_cnn, taper_layers=taper_layers,
@@ -287,7 +288,7 @@ if __name__ == '__main__':
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
     #get_fcp_agent(args, training_steps=1e7)
-    teammates = get_fcp_population(args, 4e7)
+    teammates = get_fcp_population(args, 3e7)
     # get_hrl_worker(args)
     # get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)
