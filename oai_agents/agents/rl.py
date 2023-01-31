@@ -17,8 +17,8 @@ VEC_ENV_CLS = DummyVecEnv #
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, teammates, args, eval_tms=None, name=None, env=None, eval_envs=None, use_lstm=False,
-                 use_frame_stack=False, use_subtask_counts=False, use_maskable_ppo=False, inc_sp=False, hidden_dim=128,
-                 use_subtask_eval=False, use_hrl=False, seed=None):
+                 use_frame_stack=False, use_subtask_counts=False, use_maskable_ppo=False, inc_sp=False,
+                 use_policy_clone=False, hidden_dim=128, use_subtask_eval=False, use_hrl=False, seed=None):
         name = name or 'rl_singleagent'
         super(SingleAgentTrainer, self).__init__(name, args, seed=seed)
         self.args = args
@@ -27,6 +27,7 @@ class SingleAgentTrainer(OAITrainer):
         self.use_frame_stack = use_frame_stack
         self.use_subtask_eval = use_subtask_eval
         self.using_hrl = use_hrl
+        self.use_policy_clone = use_policy_clone
         self.hidden_dim = hidden_dim
         self.seed = seed
         self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
@@ -64,17 +65,42 @@ class SingleAgentTrainer(OAITrainer):
         self.learning_agent = self.wrap_agent(sb3_agent, agent_name)
         self.agents = [self.learning_agent]
 
-        if False and inc_sp:
-            self.teammates.append(self.learning_agent)
+        if not self.using_hrl:
+            for i in range(3):
+                if inc_sp:
+                    if self.use_policy_clone:
+                        self.teammates.append(PolicyClone(self.learning_agent, args, name=f'playable_self_{i}'))
+                    else:
+                        self.teammates.append(self.learning_agent)
 
-        if False and not self.use_subtask_eval and not self.using_hrl:
+            if not self.use_subtask_eval:
+                pc = PolicyClone(self.learning_agent, args, name='playable_self')
+                if type(self.eval_teammates) == dict:
+                    for k in self.eval_teammates:
+                        self.eval_teammates[k].append((pc if self.use_policy_clone else self.learning_agent))
+                elif self.eval_teammates is not None:
+                    self.eval_teammates.append((pc if self.use_policy_clone else self.learning_agent))
+                else:
+                    self.eval_teammates = self.teammates
+
+    def update_pc(self, epoch):
+        if not self.use_policy_clone:
+            return
+        for i, tm in enumerate(self.teammates):
+            idx = epoch % 3
+            if tm.name == f'playable_self_{idx}':
+                self.teammates[i] = PolicyClone(self.learning_agent, args, name=f'playable_self_{i}')
+        if not self.use_subtask_eval:
+            pc = PolicyClone(self.learning_agent, args, name='playable_self')
             if type(self.eval_teammates) == dict:
                 for k in self.eval_teammates:
-                    self.eval_teammates[k].append(self.learning_agent)
+                    for i, tm in enumerate(self.eval_teammates[k]):
+                        if tm.name == 'playable_self':
+                            self.eval_teammates[k][i] = pc
             elif self.eval_teammates is not None:
-                self.eval_teammates.append(self.learning_agent)
-            else:
-                self.eval_teammates = self.teammates
+                for i, tm in enumerate(self.eval_teammates):
+                    if tm.name == 'playable_self':
+                        self.eval_teammates[i] = pc
 
     def _get_constructor_parameters(self):
         return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, use_frame_stack=self.use_frame_stack,
@@ -102,6 +128,8 @@ class SingleAgentTrainer(OAITrainer):
             # Set new env distribution if training on multiple envs
             if self.n_layouts > 1 and self.args.multi_env_mode != 'uniform':
                 self.set_new_envs()
+            if epoch > 0:
+                self.update_pc(epoch)
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
             if self.using_hrl:

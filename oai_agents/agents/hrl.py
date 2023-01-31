@@ -1,4 +1,4 @@
-from oai_agents.agents.base_agent import OAIAgent
+from oai_agents.agents.base_agent import OAIAgent, PolicyClone
 from oai_agents.agents.il import BehavioralCloningTrainer
 from oai_agents.agents.rl import MultipleAgentsTrainer, SingleAgentTrainer, SB3Wrapper, SB3LSTMWrapper, VEC_ENV_CLS
 from oai_agents.agents.agent_utils import DummyAgent, is_held_obj, load_agent
@@ -143,6 +143,9 @@ class MultiAgentSubtaskWorker(OAIAgent):
 
     @classmethod
     def create_model_from_pretrained_subtask_workers(cls, args):
+        """
+        Helper function to combine subtask workers that were trained separately (e.g. in parallel)
+        """
         agents = []
         for i in range(11):
             agents.append(SB3Wrapper.load(args.base_dir / 'agent_models' / f'subtask_worker_{i}' / 'best' / 'agents_dir' / 'agent_0', args))
@@ -156,7 +159,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
 class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, worker, teammates, args, eval_tms=None, use_frame_stack=False, use_subtask_counts=False,
-                 inc_sp=False, name=None):
+                 inc_sp=False, use_policy_clone=False, name=None):
         name = name or 'hrl_manager'
         n_layouts = len(args.layout_names)
         env_kwargs = {'worker': worker, 'shape_rewards': False, 'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
@@ -169,23 +172,49 @@ class RLManagerTrainer(SingleAgentTrainer):
         self.worker = worker
         super(RLManagerTrainer, self).__init__(teammates, args, eval_tms=eval_tms, name=name, env=env,
                                                eval_envs=eval_envs, inc_sp=False, use_subtask_counts=use_subtask_counts,
-                                               use_hrl=True, use_maskable_ppo=True)
+                                               use_hrl=True, use_policy_clone=use_policy_clone, use_maskable_ppo=True)
         # COMMENTED CODE BELOW IS TO ADD SELFPLAY
         # However, currently it's just a reference to the agent, so the "self-teammate" could update the main agents subtask
         # To do this correctly, the "self-teammate" would have to be cloned before every epoch
-        # if inc_sp:
-        #     playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
-        #     self.teammates.append(playable_self)
+        playable_self = self.learning_agent
+        if inc_sp:
+            for i in range(3):
+                if self.use_policy_clone:
+                    manager = PolicyClone(self.learning_agent, args)
+                    playable_self = HierarchicalRL(self.worker, manager, args, name=f'playable_self_{i}')
+                self.teammates.append(playable_self)
 
-        # if type(self.eval_teammates) == dict:
-        #     playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
-        #     for k in self.eval_teammates:
-        #         self.eval_teammates[k].append(playable_self)
-        # elif self.eval_teammates is not None:
-        #     playable_self = HierarchicalRL(self.worker, self.learning_agent, args)
-        #     self.eval_teammates.append(playable_self)
-        # else:
-        #     self.eval_teammates = self.teammates
+        if type(self.eval_teammates) == dict:
+            if self.use_policy_clone:
+                manager = PolicyClone(self.learning_agent, args)
+                playable_self = HierarchicalRL(self.worker, manager, args, name=f'playable_self')
+            for k in self.eval_teammates:
+                self.eval_teammates[k].append(playable_self)
+        elif self.eval_teammates is not None:
+            if self.use_policy_clone:
+                manager = PolicyClone(self.learning_agent, args)
+                playable_self = HierarchicalRL(self.worker, manager, args, name=f'playable_self')
+            self.eval_teammates.append(playable_self)
+        else:
+            self.eval_teammates = self.teammates
+
+    def update_pc(self, epoch):
+        if not self.use_policy_clone:
+            return
+        for tm in self.teammates:
+            idx = epoch % 3
+            if tm.name == f'playable_self_{idx}':
+                tm.manager = PolicyClone(self.learning_agent, args)
+        if type(self.eval_teammates) == dict:
+            pc = PolicyClone(self.learning_agent, args, name=f'playable_self')
+            for k in self.eval_teammates:
+                for tm in self.eval_teammates[k]:
+                    if tm.name == 'playable_self':
+                        tm.manager = pc
+        elif self.eval_teammates is not None:
+            for i, tm in enumerate(self.eval_teammates):
+                if tm.name == 'playable_self':
+                    tm.manager = PolicyClone(self.learning_agent, args, name=f'playable_self')
 
 
 class HierarchicalRL(OAIAgent):
@@ -339,7 +368,6 @@ class HierarchicalRL(OAIAgent):
                 self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
                                                             deterministic=deterministic)[0]
             self.num_steps_since_new_subtask = 0
-            print("NEW SUBTASK", Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)], "\n---")
         obs['curr_subtask'] = self.curr_subtask_id
         self.num_steps_since_new_subtask += 1
         return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)

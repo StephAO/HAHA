@@ -80,7 +80,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             if worker_steps % 5 == 0:
                 if not get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[self.curr_subtask]:
                     ready_for_next_subtask = True
-            if worker_steps > 50: # longest task is getting soup if soup needs to cook for the full 20 timsteps. Add some extra lewway
+            if worker_steps > 25: # longest task is getting soup if soup needs to cook for the full 20 timsteps. Add some extra lewway
                 ready_for_next_subtask = True
             # If subtask equals unknown, HRL agent will just STAY. This essentially forces a recheck every timestep
             # to see if any other task is possible

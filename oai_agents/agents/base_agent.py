@@ -182,6 +182,7 @@ class SB3Wrapper(OAIAgent):
     def predict(self, obs, state=None, episode_start=None, deterministic=False):
         # Based on https://github.com/DLR-RM/stable-baselines3/blob/master/stable_baselines3/common/policies.py#L305
         # Updated to include action masking
+        obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
         self.policy.set_training_mode(False)
         obs, vectorized_env = self.policy.obs_to_tensor(obs)
         with th.no_grad():
@@ -267,13 +268,14 @@ class PolicyClone(OAIAgent):
     Policy Clones are copies of other agents policies (and nothing else). They can only play the game.
     They do not support training, saving, or loading, just playing.
     """
-    def __init__(self, source_agent, args, device=None):
+    def __init__(self, source_agent, args, device=None, name=None):
         """
         Given a source agent, create a new agent that plays identically.
         WARNING: This just copies the replica's policy, not all the necessary training code
         """
-        super(PolicyClone, self).__init__('policy_clone', args)
-        device = device or th.device('cpu')
+        name = name or 'policy_clone'
+        super(PolicyClone, self).__init__(name, args)
+        device = device or args.device
         # Create policy object
         policy_cls = type(source_agent.policy)
         const_params = deepcopy(source_agent.policy._get_constructor_parameters())

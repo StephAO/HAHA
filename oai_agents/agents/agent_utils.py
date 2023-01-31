@@ -47,3 +47,6 @@ class DummyAgent:
         else:
             action = self.action
         return action, None
+
+    def set_idx(self, *args, **kwargs):
+        pass

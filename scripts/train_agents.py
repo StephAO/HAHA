@@ -29,13 +29,17 @@ def create_pop_from_agents(args):
     # WARNING: THIS IS JUST TEMPLATE CODE. This function requires hand figuring out each ck to use for the mid ck
     pop_agents = []
     base_path = args.base_dir / 'agent_models'
-    for agent_name, mid_ck in zip(['fs_16_s16384', 'fs_256_s16384', 'no_fs_16_s16384', 'no_fs_256_s16384'], ['ck_5', 'ck_4', 'ck_7', 'ck_7']):
+    # for agent_name, mid_ck in zip(['fs_16_s16384', 'fs_256_s16384', 'no_fs_16_s16384', 'no_fs_256_s16384'], ['ck_5', 'ck_4', 'ck_7', 'ck_7']):
+    for agent_name in ['2l_hd32_seed19950226', '2l_hd32_seed20220501', '2l_hd128_s1997', '2l_hd128_seed219',
+                        '2l_tpl_hd32_seed1004219', '2l_tpl_hd32_seed20220501', '2l_tpl_hd128_seed219', '2l_tpl_hd128_seed2191004']:
         best = SB3Wrapper.load(base_path / agent_name / 'best' / 'agents_dir' / 'agent_0', args)
-        worst = SB3Wrapper.load(base_path / agent_name / 'ck_0' / 'agents_dir' / 'agent_0', args)
-        mid = SB3Wrapper.load(base_path / agent_name / mid_ck / 'agents_dir' / 'agent_0', args)
+        worst_idx = np.random.randint(0, 2)
+        worst = SB3Wrapper.load(base_path / agent_name / f'ck_{worst_idx}' / 'agents_dir' / 'agent_0', args)
+        mid_idx = np.random.randint(2, 8)
+        mid = SB3Wrapper.load(base_path / agent_name / f'ck_{mid_idx}' / 'agents_dir' / 'agent_0', args)
         pop_agents += [best, worst, mid]
 
-    mat = MultipleAgentsTrainer(args, name='fcp_pop_seed=16384', num_agents=0)
+    mat = MultipleAgentsTrainer(args, name='fcp_pop_ijcai', num_agents=0)
     mat.set_agents(pop_agents)
     print(len(mat.agents))
     mat.save_agents()
@@ -288,7 +292,8 @@ if __name__ == '__main__':
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
     #get_fcp_agent(args, training_steps=1e7)
-    teammates = get_fcp_population(args, 3e7)
+    create_pop_from_agents(args)
+    # teammates = get_fcp_population(args, 3e7)
     # get_hrl_worker(args)
     # get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)
