@@ -26,7 +26,7 @@ def get_arguments(additional_args=[]):
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
     parser.add_argument('--batch-size', type=int, default=32, help='batch size')
     parser.add_argument('--eta', type=float, default=0.1, help='eta used in plastic policy update.')
-    parser.add_argument('--exp-name', type=str, default='default_exp',
+    parser.add_argument('--exp-name', type=str, default='ijcai',
                         help='Name of experiment. Used to tag save files.')
     parser.add_argument('--base-dir', type=str, default=Path.cwd(),
                         help='Base directory to save all models, data, tensorboard metrics.')

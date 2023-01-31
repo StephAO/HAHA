@@ -107,7 +107,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
-        for i in range(Subtasks.NUM_SUBTASKS): # [0, 2, 3] [1, 4] [5, 7, 6] [10, 8, 9]
+        for i in [0, 2, 3]: # [0, 2, 3] [1, 4] [5, 7, 6] [10, 8, 9],range(Subtasks.NUM_SUBTASKS)
             print(f'Starting subtask {i} - {Subtasks.IDS_TO_SUBTASKS[i]}')
             # RL single subtask agents trained with teammeates
             # Make necessary envs
@@ -131,7 +131,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
             rl_sat = SingleAgentTrainer(tms, args, eval_tms=eval_tms, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
             # Train if it makes sense to (can't train on an unknown task)
             if i != Subtasks.SUBTASKS_TO_IDS['unknown']:
-                rl_sat.train_agents(total_timesteps=3e6)
+                rl_sat.train_agents(total_timesteps=5e6)
                 agents.extend(rl_sat.get_agents())
 
         args.layout_names = original_layout_names

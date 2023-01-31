@@ -39,7 +39,7 @@ def create_pop_from_agents(args):
         mid = SB3Wrapper.load(base_path / agent_name / f'ck_{mid_idx}' / 'agents_dir' / 'agent_0', args)
         pop_agents += [best, worst, mid]
 
-    mat = MultipleAgentsTrainer(args, name='fcp_pop_ijcai', num_agents=0)
+    mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
     mat.set_agents(pop_agents)
     print(len(mat.agents))
     mat.save_agents()
@@ -72,7 +72,7 @@ def get_eval_teammates(args):
 def get_selfplay_agent(args, training_steps=1e7):
     self_play_trainer = MultipleAgentsTrainer(args, name='selfplay', num_agents=1)
     try:
-        self_play_trainer.load_agents(tag='final')
+        self_play_trainer.load_agents(tag='ijcai')
     except FileNotFoundError as e:
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
         self_play_trainer.train_agents(total_timesteps=training_steps)
@@ -86,10 +86,10 @@ def get_bc_and_human_proxy(args):
     for layout_name in all_layouts:
         bct = BehavioralCloningTrainer(args.dataset, args, name=f'bc_{layout_name}', layout_names=[layout_name])
         try:
-            bct.load_agents(tag='final')
+            bct.load_agents(tag='ijcai')
         except FileNotFoundError as e:
             print(f'Could not find saved BC and human proxy, creating them from scratch...\nFull Error: {e}')
-            bct.train_agents(epochs=300)
+            bct.train_agents(epochs=500)
         bc, human_proxy = bct.get_agents()
         bcs[layout_name] = [bc]
         human_proxies[layout_name] = [human_proxy]
@@ -103,7 +103,7 @@ def get_behavioral_cloning_play_agent(args, training_steps=1e7):
     teammates = bcs
     self_play_trainer = SingleAgentTrainer(teammates, args, name='bcp')
     try:
-        bcp = self_play_trainer.load_agents()
+        bcp = self_play_trainer.load_agents(tag='ijcai')
     except FileNotFoundError as e:
         print(f'Could not find saved BCP, creating them from scratch...\nFull Error: {e}')
         self_play_trainer.train_agents(total_timesteps=training_steps)
@@ -170,10 +170,10 @@ def get_hrl_worker(args):
         worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
     except FileNotFoundError as e:
         print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
-        worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
-        #eval_tms = get_eval_teammates(args)
-        #teammates = get_fcp_population(args, 1e7)
-        #worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
+        # worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
+        eval_tms = get_eval_teammates(args)
+        teammates = get_fcp_population(args, 1e7)
+        worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
     return worker
 
 def get_hrl_agent(args, training_steps=1e7):
@@ -292,8 +292,8 @@ if __name__ == '__main__':
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
     #get_fcp_agent(args, training_steps=1e7)
-    create_pop_from_agents(args)
+    # create_pop_from_agents(args)
     # teammates = get_fcp_population(args, 3e7)
     # get_hrl_worker(args)
-    # get_bc_and_human_proxy(args)
+    get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)
