@@ -177,7 +177,7 @@ class RLManagerTrainer(SingleAgentTrainer):
         # COMMENTED CODE BELOW IS TO ADD SELFPLAY
         # However, currently it's just a reference to the agent, so the "self-teammate" could update the main agents subtask
         # To do this correctly, the "self-teammate" would have to be cloned before every epoch
-        playable_self = self.learning_agent
+        playable_self = HierarchicalRL(self.worker, self.learning_agent, self.args, name=f'playable_self')
         if inc_sp:
             for i in range(3):
                 if self.use_policy_clone:

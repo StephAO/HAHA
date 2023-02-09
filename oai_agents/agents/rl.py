@@ -57,10 +57,14 @@ class SingleAgentTrainer(OAITrainer):
                                      n_steps=2048, batch_size=64)
             agent_name = f'{name}_lstm'
         elif use_maskable_ppo:
-            sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1)
+            sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=25000,
+                                    n_epochs=20, learning_rate=0.0003, batch_size=400, ent_coef=0.01, vf_coef=0.3,
+                                    gamma=0.99, gae_lambda=0.98)
             agent_name = f'{name}'
         else:
-            sb3_agent = PPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1)
+            sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=25000,
+                            n_epochs=20, learning_rate=0.0003, batch_size=400, ent_coef=0.01, vf_coef=0.3,
+                            gamma=0.99, gae_lambda=0.98)
             agent_name = f'{name}'
         self.learning_agent = self.wrap_agent(sb3_agent, agent_name)
         self.agents = [self.learning_agent]
@@ -128,10 +132,10 @@ class SingleAgentTrainer(OAITrainer):
             # Set new env distribution if training on multiple envs
             if self.n_layouts > 1 and self.args.multi_env_mode != 'uniform':
                 self.set_new_envs()
-            if epoch > 0:
-                self.update_pc(epoch)
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=EPOCH_TIMESTEPS)
+            if self.use_policy_clone:
+                self.update_pc(epoch)
             if self.using_hrl:
                 curr_timesteps = np.sum(self.env.env_method('get_base_env_timesteps'))
                 failure_dicts = self.env.env_method('get_worker_failures')
@@ -145,11 +149,13 @@ class SingleAgentTrainer(OAITrainer):
             else:
                 curr_timesteps = self.learning_agent.num_timesteps
 
+            # Evaluate
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.learning_agent.agent.ep_info_buffer])
             best_training_rew *= 0.99
-            if epoch % 10 == 0 or (mean_training_rew > best_training_rew and curr_timesteps > 5e5):
+            if (epoch + 1) % 5 == 0 or (mean_training_rew > best_training_rew and curr_timesteps > 5e6):
                 if mean_training_rew >= best_training_rew:
                     best_training_rew = mean_training_rew
+
                 if self.use_subtask_eval:
                     env_success = []
                     use_layout_specific_tms = type(self.eval_teammates) == dict
