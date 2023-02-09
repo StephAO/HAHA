@@ -41,8 +41,9 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             obs['visual_obs'] = obs['visual_obs'].squeeze()
         return obs
 
-    def action_masks(self):
-        return get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
+    def action_masks(self, p_idx=None):
+        p_idx = p_idx or self.p_idx
+        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
 
     def step(self, action):
         # Action is the subtask for subtask agent to perform
@@ -78,7 +79,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             worker_steps += 1
 
             if worker_steps % 5 == 0:
-                if not get_doable_subtasks(self.state, self.prev_st, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[self.curr_subtask]:
+                if not get_doable_subtasks(self.state, self.prev_subtask[self.p_idx], self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[self.curr_subtask]:
                     ready_for_next_subtask = True
             if worker_steps > 25: # longest task is getting soup if soup needs to cook for the full 20 timsteps. Add some extra lewway
                 ready_for_next_subtask = True
@@ -86,7 +87,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             # to see if any other task is possible
             if self.curr_subtask == Subtasks.SUBTASKS_TO_IDS['unknown']:
                 ready_for_next_subtask = True
-                self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
+                self.prev_subtask[self.p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
                 self.unknowns_in_a_row += 1
                 # If no new subtask becomes available after 25 timesteps, end round
                 if self.unknowns_in_a_row > 50 and not self.is_eval_env:
@@ -110,7 +111,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.env.reset(start_state_kwargs=ss_kwargs)
         self.state = self.env.state
         self.prev_state = None
-        self.prev_st = Subtasks.SUBTASKS_TO_IDS['unknown']
+        self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]
         self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it

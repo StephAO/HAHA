@@ -269,7 +269,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 tot_trials -= 1
                 continue
 
-            thresh = 0.4 if (self.layout_name == 'forced_coordination' and self.p_idx == 0 and self.goal_subtask_id in [3, 6, 9]) else 1
+            thresh = 0.4 if (self.layout_name == 'forced_coordination' and self.p_idx == 0 and self.goal_subtask_id in [3, 6, 9]) else 0.8
             if reward >= thresh:
                 results[self.goal_subtask_id][0] += 1
                 avg_steps.append(n_steps)

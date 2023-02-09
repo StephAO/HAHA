@@ -58,7 +58,7 @@ def combine_populations(args, pop_names):
 
 ### EVALUATION AGENTS ###
 def get_eval_teammates(args):
-    sp = get_selfplay_agent(args, training_steps=1e7)
+    sp = get_selfplay_agent(args, training_steps=1e7, tag='ijcai_tm')
     bcs, human_proxies = get_bc_and_human_proxy(args)
     random_agent = DummyAgent('random')
     eval_tms = {}
@@ -69,10 +69,11 @@ def get_eval_teammates(args):
 ### BASELINES ###
 
 # SP
-def get_selfplay_agent(args, training_steps=1e7):
+def get_selfplay_agent(args, training_steps=1e7, tag=None):
     self_play_trainer = MultipleAgentsTrainer(args, name='selfplay', num_agents=1)
     try:
-        self_play_trainer.load_agents(tag='ijcai')
+        tag = tag or 'ijcai'
+        self_play_trainer.load_agents(tag=tag)
     except FileNotFoundError as e:
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
         self_play_trainer.train_agents(total_timesteps=training_steps)
@@ -170,10 +171,10 @@ def get_hrl_worker(args):
         worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
     except FileNotFoundError as e:
         print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
-        # worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
-        eval_tms = get_eval_teammates(args)
-        teammates = get_fcp_population(args, 1e7)
-        worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
+        worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
+        #eval_tms = get_eval_teammates(args)
+        #teammates = get_fcp_population(args, 1e7)
+        #worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
     return worker
 
 def get_hrl_agent(args, training_steps=1e7):
@@ -181,7 +182,7 @@ def get_hrl_agent(args, training_steps=1e7):
     worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
     # Create manager
-    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=True, name='hrl_manager2')
+    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=True, name='hrl_manager', inc_sp=True, use_policy_clone=False)
     #rlmt.load_agents()
     rlmt.train_agents(total_timesteps=training_steps)
     manager = rlmt.get_agents()[0]
@@ -287,13 +288,13 @@ def create_test_population(args, training_steps=1e7):
 if __name__ == '__main__':
     args = get_arguments()
     # create_test_population(args, 1e3)
-    #get_hrl_agent(args, 2e7)
+    get_hrl_agent(args, 3e7)
 
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
     #get_fcp_agent(args, training_steps=1e7)
     # create_pop_from_agents(args)
     # teammates = get_fcp_population(args, 3e7)
-    # get_hrl_worker(args)
-    get_bc_and_human_proxy(args)
+    #get_hrl_worker(args)
+    # get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)

@@ -24,7 +24,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         super(MultiAgentSubtaskWorker, self).__init__('multi_agent_subtask_worker', args)
         assert len(agents) == Subtasks.NUM_SUBTASKS - 1
         self.agents = agents
-        self.agents.append( DummyAgent('random_dir') ) # Make unknown subtask equivalent to stay
+        self.agents.append(DummyAgent()) #'random_dir') ) # Make unknown subtask equivalent to stay
 
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False):
         assert 'curr_subtask' in obs.keys()
@@ -107,7 +107,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
-        for i in [0, 2, 3]: # [0, 2, 3] [1, 4] [5, 7, 6] [10, 8, 9],range(Subtasks.NUM_SUBTASKS)
+        for i in range(Subtasks.NUM_SUBTASKS): #[1, 4, 5, 7, 6, 10, 8, 9]: # [0, 2, 3] [1, 4] [5, 7, 6] [10, 8, 9],range(Subtasks.NUM_SUBTASKS)
             print(f'Starting subtask {i} - {Subtasks.IDS_TO_SUBTASKS[i]}')
             # RL single subtask agents trained with teammeates
             # Make necessary envs
@@ -161,6 +161,7 @@ class RLManagerTrainer(SingleAgentTrainer):
     def __init__(self, worker, teammates, args, eval_tms=None, use_frame_stack=False, use_subtask_counts=False,
                  inc_sp=False, use_policy_clone=False, name=None):
         name = name or 'hrl_manager'
+        name += ('_sp' if inc_sp else '') + ('_pc' if use_policy_clone else '')
         n_layouts = len(args.layout_names)
         env_kwargs = {'worker': worker, 'shape_rewards': False, 'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
         env = make_vec_env(OvercookedManagerGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs, vec_env_cls=VEC_ENV_CLS)
@@ -180,20 +181,20 @@ class RLManagerTrainer(SingleAgentTrainer):
         if inc_sp:
             for i in range(3):
                 if self.use_policy_clone:
-                    manager = PolicyClone(self.learning_agent, args)
-                    playable_self = HierarchicalRL(self.worker, manager, args, name=f'playable_self_{i}')
+                    manager = PolicyClone(self.learning_agent, self.args)
+                    playable_self = HierarchicalRL(self.worker, manager, self.args, name=f'playable_self_{i}')
                 self.teammates.append(playable_self)
 
         if type(self.eval_teammates) == dict:
             if self.use_policy_clone:
-                manager = PolicyClone(self.learning_agent, args)
-                playable_self = HierarchicalRL(self.worker, manager, args, name=f'playable_self')
+                manager = PolicyClone(self.learning_agent, self.args)
+                playable_self = HierarchicalRL(self.worker, manager, self.args, name=f'playable_self')
             for k in self.eval_teammates:
                 self.eval_teammates[k].append(playable_self)
         elif self.eval_teammates is not None:
             if self.use_policy_clone:
-                manager = PolicyClone(self.learning_agent, args)
-                playable_self = HierarchicalRL(self.worker, manager, args, name=f'playable_self')
+                manager = PolicyClone(self.learning_agent, self.args)
+                playable_self = HierarchicalRL(self.worker, manager, self.args, name=f'playable_self')
             self.eval_teammates.append(playable_self)
         else:
             self.eval_teammates = self.teammates
@@ -204,9 +205,9 @@ class RLManagerTrainer(SingleAgentTrainer):
         for tm in self.teammates:
             idx = epoch % 3
             if tm.name == f'playable_self_{idx}':
-                tm.manager = PolicyClone(self.learning_agent, args)
+                tm.manager = PolicyClone(self.learning_agent, self.args)
         if type(self.eval_teammates) == dict:
-            pc = PolicyClone(self.learning_agent, args, name=f'playable_self')
+            pc = PolicyClone(self.learning_agent, self.args, name=f'playable_self')
             for k in self.eval_teammates:
                 for tm in self.eval_teammates[k]:
                     if tm.name == 'playable_self':
@@ -214,7 +215,7 @@ class RLManagerTrainer(SingleAgentTrainer):
         elif self.eval_teammates is not None:
             for i, tm in enumerate(self.eval_teammates):
                 if tm.name == 'playable_self':
-                    tm.manager = PolicyClone(self.learning_agent, args, name=f'playable_self')
+                    tm.manager = PolicyClone(self.learning_agent, self.args, name=f'playable_self')
 
 
 class HierarchicalRL(OAIAgent):
