@@ -70,7 +70,7 @@ def get_eval_teammates(args):
 
 # SP
 def get_selfplay_agent(args, training_steps=1e7, tag=None):
-    self_play_trainer = MultipleAgentsTrainer(args, name='selfplay', num_agents=1)
+    self_play_trainer = MultipleAgentsTrainer(args, name='selfplay', num_agents=1, seed=496)
     try:
         tag = tag or 'ijcai'
         self_play_trainer.load_agents(tag=tag)
@@ -132,13 +132,13 @@ def get_fcp_population(args, training_steps=2e7):
         agents = []
         use_fs = False
         use_cnn = False
-        taper_layers = True
+        taper_layers = False
         use_policy_clone = False
         num_layers = 2
-        for h_dim in [32]: # [8,16], [32, 64], [128, 256], [512, 1024]
-            seed = 20220501#1997 # 64, 1024, 16384
+        for h_dim in [128]: # [8,16], [32, 64], [128, 256], [512, 1024]
+            seed = 496 # 64, 1024, 16384
             ck_rate = training_steps // 20
-            name = f'cnn_{num_layers}l_' if use_cnn else f'{num_layers}l_'
+            name = f'cnn_{num_layers}l_' if use_cnn else f'test_{num_layers}l_'
             name += 'pc_' if use_policy_clone else ''
             name += 'tpl_' if taper_layers else ''
             name += f'fs_' if use_fs else ''
@@ -160,7 +160,7 @@ def get_fcp_population(args, training_steps=2e7):
 def get_fcp_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     eval_tms = get_eval_teammates(args)
-    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp') #_st', use_subtask_counts=True)
+    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp', use_subtask_counts=False, inc_sp=True, use_policy_clone=False)
     fcp_trainer.train_agents(total_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 
@@ -171,10 +171,10 @@ def get_hrl_worker(args):
         worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
     except FileNotFoundError as e:
         print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
-        worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
-        #eval_tms = get_eval_teammates(args)
-        #teammates = get_fcp_population(args, 1e7)
-        #worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
+        #worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
+        eval_tms = get_eval_teammates(args)
+        teammates = get_fcp_population(args, 1e7)
+        worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
     return worker
 
 def get_hrl_agent(args, training_steps=1e7):
@@ -182,11 +182,11 @@ def get_hrl_agent(args, training_steps=1e7):
     worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
     # Create manager
-    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=True, name='hrl_manager', inc_sp=True, use_policy_clone=False)
+    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name='hrl_manager_notmst', inc_sp=True, use_policy_clone=False)
     #rlmt.load_agents()
     rlmt.train_agents(total_timesteps=training_steps)
     manager = rlmt.get_agents()[0]
-    hrl = HierarchicalRL(worker, manager, args)
+    hrl = HierarchicalRL(worker, manager, args, name='HAHA')
     hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))
     return hrl
 
@@ -288,13 +288,19 @@ def create_test_population(args, training_steps=1e7):
 if __name__ == '__main__':
     args = get_arguments()
     # create_test_population(args, 1e3)
-    get_hrl_agent(args, 3e7)
+    get_hrl_agent(args, 4.5e7)
+    #get_behavioral_cloning_play_agent(args, training_steps=1e8)
 
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
-    #get_fcp_agent(args, training_steps=1e7)
+    
+
+    #get_fcp_agent(args, training_steps=1e8)
+    #get_selfplay_agent(args, training_steps=1e8)
+
+
     # create_pop_from_agents(args)
-    # teammates = get_fcp_population(args, 3e7)
+    #teammates = get_fcp_population(args, 3e7)
     #get_hrl_worker(args)
     # get_bc_and_human_proxy(args)
     # get_fcp_agent(args, training_steps=1e7)

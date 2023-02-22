@@ -20,8 +20,8 @@ from stable_baselines3.common.vec_env.stacked_observations import StackedObserva
 # more during subtask worker training for robustness
 # Max number of counters the agents should use
 # USEABLE_COUNTERS = {'counter_circuit_o_1order': 8, 'forced_coordination': 5, 'asymmetric_advantages': 2, 'cramped_room': 5, 'coordination_ring': 5} # FOR WORKER TRAINING
-USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 4, 'asymmetric_advantages': 1, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
-# USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION
+USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 4, 'asymmetric_advantages': 2, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
+#USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION AND SP TRAINING
 
 
 # Calculated by dividing the average overall reward by the average reward on each layout in the 2019 human trials
@@ -71,7 +71,7 @@ class OvercookedGymEnv(Env):
 
         if ret_completed_subtasks:
             self.obs_dict['player_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
-            self.obs_dict['teammate_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
+            # self.obs_dict['teammate_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
             self.obs_dict['subtask_mask'] = spaces.MultiBinary(Subtasks.NUM_SUBTASKS)
         self.observation_space = spaces.Dict(self.obs_dict)
         self.return_completed_subtasks = ret_completed_subtasks
@@ -173,7 +173,7 @@ class OvercookedGymEnv(Env):
                 else:
                     self.prev_subtask[p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
             obs['player_completed_subtasks'] = np.eye(Subtasks.NUM_SUBTASKS)[comp_st] if comp_st is not None else np.zeros(Subtasks.NUM_SUBTASKS) #self.completed_tasks[p_idx]
-            obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
+            # obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
             obs['subtask_mask'] = self.action_masks(p_idx)
             if p_idx == self.t_idx:
                 obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}
@@ -187,7 +187,7 @@ class OvercookedGymEnv(Env):
         joint_action = [None, None]
         joint_action[self.p_idx] = action
         tm_obs = self.get_obs(p_idx=self.t_idx, enc_fn=self.teammate.encoding_fn)
-        joint_action[self.t_idx] = self.teammate.predict(tm_obs,deterministic=True)[0]
+        joint_action[self.t_idx] = self.teammate.predict(tm_obs)[0]
         joint_action = [Action.INDEX_TO_ACTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action

@@ -74,10 +74,9 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 shaped_r = info['shaped_r_by_agent'][self.p_idx] if self.p_idx else sum(info['shaped_r_by_agent'])
                 reward += sparse_r * ratio + shaped_r * (1 - ratio)
             else:
+                if not self.is_eval_env and r > 0:
+                    r *= SCALING_FACTORS[self.layout_name]
                 reward += r
-
-            if not self.is_eval_env and reward > 0:
-                reward *= SCALING_FACTORS[self.layout_name]
 
             self.step_count += 1
             worker_steps += 1
