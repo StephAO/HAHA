@@ -11,14 +11,14 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
-EPOCH_TIMESTEPS = 100000
+EPOCH_TIMESTEPS = 500000
 VEC_ENV_CLS = DummyVecEnv #
 
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, teammates, args, eval_tms=None, name=None, env=None, eval_envs=None, use_lstm=False,
                  use_frame_stack=False, use_subtask_counts=False, use_maskable_ppo=False, inc_sp=False,
-                 use_policy_clone=False, hidden_dim=128, use_subtask_eval=False, use_hrl=False, seed=None):
+                 use_policy_clone=False, hidden_dim=256, use_subtask_eval=False, use_hrl=False, seed=None):
         name = name or 'rl_singleagent'
         super(SingleAgentTrainer, self).__init__(name, args, seed=seed)
         self.args = args
@@ -57,13 +57,13 @@ class SingleAgentTrainer(OAITrainer):
                                      n_steps=2048, batch_size=64)
             agent_name = f'{name}_lstm'
         elif use_maskable_ppo:
-            sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=25000,
+            sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=400,
                                     n_epochs=20, learning_rate=0.0003, batch_size=400, ent_coef=0.01, vf_coef=0.3,
                                     gamma=0.99, gae_lambda=0.98)
             agent_name = f'{name}'
         else:
-            sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=25000,
-                            n_epochs=20, learning_rate=0.0003, batch_size=400, ent_coef=0.01, vf_coef=0.3,
+            sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=400,
+                            n_epochs=20, learning_rate=0.0003, batch_size=400, ent_coef=0.0, vf_coef=0.3,
                             gamma=0.99, gae_lambda=0.98)
             agent_name = f'{name}'
         self.learning_agent = self.wrap_agent(sb3_agent, agent_name)
@@ -77,7 +77,7 @@ class SingleAgentTrainer(OAITrainer):
                     else:
                         self.teammates.append(self.learning_agent)
 
-            if not self.use_subtask_eval:
+            if (not self.use_subtask_eval) and inc_sp:
                 pc = PolicyClone(self.learning_agent, args, name='playable_self')
                 if type(self.eval_teammates) == dict:
                     for k in self.eval_teammates:
@@ -151,7 +151,7 @@ class SingleAgentTrainer(OAITrainer):
 
             # Evaluate
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.learning_agent.agent.ep_info_buffer])
-            best_training_rew *= 0.99
+            best_training_rew *= 0.98
             if (epoch + 1) % 5 == 0 or (mean_training_rew > best_training_rew and curr_timesteps > 5e6):
                 if mean_training_rew >= best_training_rew:
                     best_training_rew = mean_training_rew

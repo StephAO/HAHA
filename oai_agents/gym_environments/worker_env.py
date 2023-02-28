@@ -184,7 +184,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
-    def reset(self, evaluation_trial_num=-1):
+    def reset(self, evaluation_trial_num=-1, p_idx=None):
         if self.use_single_subtask:
             self.goal_subtask = self.single_subtask
         else:
@@ -209,14 +209,15 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             elif self.goal_subtask in ['put_onion_in_pot', 'get_soup', 'serve_soup']:
                 self.p_idx = 0
             else:
-                self.p_idx = np.random.randint(2)
+                self.p_idx = (1 - self.p_idx) if self.p_idx is not None else (p_idx or np.random.randint(2))
         elif self.layout_name == 'asymmetric_advantages':
-            self.p_idx = np.random.randint(2)
+            self.p_idx = (1 - self.p_idx) if self.p_idx is not None else (p_idx or np.random.randint(2))
             useless_subtasks = ['put_soup_closer', 'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']
             if self.goal_subtask in useless_subtasks:
                 raise ValueError(f"{useless_subtasks} are not valid subtasks for asymmetric_advantages")
         else:
-            self.p_idx = np.random.randint(2)
+            self.p_idx = (1 - self.p_idx) if self.p_idx is not None else (p_idx or np.random.randint(2))
+
 
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it

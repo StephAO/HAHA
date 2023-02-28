@@ -30,22 +30,23 @@ def create_pop_from_agents(args):
     pop_agents = []
     base_path = args.base_dir / 'agent_models'
     # for agent_name, mid_ck in zip(['fs_16_s16384', 'fs_256_s16384', 'no_fs_16_s16384', 'no_fs_256_s16384'], ['ck_5', 'ck_4', 'ck_7', 'ck_7']):
-    for agent_name in ['2l_hd32_seed19950226', '2l_hd32_seed20220501', '2l_hd128_s1997', '2l_hd128_seed219',
-                        '2l_tpl_hd32_seed1004219', '2l_tpl_hd32_seed20220501', '2l_tpl_hd128_seed219', '2l_tpl_hd128_seed2191004']:
-        best = SB3Wrapper.load(base_path / agent_name / 'best' / 'agents_dir' / 'agent_0', args)
-        pop_agents += [best]
-        for i in [0, 3]:
-            # worst_idx = np.random.randint(0, 3) # checkpoints up to ~45% of final training scores
-            next_agent = SB3Wrapper.load(base_path / agent_name / f'ck_{i}' / 'agents_dir' / 'agent_0', args)
-            # mid_idx = np.random.randint(3, 13) # checkpoints betwee 45-90% of final training scores
-            # mid = SB3Wrapper.load(base_path / agent_name / f'ck_{mid_idx}' / 'agents_dir' / 'agent_0', args)
-            pop_agents += [next_agent]
-        # print(agent_name, worst_idx, mid_idx)
+    mid_indices = {'forced_coordination': [2, 9], 'counter_circuit_o_1order': [0, 7], 'asymmetric_advantages': [0, 1], 'cramped_room': [0, 2], 'coordination_ring': [0, 3]}
+    for layout_name in args.layout_names:
+        for agent_name in ['2l_hd32_seed19950226', '2l_hd32_seed20220501', '2l_hd128_s1997', '2l_hd128_seed219',
+                            '2l_tpl_hd32_seed1004219', '2l_tpl_hd32_seed20220501', '2l_tpl_hd128_seed219', '2l_tpl_hd128_seed2191004']:
+            best = SB3Wrapper.load(base_path / agent_name / 'best' / 'agents_dir' / 'agent_0', args)
+            pop_agents += [best]
+            for i in mid_indices[layout_name]:
+                # worst_idx = np.random.randint(0, 3) # checkpoints up to ~45% of final training scores
+                next_agent = SB3Wrapper.load(base_path / agent_name / f'ck_{i}' / 'agents_dir' / 'agent_0', args)
+                # mid_idx = np.random.randint(3, 13) # checkpoints betwee 45-90% of final training scores
+                # mid = SB3Wrapper.load(base_path / agent_name / f'ck_{mid_idx}' / 'agents_dir' / 'agent_0', args)
+                pop_agents += [next_agent]
+            # print(agent_name, worst_idx, mid_idx)
 
-    mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
-    mat.set_agents(pop_agents)
-    print(len(mat.agents))
-    mat.save_agents()
+        mat = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}', num_agents=0)
+        mat.set_agents(pop_agents)
+        mat.save_agents()
 
 def combine_populations(args, pop_names):
     full_pop = []
@@ -73,7 +74,7 @@ def get_eval_teammates(args):
 
 # SP
 def get_selfplay_agent(args, training_steps=1e7, tag=None):
-    self_play_trainer = MultipleAgentsTrainer(args, name='selfplay', num_agents=1)
+    self_play_trainer = MultipleAgentsTrainer(args, name='selfplay', num_agents=1, seed=496)
     try:
         tag = tag or 'ijcai'
         self_play_trainer.load_agents(tag=tag)
@@ -127,44 +128,53 @@ def get_population_play_agent(args, pop_size=8, training_steps=1e7):
 # FCP
 def get_fcp_population(args, training_steps=2e7):
     try:
-        mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
-        fcp_pop = mat.load_agents(tag='ijcai')
-        print(f'Loaded fcp_pop with {len(fcp_pop)} agents.')
+        fcp_pop = {}
+        for layout_name in args.layout_names:
+            mat = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}', num_agents=0)
+            fcp_pop[layout_name] = mat.load_agents(tag='ijcai')
+            print(f'Loaded fcp_pop with {len(fcp_pop)} agents.')
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
-        agents = []
-        use_fs = False
-        use_cnn = False
-        taper_layers = True
-        use_policy_clone = False
-        num_layers = 2
-        for h_dim in [32]: # [8,16], [32, 64], [128, 256], [512, 1024]
-            seed = 20220501#1997 # 64, 1024, 16384
-            ck_rate = training_steps // 20
-            name = f'cnn_{num_layers}l_' if use_cnn else f'{num_layers}l_'
-            name += 'pc_' if use_policy_clone else ''
-            name += 'tpl_' if taper_layers else ''
-            name += f'fs_' if use_fs else ''
-            name += f'hd{h_dim}_'
-            name += f'seed{seed}'
-            print(f'Starting training for: {name}')
-            mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, use_frame_stack=use_fs,
-                                        fcp_ck_rate=ck_rate, seed=seed, use_cnn=use_cnn, taper_layers=taper_layers,
-                                        use_policy_clone=use_policy_clone, num_layers=num_layers)
-            mat.train_agents(total_timesteps=training_steps)
-            mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp'), tag=name)
-            agents.extend(mat.get_fcp_agents())
-        pop = MultipleAgentsTrainer(args, name=f'fcp_pop_{name}', num_agents=0)
-        pop.set_agents(agents)
-        pop.save_agents()
-        fcp_pop = pop.get_agents()
-    return fcp_pop
+        fcp_pop = {}
+        layout_names = deepcopy(args.layout_names)
+        for layout_name in layout_names:
+            args.layout_names = [layout_name]
+            agents = []
+            use_fs = False
+            use_cnn = False
+            taper_layers = False
+            use_policy_clone = False
+            num_layers = 2
+            for h_dim in [128]: # [8,16], [32, 64], [128, 256], [512, 1024]
+                seed = 3741 #496 # 64, 1024, 16384, 3741=eval
+                ck_rate = training_steps // 10
+                name = f'cnn_{num_layers}l_' if use_cnn else f'eval_{num_layers}l_'
+                name += 'pc_' if use_policy_clone else ''
+                name += 'tpl_' if taper_layers else ''
+                name += f'fs_' if use_fs else ''
+                name += f'hd{h_dim}_'
+                name += f'seed{seed}'
+                print(f'Starting training for: {name}')
+                mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, use_frame_stack=use_fs,
+                                            fcp_ck_rate=ck_rate, seed=seed, use_cnn=use_cnn, taper_layers=taper_layers,
+                                            use_policy_clone=use_policy_clone, num_layers=num_layers)
+                mat.train_agents(total_timesteps=training_steps)
+                mat.save_agents(path=(args.base_dir / 'agent_models' / 'sp'), tag=name)
+                agents.extend(mat.get_fcp_agents())
+            pop = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}_{name}', num_agents=0)
+            pop.set_agents(agents)
+            pop.save_agents()
+            fcp_pop[layout_name] = pop.get_agents()
+        args.layout_names = layout_names
+    return tms
 
 def get_fcp_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     eval_tms = get_eval_teammates(args)
-    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp') #_st', use_subtask_counts=True)
+    print('start training')
+    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_widx', use_subtask_counts=False, inc_sp=False, use_policy_clone=False)
     fcp_trainer.train_agents(total_timesteps=training_steps)
+    print('end training')
     return fcp_trainer.get_agents()[0]
 
 def get_hrl_worker(args):
@@ -174,10 +184,10 @@ def get_hrl_worker(args):
         worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
     except FileNotFoundError as e:
         print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
-        worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
-        #eval_tms = get_eval_teammates(args)
-        #teammates = get_fcp_population(args, 1e7)
-        #worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
+        #worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
+        eval_tms = get_eval_teammates(args)
+        teammates = get_fcp_population(args, 1e7)
+        worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
     return worker
 
 def get_hrl_agent(args, training_steps=1e7):
@@ -185,11 +195,11 @@ def get_hrl_agent(args, training_steps=1e7):
     worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
     # Create manager
-    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=True, name='hrl_manager', inc_sp=True, use_policy_clone=False)
+    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name='hrl_manager_notmst', inc_sp=True, use_policy_clone=False)
     #rlmt.load_agents()
     rlmt.train_agents(total_timesteps=training_steps)
     manager = rlmt.get_agents()[0]
-    hrl = HierarchicalRL(worker, manager, args)
+    hrl = HierarchicalRL(worker, manager, args, name='HAHA')
     hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))
     return hrl
 
@@ -298,6 +308,19 @@ if __name__ == '__main__':
     #get_fcp_agent(args, training_steps=1e7)
     create_pop_from_agents(args)
     # teammates = get_fcp_population(args, 3e7)
+    #get_hrl_agent(args, 4.5e7)
+    #get_behavioral_cloning_play_agent(args, training_steps=1e8)
+
+    # create_test_population(args, 1e3)
+    # get_bc_and_human_proxy(args)
+    
+
+    # get_fcp_agent(args, training_steps=1e8)
+    #get_selfplay_agent(args, training_steps=1e8)
+
+
+    # create_pop_from_agents(args)
+    #teammates = get_fcp_population(args, 2e7)
     #get_hrl_worker(args)
     # get_bc_and_human_proxy(args)
-    # get_fcp_agent(args, training_steps=1e7)
+    #get_fcp_agent(args, training_steps=1e7)

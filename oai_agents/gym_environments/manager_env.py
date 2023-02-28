@@ -74,10 +74,9 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 shaped_r = info['shaped_r_by_agent'][self.p_idx] if self.p_idx else sum(info['shaped_r_by_agent'])
                 reward += sparse_r * ratio + shaped_r * (1 - ratio)
             else:
+                if not self.is_eval_env and r > 0:
+                    r *= SCALING_FACTORS[self.layout_name]
                 reward += r
-
-            if not self.is_eval_env and reward > 0:
-                reward *= SCALING_FACTORS[self.layout_name]
 
             self.step_count += 1
             worker_steps += 1
@@ -107,7 +106,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
 
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
-    def reset(self):
+    def reset(self, p_idx=None):
         if self.is_eval_env:
             ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
         else:
@@ -116,7 +115,8 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.state = self.env.state
         self.prev_state = None
         self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]
-        self.p_idx = np.random.randint(2)
+
+        self.p_idx = (1 - self.p_idx) if self.p_idx is not None else (p_idx or self.reset_p_idx or np.random.randint(2))
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it
         self.stack_frames[self.p_idx] = self.main_agent_stack_frames

@@ -185,18 +185,19 @@ class RLManagerTrainer(SingleAgentTrainer):
                     playable_self = HierarchicalRL(self.worker, manager, self.args, name=f'playable_self_{i}')
                 self.teammates.append(playable_self)
 
-        if type(self.eval_teammates) == dict:
-            if self.use_policy_clone:
-                manager = PolicyClone(self.learning_agent, self.args)
-                playable_self = HierarchicalRL(self.worker, manager, self.args, name=f'playable_self')
-            for k in self.eval_teammates:
-                self.eval_teammates[k].append(playable_self)
-        elif self.eval_teammates is not None:
-            if self.use_policy_clone:
-                manager = PolicyClone(self.learning_agent, self.args)
-                playable_self = HierarchicalRL(self.worker, manager, self.args, name=f'playable_self')
-            self.eval_teammates.append(playable_self)
-        else:
+            if type(self.eval_teammates) == dict :
+                if self.use_policy_clone:
+                    manager = PolicyClone(self.learning_agent, self.args)
+                    playable_self = HierarchicalRL(self.worker, manager, self.args, name=f'playable_self')
+                for k in self.eval_teammates:
+                    self.eval_teammates[k].append(playable_self)
+            elif self.eval_teammates is not None:
+                if self.use_policy_clone:
+                    manager = PolicyClone(self.learning_agent, self.args)
+                    playable_self = HierarchicalRL(self.worker, manager, self.args, name=f'playable_self')
+                self.eval_teammates.append(playable_self)
+
+        if self.eval_teammates is None:
             self.eval_teammates = self.teammates
 
     def update_pc(self, epoch):
