@@ -11,14 +11,14 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
-EPOCH_TIMESTEPS = 100000
+EPOCH_TIMESTEPS = 500000
 VEC_ENV_CLS = DummyVecEnv #
 
 class SingleAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, teammates, args, eval_tms=None, name=None, env=None, eval_envs=None, use_lstm=False,
                  use_frame_stack=False, use_subtask_counts=False, use_maskable_ppo=False, inc_sp=False,
-                 use_policy_clone=False, hidden_dim=128, use_subtask_eval=False, use_hrl=False, seed=None):
+                 use_policy_clone=False, hidden_dim=256, use_subtask_eval=False, use_hrl=False, seed=None):
         name = name or 'rl_singleagent'
         super(SingleAgentTrainer, self).__init__(name, args, seed=seed)
         self.args = args
@@ -57,13 +57,13 @@ class SingleAgentTrainer(OAITrainer):
                                      n_steps=2048, batch_size=64)
             agent_name = f'{name}_lstm'
         elif use_maskable_ppo:
-            sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=2500,
+            sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=400,
                                     n_epochs=20, learning_rate=0.0003, batch_size=400, ent_coef=0.01, vf_coef=0.3,
                                     gamma=0.99, gae_lambda=0.98)
             agent_name = f'{name}'
         else:
-            sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=2500,
-                            n_epochs=20, learning_rate=0.0003, batch_size=400, ent_coef=0.01, vf_coef=0.3,
+            sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=400,
+                            n_epochs=20, learning_rate=0.0003, batch_size=400, ent_coef=0.0, vf_coef=0.3,
                             gamma=0.99, gae_lambda=0.98)
             agent_name = f'{name}'
         self.learning_agent = self.wrap_agent(sb3_agent, agent_name)

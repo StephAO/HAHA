@@ -136,9 +136,9 @@ def get_fcp_population(args, training_steps=2e7):
         use_policy_clone = False
         num_layers = 2
         for h_dim in [128]: # [8,16], [32, 64], [128, 256], [512, 1024]
-            seed = 496 # 64, 1024, 16384
-            ck_rate = training_steps // 20
-            name = f'cnn_{num_layers}l_' if use_cnn else f'test_{num_layers}l_'
+            seed = 3741 #496 # 64, 1024, 16384, 3741=eval
+            ck_rate = training_steps // 10
+            name = f'cnn_{num_layers}l_' if use_cnn else f'eval_{num_layers}l_'
             name += 'pc_' if use_policy_clone else ''
             name += 'tpl_' if taper_layers else ''
             name += f'fs_' if use_fs else ''
@@ -160,8 +160,10 @@ def get_fcp_population(args, training_steps=2e7):
 def get_fcp_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     eval_tms = get_eval_teammates(args)
-    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp', use_subtask_counts=False, inc_sp=True, use_policy_clone=False)
+    print('start training')
+    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_widx', use_subtask_counts=False, inc_sp=False, use_policy_clone=False)
     fcp_trainer.train_agents(total_timesteps=training_steps)
+    print('end training')
     return fcp_trainer.get_agents()[0]
 
 def get_hrl_worker(args):
@@ -288,19 +290,19 @@ def create_test_population(args, training_steps=1e7):
 if __name__ == '__main__':
     args = get_arguments()
     # create_test_population(args, 1e3)
-    get_hrl_agent(args, 4.5e7)
+    #get_hrl_agent(args, 4.5e7)
     #get_behavioral_cloning_play_agent(args, training_steps=1e8)
 
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
     
 
-    #get_fcp_agent(args, training_steps=1e8)
+    get_fcp_agent(args, training_steps=1e8)
     #get_selfplay_agent(args, training_steps=1e8)
 
 
     # create_pop_from_agents(args)
-    #teammates = get_fcp_population(args, 3e7)
+    #teammates = get_fcp_population(args, 2e7)
     #get_hrl_worker(args)
     # get_bc_and_human_proxy(args)
-    # get_fcp_agent(args, training_steps=1e7)
+    #get_fcp_agent(args, training_steps=1e7)
