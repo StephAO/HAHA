@@ -24,7 +24,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         super(MultiAgentSubtaskWorker, self).__init__('multi_agent_subtask_worker', args)
         assert len(agents) == Subtasks.NUM_SUBTASKS - 1
         self.agents = agents
-        self.agents.append(DummyAgent()) #'random_dir') ) # Make unknown subtask equivalent to stay
+        self.agents.append(DummyAgent('random_dir')) #'random_dir') ) # Make unknown subtask equivalent to stay
 
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False):
         assert 'curr_subtask' in obs.keys()
@@ -301,7 +301,7 @@ class HierarchicalRL(OAIAgent):
             #     new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
         elif self.layout_name == 'forced_coordination':
             # NOTE: THIS ASSUMES BEING P2
-            # Since tasks are very limited, we use a different change insated of support and coordinated.
+            # Since tasks are very limited, we use a different change instead of support and coordinated.
             if self.p_idx == 1:
                 if (self.subtask_step + 2) % 8 == 0:
                     subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
@@ -368,6 +368,7 @@ class HierarchicalRL(OAIAgent):
             else:
                 self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
                                                             deterministic=deterministic)[0]
+            # print(f'SUBTASK: {Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)]}')
             self.num_steps_since_new_subtask = 0
         obs['curr_subtask'] = self.curr_subtask_id
         self.num_steps_since_new_subtask += 1

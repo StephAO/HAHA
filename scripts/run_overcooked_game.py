@@ -54,7 +54,7 @@ class App:
         self._running = True
         self._display_surf = None
         self.args = args
-        self.layout_name = 'asymmetric_advantages' # counter_circuit_o_1order,forced_coordination,asymmetric_advantages # args.layout_names[0]
+        self.layout_name = 'counter_circuit_o_1order' # counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room # args.layout_names[0]
 
         self.use_subtask_env = False
         if self.use_subtask_env:
@@ -63,8 +63,8 @@ class App:
         else:
             self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True, is_eval_env=True)
         self.env.set_teammate(teammate)
-        self.env.reset(p_idx=1)
-        self.env.teammate.set_idx(self.env.t_idx, self.layout_name, True, True, True)
+        self.env.reset(p_idx=0)
+        self.env.teammate.set_idx(self.env.t_idx, self.layout_name, False, True, False)
 
         self.grid_shape = self.env.grid_shape
         self.agent = agent
@@ -160,7 +160,7 @@ class App:
     def on_execute(self):
         if self.on_init() == False:
             self._running = False
-        sleep_time = 1000 // (self.fps or 100)
+        sleep_time = 1000 // (self.fps or 5)
 
         on_reset = True
         while (self._running):
@@ -173,9 +173,10 @@ class App:
             else:
                 obs = self.env.get_obs(self.env.p_idx, on_reset=False)
                 action = self.agent.predict(obs, state=self.env.state, deterministic=True)[0]
+                pygame.time.wait(sleep_time)
             done = self.step_env(action)
             self.human_action = None
-            pygame.time.wait(sleep_time)
+            # pygame.time.wait(sleep_time)
             self.on_render()
             self.curr_tick += 1
 
@@ -310,8 +311,8 @@ if __name__ == "__main__":
     # #
     # hm_hrl = HumanManagerHRL(worker, args)
     #
-    tm = load_agent(Path('agent_models/HAHA'), args)
-    agent = 'human' #HumanPlayer('agent', args)
+    tm = load_agent(Path('agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'), args) # 'agent_models/HAHA'
+    agent = 'human' #load_agent(Path('agent_models/SP'), args) #'human' #HumanPlayer('agent', args)
 
     dc = App(args, agent=agent, teammate=tm)
     dc.on_execute()

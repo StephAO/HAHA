@@ -33,11 +33,14 @@ def create_pop_from_agents(args):
     for agent_name in ['2l_hd32_seed19950226', '2l_hd32_seed20220501', '2l_hd128_s1997', '2l_hd128_seed219',
                         '2l_tpl_hd32_seed1004219', '2l_tpl_hd32_seed20220501', '2l_tpl_hd128_seed219', '2l_tpl_hd128_seed2191004']:
         best = SB3Wrapper.load(base_path / agent_name / 'best' / 'agents_dir' / 'agent_0', args)
-        worst_idx = np.random.randint(0, 2)
-        worst = SB3Wrapper.load(base_path / agent_name / f'ck_{worst_idx}' / 'agents_dir' / 'agent_0', args)
-        mid_idx = np.random.randint(2, 8)
-        mid = SB3Wrapper.load(base_path / agent_name / f'ck_{mid_idx}' / 'agents_dir' / 'agent_0', args)
-        pop_agents += [best, worst, mid]
+        pop_agents += [best]
+        for i in [0, 3]:
+            # worst_idx = np.random.randint(0, 3) # checkpoints up to ~45% of final training scores
+            next_agent = SB3Wrapper.load(base_path / agent_name / f'ck_{i}' / 'agents_dir' / 'agent_0', args)
+            # mid_idx = np.random.randint(3, 13) # checkpoints betwee 45-90% of final training scores
+            # mid = SB3Wrapper.load(base_path / agent_name / f'ck_{mid_idx}' / 'agents_dir' / 'agent_0', args)
+            pop_agents += [next_agent]
+        # print(agent_name, worst_idx, mid_idx)
 
     mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
     mat.set_agents(pop_agents)
@@ -288,12 +291,12 @@ def create_test_population(args, training_steps=1e7):
 if __name__ == '__main__':
     args = get_arguments()
     # create_test_population(args, 1e3)
-    get_hrl_agent(args, 3e7)
+    # get_hrl_agent(args, 3e7)
 
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
     #get_fcp_agent(args, training_steps=1e7)
-    # create_pop_from_agents(args)
+    create_pop_from_agents(args)
     # teammates = get_fcp_population(args, 3e7)
     #get_hrl_worker(args)
     # get_bc_and_human_proxy(args)

@@ -20,8 +20,8 @@ from stable_baselines3.common.vec_env.stacked_observations import StackedObserva
 # more during subtask worker training for robustness
 # Max number of counters the agents should use
 # USEABLE_COUNTERS = {'counter_circuit_o_1order': 8, 'forced_coordination': 5, 'asymmetric_advantages': 2, 'cramped_room': 5, 'coordination_ring': 5} # FOR WORKER TRAINING
-USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 4, 'asymmetric_advantages': 1, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
-# USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION
+# USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 4, 'asymmetric_advantages': 1, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
+USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION
 
 
 # Calculated by dividing the average overall reward by the average reward on each layout in the 2019 human trials
@@ -85,6 +85,7 @@ class OvercookedGymEnv(Env):
         self.shape_rewards = shape_rewards
         self.visualization_enabled = False
         self.step_count = 0
+        self.reset_p_idx = None
         self.teammate = None
         if full_init:
             self.init_base_env(**kwargs)
@@ -187,7 +188,7 @@ class OvercookedGymEnv(Env):
         joint_action = [None, None]
         joint_action[self.p_idx] = action
         tm_obs = self.get_obs(p_idx=self.t_idx, enc_fn=self.teammate.encoding_fn)
-        joint_action[self.t_idx] = self.teammate.predict(tm_obs,deterministic=True)[0]
+        joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=False)[0]
         joint_action = [Action.INDEX_TO_ACTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
@@ -212,8 +213,11 @@ class OvercookedGymEnv(Env):
         self.step_count += 1
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
+    def set_reset_p_idx(self, p_idx):
+        self.reset_p_idx = p_idx
+
     def reset(self, p_idx=None):
-        self.p_idx = np.random.randint(2) if p_idx is None else p_idx
+        self.p_idx = p_idx or self.reset_p_idx or np.random.randint(2)
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it
         self.stack_frames[self.p_idx] = self.main_agent_stack_frames

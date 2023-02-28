@@ -19,21 +19,32 @@ def eval_agents_with_various_teammates(agents_to_evaluate, teammates):
             eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(len(args.layout_names))]
             for eval_env in eval_envs:
                 for j, p2 in enumerate(teammates):
+                    if type(p2) != dict and p1.name == p2.name:
+                        continue
                     p2 = p2[eval_env.layout_name][0] if type(p2) == dict else p2
-                    p1.set_idx(0, eval_env.layout_name, is_hrl=('hrl' in p1.name), tune_subtasks="+tuned" in p1.name)
-                    p2.set_idx(1, eval_env.layout_name, is_hrl=('hrl' in p2.name), tune_subtasks="+tuned" in p2.name)
-                    # p1.p_idx, p2.idx = 0, 1
-                    # p1.set_play_params(False, "+tuned" in p1.name)
-                    # p2.set_play_params(False, "+tuned" in p2.name)
-                    # p1.layout_name = eval_env.layout_name
-                    # p2.layout_name = eval_env.layout_name
                     print(f'Now evaluating {p1.name} with teammates {p2.name}')
-                    eval_env.set_teammate(p2)
-                    mean_reward, std_reward = evaluate_policy(p1, eval_env, n_eval_episodes=10,
-                                                              deterministic=False, warn=False, render=False)
-                    score_matrices[eval_env.layout_name][i][j] = mean_reward
+                    for p_idx in [0, 1]:
+                        p1.set_idx(p_idx, eval_env.layout_name, is_hrl=('hrl' in p1.name), tune_subtasks="+tuned" in p1.name)
+                        p2.set_idx(1-p_idx, eval_env.layout_name, is_hrl=('hrl' in p2.name), tune_subtasks="+tuned" in p2.name)
+                        # p1.p_idx, p2.idx = 0, 1
+                        # p1.set_play_params(False, "+tuned" in p1.name)
+                        # p2.set_play_params(False, "+tuned" in p2.name)
+                        # p1.layout_name = eval_env.layout_name
+                        # p2.layout_name = eval_env.layout_name
+                        eval_env.set_teammate(p2)
+                        eval_env.set_reset_p_idx(p_idx)
+                        mean_reward, std_reward = evaluate_policy(p1, eval_env, n_eval_episodes=5,
+                                                                  deterministic=False, warn=False, render=False)
+                        score_matrices[eval_env.layout_name][i][j] += mean_reward
                     pbar.update(1)
+                    score_matrices[eval_env.layout_name][i][j] /= 2
     pbar.close()
+
+    print(score_matrices)
+
+    print([p.name for p in agents_to_evaluate])
+    print([('bc' if type(p) == dict else p.name) for p in teammates])
+    print(score_matrices)
 
     return score_matrices
 
@@ -58,11 +69,16 @@ if __name__ == "__main__":
     main_agents_fns = [base_dir / fn for fn in main_agents_fns]
 
     main_agents = load_agents_population(main_agents_fns, args)
-    # bc, human_proxy = train_agents.get_bc_and_human_proxy(args)
+    bc, human_proxy = train_agents.get_bc_and_human_proxy(args)
 
     # Load main agents again to avoid issues with hrl object
-    tms = [*load_agents_population(main_agents_fns, args), DummyAgent('random')]#, human_proxy]
+    # tms = [*load_agents_population(main_agents_fns, args), DummyAgent('random'), human_proxy] # *load_agents_population(main_agents_fns, args),
+    # tms = get_fcp_population(args, training_steps)
 
+    # tm_fns = ["ck_0", "ck_4", "ck_8", "ck_12", "ck_16", "best"]
+    # tm_fns = [base_dir / '2l_hd128_s1997' / fn / 'agents_dir' / 'agent_0' for fn in tm_fns]
+    tms = [human_proxy] #[*load_agents_population(tm_fns, args)]
+    print(len(tms))
 
     score_matrices = eval_agents_with_various_teammates(main_agents, tms)
     for layout in args.layout_names:
