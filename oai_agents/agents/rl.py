@@ -177,7 +177,7 @@ class SingleAgentTrainer(OAITrainer):
                     if all(env_success):
                         break
                 else:
-                    mean_reward = self.evaluate(self.learning_agent, timestep=curr_timesteps)
+                    mean_reward, rew_per_layout = self.evaluate(self.learning_agent, timestep=curr_timesteps)
                     if mean_reward >= best_score:
                         best_path, best_tag = self.save_agents(tag='best')
                         print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
@@ -271,7 +271,7 @@ class MultipleAgentsTrainer(OAITrainer):
         if self.fcp_ck_rate is not None:
             self.ck_list = []
             path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
-            self.ck_list.append((0, path, tag))
+            self.ck_list.append(({k: 0 for k in self.args.layout_names}, path, tag))
         best_path, best_tag = None, None
         best_score = -1
         exp_name = exp_name or self.args.exp_name
@@ -303,12 +303,12 @@ class MultipleAgentsTrainer(OAITrainer):
             if (epoch + 1) % 5 == 0 or (mean_training_rew > best_training_rew and np.sum(self.agents_timesteps) > 2e7):
                 if mean_training_rew >= best_training_rew:
                     best_training_rew = mean_training_rew
-                mean_reward = self.evaluate(self.agents[learner_idx], timestep=np.sum(self.agents_timesteps))
+                mean_reward, rew_per_layout= self.evaluate(self.agents[learner_idx], timestep=np.sum(self.agents_timesteps))
                 # FCP checkpoint saving
                 if self.fcp_ck_rate and len(self.agents) == 1:
                     if self.agents_timesteps[0] // self.fcp_ck_rate > (len(self.ck_list) - 1):
                         path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
-                        self.ck_list.append((mean_reward, path, tag))
+                        self.ck_list.append((rew_per_layout, path, tag))
                 # Saving best model
                 if mean_reward >= best_score:
                     best_path, best_tag = self.save_agents(tag='best')
@@ -318,32 +318,37 @@ class MultipleAgentsTrainer(OAITrainer):
         self.load_agents(best_path, best_tag)
         run.finish()
 
-    def get_fcp_agents(self):
+    def get_fcp_agents(self, layout_name):
         if len(self.ck_list) < 3:
             raise ValueError('Must have at least 3 checkpoints saved. Increase fcp_ck_rate or training length')
         agents = []
+        # Best agent for this layout
         best_score = -1
         best_path, best_tag = None, None
-        for score, path, tag in self.ck_list:
+        for scores, path, tag in self.ck_list:
+            score = scores[layout_name]
             if score > best_score:
                 best_score = score
                 best_path, best_tag = path, tag
         best = self.load_agents(best_path, best_tag)
         agents.extend(best)
         del best
+        # Worst agent for this layout
         _, worst_path, worst_tag = self.ck_list[0]
         worst = self.load_agents(worst_path, worst_tag)
         agents.extend(worst)
         del worst
-
+        # Middle agent for this layout
         closest_to_mid_score = float('inf')
         mid_path, mid_tag = None, None
-        for i, (score, path, tag) in enumerate(self.ck_list):
+        for i, (scores, path, tag) in enumerate(self.ck_list):
+            score = scores[layout_name]
             if abs((best_score / 2) - score) < closest_to_mid_score:
                 closest_to_mid_score = score
                 mid_path, mid_tag = path, tag
         mid = self.load_agents(mid_path, mid_tag)
         agents.extend(mid)
         del mid
+
         return agents
 

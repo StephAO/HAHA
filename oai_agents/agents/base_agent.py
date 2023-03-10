@@ -374,25 +374,27 @@ class OAITrainer(ABC):
     def evaluate(self, eval_agent, num_eps_per_layout_per_tm=4, visualize=False, timestep=None, log_wandb=True,
                  deterministic=False):
         tot_mean_reward = []
+        rew_per_layout = {}
         use_layout_specific_tms = type(self.eval_teammates) == dict
         timestep = timestep if timestep is not None else eval_agent.num_timesteps
         for i, env in enumerate(self.eval_envs):
             tms = self.eval_teammates[env.get_layout_name()] if use_layout_specific_tms else self.eval_teammates
-            mean_reward_for_layout = []
+            rew_per_layout[env.layout_name] = []
             for tm in tms:
                 env.set_teammate(tm)
                 mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_eps_per_layout_per_tm,
                                                           deterministic=deterministic, warn=False, render=visualize)
                 tot_mean_reward.append(mean_reward)
-                mean_reward_for_layout.append(mean_reward)
+                rew_per_layout[env.layout_name].append(mean_reward)
                 print(f'Eval at timestep {timestep} for layout {env.layout_name} with tm {tm.name}: {mean_reward}')
+            rew_per_layout[env.layout_name] = np.mean(rew_per_layout[env.layout_name])
             if log_wandb:
-                wandb.log({f'eval_mean_reward_{env.layout_name}': np.mean(mean_reward_for_layout), 'timestep': timestep})
+                wandb.log({f'eval_mean_reward_{env.layout_name}': rew_per_layout[env.layout_name], 'timestep': timestep})
 
         print(f'Eval at timestep {timestep}: {np.mean(tot_mean_reward)}')
         if log_wandb:
             wandb.log({f'eval_mean_reward': np.mean(tot_mean_reward), 'timestep': timestep})
-        return np.mean(tot_mean_reward)
+        return np.mean(tot_mean_reward), rew_per_layout
 
     def set_new_teammates(self):
         for i in range(self.args.n_envs):
