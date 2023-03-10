@@ -88,6 +88,7 @@ class OvercookedGymEnv(Env):
         self.step_count = 0
         self.reset_p_idx = None
         self.teammate = None
+        self.p_idx = None
         if full_init:
             self.init_base_env(**kwargs)
 

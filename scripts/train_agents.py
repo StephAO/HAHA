@@ -27,12 +27,12 @@ def calculate_agent_pairing_score_matrix(agents, args):
 
 def create_pop_from_agents(args):
     # WARNING: THIS IS JUST TEMPLATE CODE. This function requires hand figuring out each ck to use for the mid ck
-    pop_agents = []
     base_path = args.base_dir / 'agent_models'
     # for agent_name, mid_ck in zip(['fs_16_s16384', 'fs_256_s16384', 'no_fs_16_s16384', 'no_fs_256_s16384'], ['ck_5', 'ck_4', 'ck_7', 'ck_7']):
     mid_indices = {'forced_coordination': [2, 9], 'counter_circuit_o_1order': [0, 7], 'asymmetric_advantages': [0, 1], 'cramped_room': [0, 2], 'coordination_ring': [0, 3]}
     for layout_name in args.layout_names:
-        for agent_name in ['2l_hd32_seed19950226', '2l_hd32_seed20220501', '2l_hd128_s1997', '2l_hd128_seed219',
+        pop_agents = []
+        for agent_name in ['2l_hd32_seed19950226', '2l_hd32_seed20220501', '2l_hd128_seed1997', '2l_hd128_seed219',
                             '2l_tpl_hd32_seed1004219', '2l_tpl_hd32_seed20220501', '2l_tpl_hd128_seed219', '2l_tpl_hd128_seed2191004']:
             best = SB3Wrapper.load(base_path / agent_name / 'best' / 'agents_dir' / 'agent_0', args)
             pop_agents += [best]
@@ -74,9 +74,9 @@ def get_eval_teammates(args):
 
 # SP
 def get_selfplay_agent(args, training_steps=1e7, tag=None):
-    self_play_trainer = MultipleAgentsTrainer(args, name='selfplay', num_agents=1, seed=496)
+    self_play_trainer = MultipleAgentsTrainer(args, name='selfplay', num_agents=1, seed=499, use_cnn=False, use_frame_stack=True)
     try:
-        tag = tag or 'ijcai'
+        tag = tag or 'ijcai_testing2'
         self_play_trainer.load_agents(tag=tag)
     except FileNotFoundError as e:
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
@@ -131,7 +131,7 @@ def get_fcp_population(args, training_steps=2e7):
         fcp_pop = {}
         for layout_name in args.layout_names:
             mat = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}', num_agents=0)
-            fcp_pop[layout_name] = mat.load_agents(tag='ijcai')
+            fcp_pop[layout_name] = mat.load_agents(tag='ijcai_final')
             print(f'Loaded fcp_pop with {len(fcp_pop)} agents.')
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
@@ -166,13 +166,13 @@ def get_fcp_population(args, training_steps=2e7):
             pop.save_agents()
             fcp_pop[layout_name] = pop.get_agents()
         args.layout_names = layout_names
-    return tms
+    return fcp_pop
 
 def get_fcp_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     eval_tms = get_eval_teammates(args)
     print('start training')
-    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_widx', use_subtask_counts=False, inc_sp=False, use_policy_clone=False)
+    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_dtms', use_subtask_counts=False, inc_sp=False, use_policy_clone=False)
     fcp_trainer.train_agents(total_timesteps=training_steps)
     print('end training')
     return fcp_trainer.get_agents()[0]
@@ -195,7 +195,7 @@ def get_hrl_agent(args, training_steps=1e7):
     worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
     # Create manager
-    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name='hrl_manager_notmst', inc_sp=True, use_policy_clone=False)
+    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name='hrl_manager_notmst', inc_sp=False, use_policy_clone=False)
     #rlmt.load_agents()
     rlmt.train_agents(total_timesteps=training_steps)
     manager = rlmt.get_agents()[0]
@@ -301,12 +301,12 @@ def create_test_population(args, training_steps=1e7):
 if __name__ == '__main__':
     args = get_arguments()
     # create_test_population(args, 1e3)
-    # get_hrl_agent(args, 3e7)
+    #get_hrl_agent(args, 3e7)
 
     # create_test_population(args, 1e3)
     # get_bc_and_human_proxy(args)
-    #get_fcp_agent(args, training_steps=1e7)
-    create_pop_from_agents(args)
+    #get_fcp_agent(args, training_steps=5e7)
+    #create_pop_from_agents(args)
     # teammates = get_fcp_population(args, 3e7)
     #get_hrl_agent(args, 4.5e7)
     #get_behavioral_cloning_play_agent(args, training_steps=1e8)
@@ -316,7 +316,7 @@ if __name__ == '__main__':
     
 
     # get_fcp_agent(args, training_steps=1e8)
-    #get_selfplay_agent(args, training_steps=1e8)
+    get_selfplay_agent(args, training_steps=3e7)
 
 
     # create_pop_from_agents(args)

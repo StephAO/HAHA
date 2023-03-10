@@ -23,13 +23,13 @@ class GridEncoder(nn.Module):
         super(GridEncoder, self).__init__()
         self.kernels = (5, 3, 3)
         self.strides = (1, 1, 1)
-        self.channels = (32, 32, 32)
+        self.channels = (64, 32, 32)
         self.padding = (2, 1, 1)
 
         layers = []
         current_channels = grid_shape[0]
         for i, (k, s, p, c) in enumerate(zip(self.kernels, self.strides, self.padding, self.channels)):
-            layers.append(spectral_norm(nn.Conv2d(current_channels, c, k, stride=s, padding=p)))#self.padding))
+            layers.append(spectral_norm(nn.Conv2d(current_channels, c, k, stride=s, padding=p)))#spectral_norm( self.padding))
             layers.append(act())
             current_channels = c
             # depth *= 2
@@ -47,7 +47,7 @@ class MLP(nn.Module):
         if num_layers > 1:
             layers = [spectral_norm(nn.Linear(input_dim, hidden_dim)), act()]
         else:
-            layers = [spectral_norm(nn.Linear(input_dim, output_dim)), act()]
+            layers = [nn.Linear(input_dim, output_dim), act()]
         for _ in range(num_layers - 2):
             layers += [spectral_norm(nn.Linear(hidden_dim, hidden_dim)), act()]
         if num_layers > 1:

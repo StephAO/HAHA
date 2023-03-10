@@ -11,7 +11,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from sb3_contrib import RecurrentPPO, MaskablePPO
 import wandb
 
-EPOCH_TIMESTEPS = 500000
+EPOCH_TIMESTEPS = 65000
 VEC_ENV_CLS = DummyVecEnv #
 
 class SingleAgentTrainer(OAITrainer):
@@ -56,15 +56,16 @@ class SingleAgentTrainer(OAITrainer):
             sb3_agent = RecurrentPPO('MultiInputLstmPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1,
                                      n_steps=2048, batch_size=64)
             agent_name = f'{name}_lstm'
-        elif use_maskable_ppo:
-            sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=400,
-                                    n_epochs=20, learning_rate=0.0003, batch_size=400, ent_coef=0.01, vf_coef=0.3,
-                                    gamma=0.99, gae_lambda=0.98)
+        elif use_maskable_ppo: # Essentially equivalent to is_hrl
+            #EPOCH_TIMESTEPS = EPOCH_TIMESTEPS / 8
+            sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=63,
+                                    n_epochs=4, learning_rate=0.0003, batch_size=250, ent_coef=0.001, vf_coef=0.3,
+                                    gamma=0.99, gae_lambda=0.95)
             agent_name = f'{name}'
         else:
-            sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=400,
-                            n_epochs=20, learning_rate=0.0003, batch_size=400, ent_coef=0.0, vf_coef=0.3,
-                            gamma=0.99, gae_lambda=0.98)
+            sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=500,
+                            n_epochs=4, learning_rate=0.0003, batch_size=250, ent_coef=0.001, vf_coef=0.3,
+                            gamma=0.99, gae_lambda=0.95)
             agent_name = f'{name}'
         self.learning_agent = self.wrap_agent(sb3_agent, agent_name)
         self.agents = [self.learning_agent]
@@ -227,6 +228,7 @@ class MultipleAgentsTrainer(OAITrainer):
             net_arch=[dict(pi=layers, vf=layers)] # hidden_dim, hidden_dim,
         )
         if use_cnn:
+            print('USING CNN')
             policy_kwargs.update(
                 features_extractor_class=OAISinglePlayerFeatureExtractor,
                 features_extractor_kwargs=dict(hidden_dim=hidden_dim)
@@ -236,18 +238,19 @@ class MultipleAgentsTrainer(OAITrainer):
         self.agents_in_training = np.ones(num_agents)
         self.agents_timesteps = np.zeros(num_agents)
         if use_lstm:
+            print('USING LSTM')
             policy_kwargs['n_lstm_layers'] = 2
             policy_kwargs['lstm_hidden_size'] = hidden_dim
             for i in range(num_agents):
                 sb3_agent = RecurrentPPO('MultiInputLstmPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1,
-                                         n_steps=2048, batch_size=64)
+                                         n_steps=500, batch_size=125, n_epochs=2, ent_coef=0.001, vf_coef=0.3)
                 agent_name = f'{name}_lstm_{i + 1}'
                 self.agents.append(SB3LSTMWrapper(sb3_agent, agent_name, args))
         else:
             for i in range(num_agents):
-                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=25000,
-                                n_epochs=20, learning_rate=0.0003, batch_size=400, ent_coef=0.01, vf_coef=0.3,
-                                gamma=0.99, gae_lambda=0.98)#, clip_range_vf=clip_sched)
+                sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=500,
+                                n_epochs=1, learning_rate=0.0003, batch_size=32, ent_coef=0.001, vf_coef=0.3,
+                                gamma=0.99, gae_lambda=0.95)#, clip_range_vf=clip_sched)
                 agent_name = f'{name}_{i + 1}'
                 self.agents.append(SB3Wrapper(sb3_agent, agent_name, args))
 
