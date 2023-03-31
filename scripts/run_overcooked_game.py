@@ -4,12 +4,17 @@ import pandas as pd
 from pathlib import Path
 import pygame
 from pygame import K_UP, K_LEFT, K_RIGHT, K_DOWN, K_SPACE, K_s
-from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE
+from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE, FULLSCREEN
 import matplotlib
 matplotlib.use('TkAgg')
 from os import listdir
 from os.path import isfile, join
 import re
+
+import pathlib
+temp = pathlib.PosixPath
+pathlib.PosixPath = pathlib.WindowsPath
+
 
 from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
@@ -123,7 +128,8 @@ class App:
 
         obs, reward, done, info = self.env.step(agent_action)
 
-        pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
+        #pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
+        #pygame.image.save(self.window, f"C:/Users/ARL/oai_agents/screenshots/screenshot_{self.curr_tick}.png")
 
         # Log data to send to psiturk client
         curr_reward = sum(info['sparse_r_by_agent'])
@@ -311,7 +317,9 @@ if __name__ == "__main__":
     # #
     # hm_hrl = HumanManagerHRL(worker, args)
     #
-    tm = load_agent(Path('agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'), args) # 'agent_models/HAHA'
+    #tm = load_agent(Path('agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'), args) # 'agent_models/HAHA'
+    #tm = load_agent(Path('agent_models/HAHA'), args) # 'agent_models/HAHA'
+    tm = DummyAgent()
     agent = 'human' #load_agent(Path('agent_models/SP'), args) #'human' #HumanPlayer('agent', args)
 
     dc = App(args, agent=agent, teammate=tm)
