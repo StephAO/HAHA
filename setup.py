@@ -2,7 +2,7 @@
 
 from setuptools import setup, find_packages
 
-with open("README.md", "r", encoding='UTF8') as fh:
+with open("README.md", encoding='utf-8') as fh:
     long_description = fh.read()
 
 setup(name='oai_agents',
