@@ -216,7 +216,7 @@ class OvercookedGymEnv(Env):
             reward = sparse_r * ratio + shaped_r * (1 - ratio)
 
         # Scale rewards
-        if not self.is_eval_env and reward > 0:
+        if False and not self.is_eval_env and reward > 0:
             reward *= SCALING_FACTORS[self.layout_name]
 
         self.step_count += 1

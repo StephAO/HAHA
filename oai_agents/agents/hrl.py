@@ -131,7 +131,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
             rl_sat = SingleAgentTrainer(tms, args, eval_tms=eval_tms, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
             # Train if it makes sense to (can't train on an unknown task)
             if i != Subtasks.SUBTASKS_TO_IDS['unknown']:
-                rl_sat.train_agents(total_timesteps=5e6)
+                rl_sat.train_agents(total_timesteps=4.5e6)
                 agents.extend(rl_sat.get_agents())
 
         args.layout_names = original_layout_names
@@ -159,7 +159,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
 class RLManagerTrainer(SingleAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, worker, teammates, args, eval_tms=None, use_frame_stack=False, use_subtask_counts=False,
-                 inc_sp=False, use_policy_clone=False, name=None):
+                 inc_sp=False, use_policy_clone=False, name=None, seed=None):
         name = name or 'hrl_manager'
         name += ('_sp' if inc_sp else '') + ('_pc' if use_policy_clone else '')
         n_layouts = len(args.layout_names)
@@ -173,7 +173,8 @@ class RLManagerTrainer(SingleAgentTrainer):
         self.worker = worker
         super(RLManagerTrainer, self).__init__(teammates, args, eval_tms=eval_tms, name=name, env=env,
                                                eval_envs=eval_envs, inc_sp=False, use_subtask_counts=use_subtask_counts,
-                                               use_hrl=True, use_policy_clone=use_policy_clone, use_maskable_ppo=True)
+                                               use_hrl=True, use_policy_clone=use_policy_clone, use_maskable_ppo=True,
+                                               seed=seed)
         # COMMENTED CODE BELOW IS TO ADD SELFPLAY
         # However, currently it's just a reference to the agent, so the "self-teammate" could update the main agents subtask
         # To do this correctly, the "self-teammate" would have to be cloned before every epoch

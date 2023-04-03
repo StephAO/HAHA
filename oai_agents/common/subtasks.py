@@ -112,7 +112,7 @@ def calculate_completed_subtask(layout, prev_state, curr_state, p_idx):
     return Subtasks.SUBTASKS_TO_IDS[subtask]
 
 
-def non_full_pot_exists(state, terrain):
+def non_full_pot_exists(state, terrain, layout_name):
     """
     Returns true if there is currently an empty soup
     NOTE: Assumes there are 2 pots
@@ -122,7 +122,8 @@ def non_full_pot_exists(state, terrain):
         x, y = obj.position
         if obj.name == 'soup' and terrain[y][x] == 'P' and obj.is_full:
             n_full_soups += 1
-    return n_full_soups < 2
+    tot_pots = 1 if layout_name == 'cramped_room' else 2
+    return n_full_soups < tot_pots
 
 def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_counters):
     '''
@@ -166,7 +167,7 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_closer']] = 1
         # There must be an empty pot to put an onion into
         if not (layout_name == 'forced_coordination' and p_idx == 1):
-            if non_full_pot_exists(state, terrain):
+            if non_full_pot_exists(state, terrain, layout_name):
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']] = 1
     # The player is holding a plate, so it can only accomplish tasks that involve putting the plate somewhere
     elif state.players[p_idx].held_object.name == 'dish':
