@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import pygame
+import pylsl
 from pygame import K_UP, K_LEFT, K_RIGHT, K_DOWN, K_SPACE, K_s
 from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE, FULLSCREEN
 import matplotlib
@@ -11,10 +12,13 @@ from os import listdir
 from os.path import isfile, join
 import re
 
+# Windows path
 import pathlib
 temp = pathlib.PosixPath
 pathlib.PosixPath = pathlib.WindowsPath
 
+# LSL testing
+from pylsl import StreamInfo, StreamOutlet, local_clock
 
 from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
@@ -75,13 +79,17 @@ class App:
         self.agent = agent
         self.human_action = None
         self.slowmo_rate = slowmo_rate
-        self.fps = 30 // slowmo_rate if slowmo_rate is not None else None
+        self.fps = 5 #  // slowmo_rate if slowmo_rate is not None else None
         self.score = 0
         self.curr_tick = 0
         self.data_path = args.base_dir / args.data_path
         self.data_path.mkdir(parents=True, exist_ok=True)
 
-        self.collect_trajectory = False
+        self.info_stream = StreamInfo(name="GameData", type="GameData", channel_count=1, nominal_srate=self.fps,
+                                      channel_format='string', source_id='game')
+        self.outlet = StreamOutlet(self.info_stream)
+
+        self.collect_trajectory = True
         if self.collect_trajectory:
             self.trajectory = []
             trial_file = re.compile('^.*\.[0-9]+\.pickle$')
@@ -134,18 +142,23 @@ class App:
         # Log data to send to psiturk client
         curr_reward = sum(info['sparse_r_by_agent'])
         self.score += curr_reward
-        # transition = {
-        #     "state" : json.dumps(prev_state.to_dict()),
-        #     "joint_action" : joint_action, # TODO get teammate action from env to create joint_action json.dumps(joint_action.item()),
-        #     "reward" : curr_reward,
-        #     "time_left" : max((1200 - self.curr_tick) / self.fps, 0),
-        #     "score" : self.score,
-        #     "time_elapsed" : self.curr_tick / self.fps,
-        #     "cur_gameloop" : self.curr_tick,
-        #     "layout" : self.env.env.mdp.terrain_mtx,
-        #     "layout_name" : self.layout_name,
-        #     "trial_id" : 100 # TODO this is just for testing self.trial_id,
-        # }
+        transition = {
+             "state" : json.dumps(prev_state.to_dict()),
+              #"joint_action" : joint_action, # TODO get teammate action from env to create joint_action json.dumps(joint_action.item()),
+             "reward" : curr_reward,
+             "time_left" : max((1200 - self.curr_tick) / self.fps, 0),
+             "score" : self.score,
+             "time_elapsed" : self.curr_tick / self.fps,
+             "cur_gameloop" : self.curr_tick,
+             "layout" : self.env.env.mdp.terrain_mtx,
+             "layout_name" : self.layout_name,
+             "trial_id" : 100, # TODO this is just for testing self.trial_id,
+              "user_id" : 100,
+
+         }
+        trans_str = json.dumps(transition)
+        self.outlet.push_sample([trans_str])
+
         if self.collect_trajectory:
             self.trajectory.append(transition)
         return done
@@ -171,7 +184,7 @@ class App:
         on_reset = True
         while (self._running):
             if self.agent == 'human':
-                while self.human_action is None and self.fps is None:
+                if self.human_action is None and self.fps is None:
                     for event in pygame.event.get():
                         self.on_event(event)
                     pygame.event.pump()
@@ -182,7 +195,7 @@ class App:
                 pygame.time.wait(sleep_time)
             done = self.step_env(action)
             self.human_action = None
-            # pygame.time.wait(sleep_time)
+            pygame.time.wait(sleep_time)
             self.on_render()
             self.curr_tick += 1
 
@@ -318,8 +331,8 @@ if __name__ == "__main__":
     # hm_hrl = HumanManagerHRL(worker, args)
     #
     #tm = load_agent(Path('agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'), args) # 'agent_models/HAHA'
-    #tm = load_agent(Path('agent_models/HAHA'), args) # 'agent_models/HAHA'
-    tm = DummyAgent()
+    tm = load_agent(Path('agent_models/HAHA'), args) # 'agent_models/HAHA'
+    #tm = DummyAgent()
     agent = 'human' #load_agent(Path('agent_models/SP'), args) #'human' #HumanPlayer('agent', args)
 
     dc = App(args, agent=agent, teammate=tm)
