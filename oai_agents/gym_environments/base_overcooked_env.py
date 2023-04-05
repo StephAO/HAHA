@@ -89,6 +89,7 @@ class OvercookedGymEnv(Env):
         self.reset_p_idx = None
         self.teammate = None
         self.p_idx = None
+        self.joint_action = [None, None]
         if full_init:
             self.init_base_env(**kwargs)
 
@@ -133,6 +134,9 @@ class OvercookedGymEnv(Env):
 
     def get_layout_name(self):
         return self.layout_name
+
+    def get_joint_action(self):
+        return self.joint_action
 
     def set_teammate(self, teammate):
         # TODO asser has attribute observation space
@@ -199,6 +203,7 @@ class OvercookedGymEnv(Env):
         tm_obs = self.get_obs(p_idx=self.t_idx, enc_fn=self.teammate.encoding_fn)
         joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=False)[0]
         joint_action = [Action.INDEX_TO_ACTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
+        self.joint_action = joint_action
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
@@ -226,7 +231,14 @@ class OvercookedGymEnv(Env):
         self.reset_p_idx = p_idx
 
     def reset(self, p_idx=None):
-        self.p_idx = (1 - self.p_idx) if self.p_idx is not None else (p_idx or self.reset_p_idx or np.random.randint(2))
+        if p_idx is not None:
+            self.p_idx = p_idx
+        elif self.reset_p_idx is not None:
+            self.p_idx = self.reset_p_idx
+        elif self.p_idx is not None:
+            self.p_idx = 1 - self.p_idx
+        else:
+            self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it
         self.stack_frames[self.p_idx] = self.main_agent_stack_frames

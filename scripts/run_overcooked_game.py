@@ -50,11 +50,11 @@ one_counter_params = {
 class App:
     """Class to run an Overcooked Gridworld game, leaving one of the agents as fixed.
     Useful for debugging. Most of the code from http://pygametutorials.wikidot.com/tutorials-basic."""
-    def __init__(self, args, agent=None, teammate=None, slowmo_rate=None):
+    def __init__(self, args, agent=None, teammate=None, fps=5):
         self._running = True
         self._display_surf = None
         self.args = args
-        self.layout_name = 'counter_circuit_o_1order' # counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room # args.layout_names[0]
+        self.layout_name = 'asymmetric_advantages' # counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room # args.layout_names[0]
 
         self.use_subtask_env = False
         if self.use_subtask_env:
@@ -69,8 +69,7 @@ class App:
         self.grid_shape = self.env.grid_shape
         self.agent = agent
         self.human_action = None
-        self.slowmo_rate = slowmo_rate
-        self.fps = 30 // slowmo_rate if slowmo_rate is not None else None
+        self.fps = fps
         self.score = 0
         self.curr_tick = 0
         self.data_path = args.base_dir / args.data_path
@@ -88,11 +87,12 @@ class App:
 
     def on_init(self):
         pygame.init()
-        surface = StateVisualizer().render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx)
+        surface = StateVisualizer().render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0})
         self.window = pygame.display.set_mode(surface.get_size(), HWSURFACE | DOUBLEBUF | RESIZABLE)
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
         self._running = True
+
 
     def on_event(self, event):
         if event.type == pygame.KEYDOWN:
@@ -123,30 +123,29 @@ class App:
 
         obs, reward, done, info = self.env.step(agent_action)
 
-        pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
+        # pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
 
         # Log data to send to psiturk client
         curr_reward = sum(info['sparse_r_by_agent'])
         self.score += curr_reward
-        # transition = {
-        #     "state" : json.dumps(prev_state.to_dict()),
-        #     "joint_action" : joint_action, # TODO get teammate action from env to create joint_action json.dumps(joint_action.item()),
-        #     "reward" : curr_reward,
-        #     "time_left" : max((1200 - self.curr_tick) / self.fps, 0),
-        #     "score" : self.score,
-        #     "time_elapsed" : self.curr_tick / self.fps,
-        #     "cur_gameloop" : self.curr_tick,
-        #     "layout" : self.env.env.mdp.terrain_mtx,
-        #     "layout_name" : self.layout_name,
-        #     "trial_id" : 100 # TODO this is just for testing self.trial_id,
-        # }
+        transition = {
+            "state" : json.dumps(prev_state.to_dict()),
+            "joint_action" : json.dumps(self.env.get_joint_action()), # TODO get teammate action from env to create joint_action json.dumps(joint_action.item()),
+            "reward" : curr_reward,
+            "time_left" : max((1200 - self.curr_tick) / self.fps, 0),
+            "score" : self.score,
+            "time_elapsed" : self.curr_tick / self.fps,
+            "cur_gameloop" : self.curr_tick,
+            "layout" : self.env.env.mdp.terrain_mtx,
+            "layout_name" : self.layout_name,
+            "trial_id" : 100 # TODO this is just for testing self.trial_id,
+        }
         if self.collect_trajectory:
             self.trajectory.append(transition)
         return done
 
     def on_render(self, pidx=None):
-        # p0_action = Action.ACTION_TO_INDEX[self.joint_action[0]] if pidx == 1 else None # used if solo collection trajectories
-        surface = StateVisualizer().render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, pidx=pidx, hud_data={"timestep": self.curr_tick})#, p0_action=p0_action)
+        surface = StateVisualizer().render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": self.curr_tick})
         self.window = pygame.display.set_mode(surface.get_size(), HWSURFACE | DOUBLEBUF | RESIZABLE)
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
@@ -165,10 +164,10 @@ class App:
         on_reset = True
         while (self._running):
             if self.agent == 'human':
-                while self.human_action is None and self.fps is None:
-                    for event in pygame.event.get():
-                        self.on_event(event)
-                    pygame.event.pump()
+                # while self.human_action is None and self.fps is None:
+                for event in pygame.event.get():
+                    self.on_event(event)
+                pygame.event.pump()
                 action = self.human_action if self.human_action is not None else Action.ACTION_TO_INDEX[Action.STAY]
             else:
                 obs = self.env.get_obs(self.env.p_idx, on_reset=False)
@@ -176,7 +175,7 @@ class App:
                 pygame.time.wait(sleep_time)
             done = self.step_env(action)
             self.human_action = None
-            # pygame.time.wait(sleep_time)
+            pygame.time.wait(sleep_time)
             self.on_render()
             self.curr_tick += 1
 
@@ -311,8 +310,8 @@ if __name__ == "__main__":
     # #
     # hm_hrl = HumanManagerHRL(worker, args)
     #
-    tm = load_agent(Path('agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'), args) # 'agent_models/HAHA'
-    agent = 'human' #load_agent(Path('agent_models/SP'), args) #'human' #HumanPlayer('agent', args)
+    tm = load_agent(Path('agent_models/HAHA'), args) # 'agent_models/HAHA' 'agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'
+    agent = 'human' #load_agent(Path('agent_models/HAHA_nips'), args) #'human' #HumanPlayer('agent', args) # 'human'
 
     dc = App(args, agent=agent, teammate=tm)
     dc.on_execute()

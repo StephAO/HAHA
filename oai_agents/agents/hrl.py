@@ -24,7 +24,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         super(MultiAgentSubtaskWorker, self).__init__('multi_agent_subtask_worker', args)
         assert len(agents) == Subtasks.NUM_SUBTASKS - 1
         self.agents = agents
-        self.agents.append(DummyAgent('random_dir')) #'random_dir') ) # Make unknown subtask equivalent to stay
+        self.agents.append(DummyAgent()) #'random_dir') ) # Make unknown subtask equivalent to stay
 
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False):
         assert 'curr_subtask' in obs.keys()
