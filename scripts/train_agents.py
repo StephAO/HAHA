@@ -48,15 +48,18 @@ def create_pop_from_agents(args):
         mat.set_agents(pop_agents)
         mat.save_agents()
 
-def combine_populations(args, pop_names, new_name):
-    full_pop = []
-    for pop_name in pop_names:
-        mat = MultipleAgentsTrainer(args, name=pop_name, num_agents=0)
-        full_pop += mat.load_agents()
-    verify = input('WARNING: You are about to overwrite fcp_pop. Press Y to continue, or anything else to cancel.')
-    if verify.lower() == 'y':
-        mat = MultipleAgentsTrainer(args, name=new_name, num_agents=0)
-        mat.set_agents(full_pop)
+def combine_populations(args): #, pop_names, new_name):
+    pop_names = ['sp_fs_hd32_seed105', 'sp_fs_hd32_seed1997', 'sp_fs_hd256_seed105', 'sp_fs_hd256_seed1997',
+                 'sp_hd32_seed105', 'sp_hd32_seed1997', 'sp_hd256_seed105', 'sp_hd256_seed1997']
+    full_pop = {k: [] for k in args.layout_names}
+    for layout_name in args.layout_names:
+        for pop_name in pop_names:
+            mat = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}_{pop_name}', num_agents=0)
+            full_pop[layout_name] += mat.load_agents()
+        # verify = input('WARNING: You are about to overwrite fcp_pop. Press Y to continue, or anything else to cancel.')
+        # if verify.lower() == 'y':
+        mat = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}', num_agents=0)
+        mat.set_agents(full_pop[layout_name])
         print(len(mat.agents))
         mat.save_agents()
 
@@ -131,24 +134,24 @@ def get_fcp_population(args, training_steps=2e7):
         fcp_pop = {}
         for layout_name in args.layout_names:
             mat = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}', num_agents=0)
-            fcp_pop[layout_name] = mat.load_agents(tag='ijcai_final')
+            fcp_pop[layout_name] = mat.load_agents(tag='ijcai')
             print(f'Loaded fcp_pop with {len(fcp_pop)} agents.')
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
         fcp_pop = {}
-        layout_names = deepcopy(args.layout_names)
-        args.layout_names = [layout_name]
+        #layout_names = deepcopy(args.layout_names)
+        #args.layout_names = [layout_name]
         agents = []
         # use_fs = False
         # use_cnn = False
         # taper_layers = False
         num_layers = 2
-        seed = 1997
-        for use_fs in [True, False]
-            for h_dim in [32, 64]: # [8,16], [32, 64], [128, 256], [512, 1024]
+        seed = 105
+        for use_fs in [True, False]:
+            for h_dim in [32, 256]: # [8,16], [32, 64], [128, 256], [512, 1024]
                 ck_rate = training_steps // 20
                 # name = f'cnn_{num_layers}l_' if use_cnn else f'eval_{num_layers}l_'
-                name = ''
+                name = 'sp_'
                 # name += 'pc_' if use_policy_clone else ''
                 # name += 'tpl_' if taper_layers else ''
                 name += f'fs_' if use_fs else ''
@@ -159,7 +162,7 @@ def get_fcp_population(args, training_steps=2e7):
                                             fcp_ck_rate=ck_rate, seed=seed, num_layers=num_layers)
                 mat.train_agents(total_timesteps=training_steps)
 
-                for layout_name in layout_names:
+                for layout_name in args.layout_names:
                     agents = mat.get_fcp_agents(layout_name)
                     pop = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}_{name}', num_agents=0)
                     pop.set_agents(agents)
@@ -171,7 +174,7 @@ def get_fcp_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     eval_tms = get_eval_teammates(args)
     print('start training')
-    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_dtms', use_subtask_counts=False, inc_sp=False, use_policy_clone=False)
+    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp', use_subtask_counts=False, inc_sp=False, use_policy_clone=False)
     fcp_trainer.train_agents(total_timesteps=training_steps)
     print('end training')
     return fcp_trainer.get_agents()[0]
@@ -194,7 +197,7 @@ def get_hrl_agent(args, training_steps=1e7):
     worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
     # Create manager
-    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name='hrl_manager_notmst', inc_sp=False, use_policy_clone=False)
+    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name='HAHA_long_500steps', inc_sp=False, use_policy_clone=False, seed=420)
     #rlmt.load_agents()
     rlmt.train_agents(total_timesteps=training_steps)
     manager = rlmt.get_agents()[0]
@@ -299,16 +302,16 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
-    # get_selfplay_agent(args, training_steps=5e7)
+    #get_selfplay_agent(args, training_steps=1e8)
     # get_bc_and_human_proxy(args)
-    # get_behavioral_cloning_play_agent(args, training_steps=5e7)
+    #get_behavioral_cloning_play_agent(args, training_steps=1e8)
 
-    get_fcp_population(args, 2e7)
-    # get_fcp_agent(args, training_steps=5e7)
+    # get_fcp_population(args, 2e7)
+    # get_fcp_agent(args, training_steps=1e8)
     # get_hrl_worker(args)
-    # get_hrl_agent(args, 4.5e7)
+    get_hrl_agent(args, 1.5e8)
 
     # create_test_population(args, 1e3)
     # create_pop_from_agents(args)
 
-
+    #combine_populations(args)
