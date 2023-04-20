@@ -60,10 +60,10 @@ class OvercookedGymEnv(Env):
         self.enc_num_channels = 26 # Default channels of OAI_Lossless encoding
         self.obs_dict = {}
         if enc_fn == 'OAI_feats':
-            #self.obs_dict['agent_obs'] = spaces.Box(0, 400, (96,), dtype=np.int)
+
             self.obs_dict['agent_obs'] = spaces.Box(0, 400, (96,), dtype=int)
         else:
-            #self.obs_dict['visual_obs'] = spaces.Box(0, 20, (self.enc_num_channels, *self.grid_shape), dtype=np.int)
+
             self.obs_dict['visual_obs'] = spaces.Box(0, 20, (self.enc_num_channels, *self.grid_shape), dtype=int)
             # Stacked obs for main player (index 0) and teammate (index 1)
             self.stackedobs = [StackedObservations(1, args.num_stack, self.obs_dict['visual_obs'], 'first'),
@@ -72,9 +72,9 @@ class OvercookedGymEnv(Env):
             self.obs_dict['visual_obs'] = self.stackedobs[0].stack_observation_space(self.obs_dict['visual_obs'])
 
         if ret_completed_subtasks:
-            #self.obs_dict['player_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
+
             self.obs_dict['player_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=int)
-            # self.obs_dict['teammate_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
+
             # self.obs_dict['teammate_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=int)
             self.obs_dict['subtask_mask'] = spaces.MultiBinary(Subtasks.NUM_SUBTASKS)
         # self.obs_dict['layout_idx'] = spaces.MultiBinary(5)

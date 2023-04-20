@@ -8,7 +8,9 @@ from pygame import K_UP, K_LEFT, K_RIGHT, K_DOWN, K_SPACE, K_s
 from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE, FULLSCREEN
 import matplotlib
 matplotlib.use('TkAgg')
-from os import listdir
+
+from os import listdir, environ, system
+
 from os.path import isfile, join
 import re
 
@@ -19,6 +21,13 @@ pathlib.PosixPath = pathlib.WindowsPath
 
 # LSL testing
 from pylsl import StreamInfo, StreamOutlet, local_clock
+
+import pathlib
+temp = pathlib.PosixPath
+pathlib.PosixPath = pathlib.WindowsPath
+
+from pylsl import StreamInfo, StreamOutlet, local_clock
+
 
 from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
@@ -38,10 +47,8 @@ from overcooked_ai_py.planning.planners import MediumLevelActionManager
 
 
 
-
 def pause():
-    programPause = input("Press the <ENTER> key to continue...")
-
+    programPause = input("Press the <Enter> key to continue...")
 
 
 no_counters_params = {
@@ -98,8 +105,10 @@ class App:
         self.info_stream = StreamInfo(name="GameData", type="GameData", channel_count=1, nominal_srate=self.fps,
                                       channel_format='string', source_id='game')
         self.outlet = StreamOutlet(self.info_stream)
-        start_LSLstr = "\n\n\nRefresh LSL streams, select GameData and start LSL recording"
-        print(start_LSLstr)
+
+
+        print("\n\nRefresh LSL streams\nSelect GameData stream\n Start LSL recording")
+
         pause()
 
 
@@ -146,14 +155,11 @@ class App:
         if event.type == pygame.QUIT:
             self._running = False
 
+
     def step_env(self, agent_action):
         prev_state = self.env.state
 
         obs, reward, done, info = self.env.step(agent_action)
-
-
-        #pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
-        #pygame.image.save(self.window, f"C:/Users/ARL/oai_agents/screenshots/screenshot_{self.curr_tick}.png")
 
         # pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
 
@@ -163,19 +169,22 @@ class App:
         self.score += curr_reward
         transition = {
 
-             "state" : json.dumps(prev_state.to_dict()),
-             "joint_action": json.dumps(self.env.get_joint_action()),  # TODO get teammate action from env to create joint_action json.dumps(joint_action.item()),
-             "reward" : curr_reward,
-             "time_left" : max((1200 - self.curr_tick) / self.fps, 0),
-             "score" : self.score,
-             "time_elapsed" : self.curr_tick / self.fps,
-             "cur_gameloop" : self.curr_tick,
-             "layout" : self.env.env.mdp.terrain_mtx,
-             "layout_name" : self.layout_name,
-             "trial_id" : 100, # TODO this is just for testing self.trial_id,
-             "user_id" : 100,
+            "state" : json.dumps(prev_state.to_dict()),
+            "joint_action" : json.dumps(self.env.get_joint_action()), # TODO get teammate action from env to create joint_action json.dumps(joint_action.item()),
+            "reward" : curr_reward,
+            "time_left" : max((1200 - self.curr_tick) / self.fps, 0),
+            "score" : self.score,
+            "time_elapsed" : self.curr_tick / self.fps,
+            "cur_gameloop" : self.curr_tick,
+            "layout" : self.env.env.mdp.terrain_mtx,
+            "layout_name" : self.layout_name,
+            "trial_id" : 100, # TODO this is just for testing self.trial_id,
+            "dimension": (self.x, self.y, self.surface_size, self.tile_size, self.grid_shape, self.hud_size),
+            "timestamp": time.time(),
+            "user_id": 100,
+        }
 
-         }
+
         trans_str = json.dumps(transition)
         self.outlet.push_sample([trans_str])
 
