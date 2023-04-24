@@ -19,8 +19,10 @@ import pathlib
 temp = pathlib.PosixPath
 pathlib.PosixPath = pathlib.WindowsPath
 
-import time
 
+import pathlib
+temp = pathlib.PosixPath
+pathlib.PosixPath = pathlib.WindowsPath
 
 # Lab streaming layer
 from pylsl import StreamInfo, StreamOutlet, local_clock
@@ -182,7 +184,7 @@ class App:
             "layout_name" : self.layout_name,
             "trial_id" : 100, # TODO this is just for testing self.trial_id,
             #"dimension": (self.x, self.y, self.surface_size, self.tile_size, self.grid_shape, self.hud_size),
-            "timestamp": time.time(),
+            #"timestamp": time.time(),
             "user_id": 100,
         }
 
