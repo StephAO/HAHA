@@ -9,10 +9,13 @@ from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE, FULLSCREEN
 import matplotlib
 matplotlib.use('TkAgg')
 
+
 from os import listdir, environ, system
+
 
 from os.path import isfile, join
 import re
+import time
 
 # Windows path
 import pathlib
@@ -81,7 +84,8 @@ class App:
         self._running = True
         self._display_surf = None
         self.args = args
-        self.layout_name = 'asymmetric_advantages' # counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room # args.layout_names[0]
+        self.layout_name = 'asymmetric_advantages' #'counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room' # args.layout_names[0]
+        # self.layout_name = np.random.choice(self.layout_names)
 
         self.use_subtask_env = False
         if self.use_subtask_env:
@@ -125,10 +129,19 @@ class App:
             self.trial_id = max(trial_ids) + 1 if len(trial_ids) > 0 else 1
 
     def on_init(self):
+        surface = StateVisualizer(tile_size=175).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0})
+
         pygame.init()
-        surface = StateVisualizer().render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0})
-        self.window = pygame.display.set_mode(surface.get_size(), HWSURFACE | DOUBLEBUF | RESIZABLE)
+        self.surface_size = surface.get_size()
+        self.x, self.y = (1920 - self.surface_size[0]) // 2, (1080 - self.surface_size[1]) // 2
+        self.tile_size = StateVisualizer().tile_size
+        self.grid_shape = self.env.mdp.shape
+        self.hud_size = self.surface_size[1] - (self.grid_shape[1] * self.tile_size)
+        environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (self.x, self.y)
+
+        self.window = pygame.display.set_mode(self.surface_size, HWSURFACE | DOUBLEBUF | RESIZABLE)
         self.window.blit(surface, (0, 0))
+        print(self.x, self.y, self.surface_size, self.tile_size, self.grid_shape, self.hud_size)
         pygame.display.flip()
         self._running = True
 
@@ -183,9 +196,10 @@ class App:
             "layout" : self.env.env.mdp.terrain_mtx,
             "layout_name" : self.layout_name,
             "trial_id" : 100, # TODO this is just for testing self.trial_id,
-            #"dimension": (self.x, self.y, self.surface_size, self.tile_size, self.grid_shape, self.hud_size),
-            #"timestamp": time.time(),
+            "dimension": (self.x, self.y, self.surface_size, self.tile_size, self.grid_shape, self.hud_size),
+            "timestamp": time.time(),
             "user_id": 100,
+
         }
 
 
@@ -197,7 +211,7 @@ class App:
         return done
 
     def on_render(self, pidx=None):
-        surface = StateVisualizer().render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": self.curr_tick})
+        surface = StateVisualizer(tile_size=175).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": self.curr_tick})
         self.window = pygame.display.set_mode(surface.get_size(), HWSURFACE | DOUBLEBUF | RESIZABLE)
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
@@ -262,6 +276,30 @@ class App:
                     return str(list_of_lists)
                 df['layout'] = df['layout'].apply(joiner)
                 df.to_pickle(data_path / f)
+
+
+def map_eye_tracking_to_grid(eye_data, top_left_x, top_left_y, surface_size, tile_size, grid_shape, hud_size):
+    import matplotlib.pyplot as plt
+    grid_top_left = (top_left_x, top_left_y + hud_size)
+    heat_map = np.zeros(grid_shape)
+    x_bins = list(range(tile_size, surface_size[0], tile_size))
+    y_bins = list(range(tile_size, surface_size[1] - hud_size, tile_size))
+    for x, y in eye_data:
+        x -= grid_top_left[0]
+        y -= grid_top_left[1]
+        if not (0 < x < surface_size[0] and 0 < y < surface_size[1] - 50):
+            # Out of bounds
+            continue
+        x_bin = np.digitize(x, x_bins)
+        y_bin = np.digitize(y, y_bins)
+        heat_map[x_bin][y_bin] += 1
+
+    heat_map /= np.sum(heat_map)
+    plt.imshow(np.transpose(heat_map), cmap='hot', interpolation='nearest')
+    plt.show()
+    return heat_map
+
+
 
 class HumanManagerHRL(OAIAgent):
     def __init__(self, worker, args):
@@ -351,24 +389,10 @@ if __name__ == "__main__":
 
     args = get_arguments(additional_args)
 
-    # args.layout_names = ['tf_test_4', 'tf_test_4']
-    #
-    # data_path = args.base_dir / args.data_path
-    #
-    # mat = MultipleAgentsTrainer(args, num_agents=0)
-    # mat.load_agents(path=Path('./agent_models/fcp_pop/ego_pop'), tag='test')
-    # teammates = mat.get_agents()
-    #
-    # worker = MultiAgentSubtaskWorker.load(
-    #         Path('./agent_models/multi_agent_subtask_worker/final/'), args)
-    # #
-    # hm_hrl = HumanManagerHRL(worker, args)
-    #
+    # print(map_eye_tracking_to_grid([(680, 400), (680, 750), (1290, 400), (1290, 750), (680, 350), (0, 0)], 622, 327, (675, 425), 75, (9, 5), 50))
 
-    #tm = load_agent(Path('agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'), args) # 'agent_models/HAHA'
-    tm = load_agent(Path('agent_models/HAHA'), args) # 'agent_models/HAHA'
-    #tm = DummyAgent()
-    agent = 'human' #load_agent(Path('agent_models/SP'), args) #'human' #HumanPlayer('agent', args)
+    tm = load_agent(Path('agent_models/HAHA'), args) # 'agent_models/HAHA' 'agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'
+    agent = 'human' #load_agent(Path('agent_models/HAHA_nips'), args) #'human' #HumanPlayer('agent', args) # 'human'
 
 
     dc = App(args, agent=agent, teammate=tm)
