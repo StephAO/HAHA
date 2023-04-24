@@ -88,7 +88,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 ready_for_next_subtask = True
             # If subtask equals unknown, HRL agent will just STAY. This essentially forces a recheck every timestep
             # to see if any other task is possible
-            if self.curr_subtask == Subtasks.SUBTASKS_TO_IDS['unknown']:
+            if self.curr_subtask == Subtasks.SUBTASKS_TO_IDS['unknown'] and worker_steps >= 2:
                 ready_for_next_subtask = True
                 self.prev_subtask[self.p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
                 self.unknowns_in_a_row += 1
@@ -121,7 +121,14 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.prev_state = None
         self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]
 
-        self.p_idx = (1 - self.p_idx) if self.p_idx is not None else (p_idx or self.reset_p_idx or np.random.randint(2))
+        if p_idx is not None:
+            self.p_idx = p_idx
+        elif self.reset_p_idx is not None:
+            self.p_idx = self.reset_p_idx
+        elif self.p_idx is not None:
+            self.p_idx = 1 - self.p_idx
+        else:
+            self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it
         self.stack_frames[self.p_idx] = self.main_agent_stack_frames
