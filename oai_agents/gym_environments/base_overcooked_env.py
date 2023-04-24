@@ -20,7 +20,7 @@ from stable_baselines3.common.vec_env.stacked_observations import StackedObserva
 # more during subtask worker training for robustness
 # Max number of counters the agents should use
 # USEABLE_COUNTERS = {'counter_circuit_o_1order': 8, 'forced_coordination': 5, 'asymmetric_advantages': 2, 'cramped_room': 5, 'coordination_ring': 5} # FOR WORKER TRAINING
-USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 4, 'asymmetric_advantages': 4, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
+USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 3, 'asymmetric_advantages': 2, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
 #USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION AND SP TRAINING
 
 
@@ -71,7 +71,7 @@ class OvercookedGymEnv(Env):
 
         if ret_completed_subtasks:
             self.obs_dict['player_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
-            # self.obs_dict['teammate_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
+            self.obs_dict['teammate_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
             self.obs_dict['subtask_mask'] = spaces.MultiBinary(Subtasks.NUM_SUBTASKS)
         # self.obs_dict['layout_idx'] = spaces.MultiBinary(5)
         self.observation_space = spaces.Dict(self.obs_dict)
@@ -182,15 +182,18 @@ class OvercookedGymEnv(Env):
                 comp_st = calculate_completed_subtask(self.terrain, self.prev_state, self.state, p_idx)
                 # If a subtask has been completed, update counts
                 if comp_st is not None:
-                    self.completed_tasks[p_idx][comp_st] += 1
+                    self.completed_tasks[p_idx] = np.eye(Subtasks.NUM_SUBTASKS)[comp_st]
                     self.prev_subtask[p_idx] = comp_st
                 else:
+                    self.completed_tasks[p_idx] = np.zeros(Subtasks.NUM_SUBTASKS)
                     self.prev_subtask[p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
-            obs['player_completed_subtasks'] = np.eye(Subtasks.NUM_SUBTASKS)[comp_st] if comp_st is not None else np.zeros(Subtasks.NUM_SUBTASKS) #self.completed_tasks[p_idx]
-            # obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
+            obs['player_completed_subtasks'] =  self.completed_tasks[p_idx]
+            obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
             obs['subtask_mask'] = self.action_masks(p_idx)
             if p_idx == self.t_idx:
                 obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}
+            else:
+                obs = {k: v for k, v in obs.items() if k in self.observation_space.keys()}
 
         return obs
 

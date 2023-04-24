@@ -59,8 +59,8 @@ class SingleAgentTrainer(OAITrainer):
         elif use_maskable_ppo: # Essentially equivalent to is_hrl
             self.epoch_timesteps = 2e5
             sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=500,
-                                    n_epochs=16, learning_rate=0.0003, batch_size=500, ent_coef=0.001, vf_coef=0.3,
-                                    gamma=0.99, gae_lambda=0.95)
+                                    n_epochs=16, learning_rate=0.0003, batch_size=500, ent_coef=0.001) #, vf_coef=0.3,
+                                    # gamma=0.99, gae_lambda=0.95)
             agent_name = f'{name}'
         else:
             sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=500,

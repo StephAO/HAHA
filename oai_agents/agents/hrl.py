@@ -360,8 +360,8 @@ class HierarchicalRL(OAIAgent):
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         # TODO consider forcing new subtask if none has been completed in x timesteps
         # print(obs['player_completed_subtasks'],  self.prev_player_comp_st, (obs['player_completed_subtasks'] != self.prev_player_comp_st).any(), flush=True)
-        if np.sum(obs['player_completed_subtasks']) == 1 or \
-                self.num_steps_since_new_subtask > 15 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
+        if np.sum(obs['player_completed_subtasks']) == 1 or np.sum(obs['teammate_completed_subtasks']) == 1 or \
+            self.num_steps_since_new_subtask > 20 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
             if np.sum(obs['player_completed_subtasks'][:-1]) == 1:
                 self.subtask_step += 1
             # Completed previous subtask, set new subtask
