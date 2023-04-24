@@ -84,7 +84,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             if worker_steps % 5 == 0:
                 if not get_doable_subtasks(self.state, self.prev_subtask[self.p_idx], self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[self.curr_subtask]:
                     ready_for_next_subtask = True
-            if worker_steps > 25: # longest task is getting soup if soup needs to cook for the full 20 timsteps. Add some extra lewway
+            if worker_steps > 20: # longest task is getting soup if soup needs to cook for the full 20 timsteps. Add some extra lewway
                 ready_for_next_subtask = True
             # If subtask equals unknown, HRL agent will just STAY. This essentially forces a recheck every timestep
             # to see if any other task is possible
@@ -93,7 +93,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 self.prev_subtask[self.p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
                 self.unknowns_in_a_row += 1
                 # If no new subtask becomes available after 25 timesteps, end round
-                if self.unknowns_in_a_row > 50 and not self.is_eval_env:
+                if self.unknowns_in_a_row > 10 and not self.is_eval_env:
                     done = True
             else:
                 self.unknowns_in_a_row = 0
@@ -102,6 +102,11 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 completed_subtask = calculate_completed_subtask(self.terrain, self.prev_state, self.state, self.p_idx)
                 if completed_subtask != self.curr_subtask:
                     self.worker_failures[self.curr_subtask] += 1
+                    self.failures_in_a_row += 1
+                    if self.failures_in_a_row >= 5 and not self.is_eval_env:
+                         done = True
+                else:
+                    self.failures_in_a_row = 0
                 ready_for_next_subtask = True
 
         return self.get_obs(self.p_idx, done=done), reward, done, info
@@ -126,6 +131,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.stack_frames_need_reset = [True, True]
         self.curr_subtask = 0
         self.unknowns_in_a_row = 0
+        self.failures_in_a_row = 0
         # Reset subtask counts
         self.completed_tasks = [np.zeros(Subtasks.NUM_SUBTASKS), np.zeros(Subtasks.NUM_SUBTASKS)]
         return self.get_obs(self.p_idx, on_reset=True)

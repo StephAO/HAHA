@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 import torch as th
 
-ARGS_TO_SAVE_LOAD = ['layout_names', 'encoding_fn']
+ARGS_TO_SAVE_LOAD = ['encoding_fn'] #'layout_names', 
 
 def get_arguments(additional_args=[]):
     """
@@ -17,7 +17,7 @@ def get_arguments(additional_args=[]):
                         help='What distributions to use when training on multiple environments. Options: "uniform", "random", "splits". Default: "uniform"')
     parser.add_argument('--subtask-selection', type=str, default='value_based',
                         help='Which subtask selection algorithm to use. Options: "value_based", "dist". Default: "value_based"')
-    parser.add_argument('--horizon', type=int, default=1200, help='Max timesteps in a rollout')
+    parser.add_argument('--horizon', type=int, default=400, help='Max timesteps in a rollout')
     parser.add_argument('--n-envs', type=int, default=50, help='Number of environments to use while training')
     parser.add_argument('--num_stack', type=int, default=2, help='Number of frame stacks to use in training')
     parser.add_argument('--encoding-fn', type=str, default='OAI_egocentric',

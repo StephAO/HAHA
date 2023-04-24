@@ -20,7 +20,7 @@ from stable_baselines3.common.vec_env.stacked_observations import StackedObserva
 # more during subtask worker training for robustness
 # Max number of counters the agents should use
 # USEABLE_COUNTERS = {'counter_circuit_o_1order': 8, 'forced_coordination': 5, 'asymmetric_advantages': 2, 'cramped_room': 5, 'coordination_ring': 5} # FOR WORKER TRAINING
-USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 4, 'asymmetric_advantages': 2, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
+USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 4, 'asymmetric_advantages': 4, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
 #USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION AND SP TRAINING
 
 

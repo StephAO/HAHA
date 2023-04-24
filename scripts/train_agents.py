@@ -197,7 +197,7 @@ def get_hrl_agent(args, training_steps=1e7):
     worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
     # Create manager
-    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name='HAHA_long_500steps', inc_sp=False, use_policy_clone=False, seed=420)
+    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name='HAHA_long_8epoch_bs250_steps250', inc_sp=False, use_policy_clone=False, seed=420)
     #rlmt.load_agents()
     rlmt.train_agents(total_timesteps=training_steps)
     manager = rlmt.get_agents()[0]
