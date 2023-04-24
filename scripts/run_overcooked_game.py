@@ -19,15 +19,14 @@ import pathlib
 temp = pathlib.PosixPath
 pathlib.PosixPath = pathlib.WindowsPath
 
-# LSL testing
+import time
+
+
+# Lab streaming layer
 from pylsl import StreamInfo, StreamOutlet, local_clock
 
-import pathlib
-temp = pathlib.PosixPath
-pathlib.PosixPath = pathlib.WindowsPath
-
-from pylsl import StreamInfo, StreamOutlet, local_clock
-
+# Used to activate game window at game start for immediate game play
+import pygetwindow as gw
 
 from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
@@ -76,6 +75,7 @@ class App:
     """Class to run an Overcooked Gridworld game, leaving one of the agents as fixed.
     Useful for debugging. Most of the code from http://pygametutorials.wikidot.com/tutorials-basic."""
     def __init__(self, args, agent=None, teammate=None, fps=5):
+        self.x = None
         self._running = True
         self._display_surf = None
         self.args = args
@@ -130,6 +130,8 @@ class App:
         pygame.display.flip()
         self._running = True
 
+        win = gw.getWindowsWithTitle('pygame window')[0]
+        win.activate()
 
     def on_event(self, event):
         if event.type == pygame.KEYDOWN:
@@ -161,7 +163,7 @@ class App:
 
         obs, reward, done, info = self.env.step(agent_action)
 
-        # pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
+        pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
 
 
         # Log data to send to psiturk client
@@ -179,7 +181,7 @@ class App:
             "layout" : self.env.env.mdp.terrain_mtx,
             "layout_name" : self.layout_name,
             "trial_id" : 100, # TODO this is just for testing self.trial_id,
-            "dimension": (self.x, self.y, self.surface_size, self.tile_size, self.grid_shape, self.hud_size),
+            #"dimension": (self.x, self.y, self.surface_size, self.tile_size, self.grid_shape, self.hud_size),
             "timestamp": time.time(),
             "user_id": 100,
         }
