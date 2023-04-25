@@ -17,6 +17,7 @@ import re
 
 from pathlib import Path
 import pathlib
+
 # Windows path
 if name == 'nt':
     temp = pathlib.PosixPath
@@ -355,4 +356,3 @@ if __name__ == "__main__":
 
     dc = OvercookedGUI(args, agent=agent, teammate=tm)
     dc.on_execute()
-
