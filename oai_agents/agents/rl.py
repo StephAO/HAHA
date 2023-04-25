@@ -57,9 +57,9 @@ class SingleAgentTrainer(OAITrainer):
                                      n_steps=2048, batch_size=64)
             agent_name = f'{name}_lstm'
         elif use_maskable_ppo: # Essentially equivalent to is_hrl
-            self.epoch_timesteps = 2e5
+            # self.epoch_timesteps = 2e5
             sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=500,
-                                    n_epochs=16, learning_rate=0.0003, batch_size=500, ent_coef=0.001) #, vf_coef=0.3,
+                                    n_epochs=4, learning_rate=0.0003, batch_size=500, ent_coef=0.001, vf_coef=0.3)#
                                     # gamma=0.99, gae_lambda=0.95)
             agent_name = f'{name}'
         else:
@@ -69,43 +69,6 @@ class SingleAgentTrainer(OAITrainer):
             agent_name = f'{name}'
         self.learning_agent = self.wrap_agent(sb3_agent, agent_name)
         self.agents = [self.learning_agent]
-
-        if not self.using_hrl:
-            for i in range(3):
-                if inc_sp:
-                    if self.use_policy_clone:
-                        self.teammates.append(PolicyClone(self.learning_agent, args, name=f'playable_self_{i}'))
-                    else:
-                        self.teammates.append(self.learning_agent)
-
-            if (not self.use_subtask_eval) and inc_sp:
-                pc = PolicyClone(self.learning_agent, args, name='playable_self')
-                if type(self.eval_teammates) == dict:
-                    for k in self.eval_teammates:
-                        self.eval_teammates[k].append((pc if self.use_policy_clone else self.learning_agent))
-                elif self.eval_teammates is not None:
-                    self.eval_teammates.append((pc if self.use_policy_clone else self.learning_agent))
-                else:
-                    self.eval_teammates = self.teammates
-
-    def update_pc(self, epoch):
-        if not self.use_policy_clone:
-            return
-        for i, tm in enumerate(self.teammates):
-            idx = epoch % 3
-            if tm.name == f'playable_self_{idx}':
-                self.teammates[i] = PolicyClone(self.learning_agent, args, name=f'playable_self_{i}')
-        if not self.use_subtask_eval:
-            pc = PolicyClone(self.learning_agent, args, name='playable_self')
-            if type(self.eval_teammates) == dict:
-                for k in self.eval_teammates:
-                    for i, tm in enumerate(self.eval_teammates[k]):
-                        if tm.name == 'playable_self':
-                            self.eval_teammates[k][i] = pc
-            elif self.eval_teammates is not None:
-                for i, tm in enumerate(self.eval_teammates):
-                    if tm.name == 'playable_self':
-                        self.eval_teammates[i] = pc
 
     def _get_constructor_parameters(self):
         return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, use_frame_stack=self.use_frame_stack,
@@ -138,7 +101,7 @@ class SingleAgentTrainer(OAITrainer):
             if self.use_policy_clone:
                 self.update_pc(epoch)
             if self.using_hrl:
-                curr_timesteps = np.sum(self.env.env_method('get_base_env_timesteps'))
+                curr_timesteps = self.learning_agent.num_timesteps #np.sum(self.env.env_method('get_base_env_timesteps'))
                 failure_dicts = self.env.env_method('get_worker_failures')
                 tot_failure_dict = {ln: {k: 0 for k in failure_dicts[0][1].keys()} for ln in self.args.layout_names}
                 for ln, fd in failure_dicts:
