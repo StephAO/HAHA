@@ -20,7 +20,7 @@ from stable_baselines3.common.vec_env.stacked_observations import StackedObserva
 # more during subtask worker training for robustness
 # Max number of counters the agents should use
 # USEABLE_COUNTERS = {'counter_circuit_o_1order': 8, 'forced_coordination': 5, 'asymmetric_advantages': 2, 'cramped_room': 5, 'coordination_ring': 5} # FOR WORKER TRAINING
-USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 4, 'asymmetric_advantages': 2, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
+USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 4, 'asymmetric_advantages': 2, 'cramped_room': 4, 'coordination_ring': 4, 'div1': 4,  'div2': 4,  'div3': 4} # FOR MANAGER TRAINING
 #USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION AND SP TRAINING
 
 
@@ -122,7 +122,15 @@ class OvercookedGymEnv(Env):
                 'counter_pickup': all_counters,
                 'same_motion_goals': True
             }
-            self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
+            no_counters_params = {
+                'start_orientations': False,
+                'wait_allowed': False,
+                'counter_goals': [],
+                'counter_drop': [],
+                'counter_pickup': [],
+                'same_motion_goals': True
+            }
+            self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, no_counters_params, force_compute=False)
             # To ensure that an agent is on both sides of the counter, remove random starts for forced coord
             ss_fn = self.mdp.get_fully_random_start_state_fn(self.mlam)
             self.env = OvercookedEnv.from_mdp(self.mdp, horizon=horizon, start_state_fn=ss_fn)
