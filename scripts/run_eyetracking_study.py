@@ -62,24 +62,14 @@ def run_study(args, teammates, layouts):
 class LikertScaleGUI(ThemedTk):
     NON_ANSWERED_VALUE = -4
 
-    def __init__(self, theme='clearlooks'):
+    def __init__(self):#, theme='clearlooks'):
         super().__init__(fonts=True, themebg=True)
-        self.set_theme(theme)
         self.title("Survey")
         self.resizable(False, False)  # This code helps to disable windows from resizing
 
-        window_height = len(questions) * 89 + 50
-        window_width = 872
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        x_coordinate = screen_width // 2 - window_width // 2
-        y_coordinate = screen_height // 2 - window_height // 2
-        self.geometry(f'{window_width}x{window_height}+{x_coordinate}+{y_coordinate}')
-
-        style = ttk.Style(self)
-        style.theme_use('clearlooks')
-
+        self.eval('tk::PlaceWindow . center')
         style = ttk.Style()
+        style.theme_use('clearlooks')
         style.configure('S1.TFrame', background='#888')
         style.configure('S1.TLabel', background='#888')
         style.configure('S1.TRadiobutton', background='#888')
@@ -116,8 +106,7 @@ class LikertScaleGUI(ThemedTk):
                 colframe = ttk.Frame(rowframe, style=f'{s}.TFrame')
                 colframe.grid(row=1, column=j)
                 ttk.Label(colframe, text=label, style=f'{s}.TLabel', font=('Helvetica', 15)).grid(row=1, column=0,
-                                                                                                  padx=(5,
-                                                                                                        5))  # , sticky="center")
+                                                                                                  padx=(5, 5))
                 ttk.Radiobutton(colframe, variable=self.radio_button_values[-1], value=j - 3,
                                 style=f'{s}.TRadiobutton').grid(row=2, column=0, padx=(10, 10), pady=(0, 10))
 
@@ -125,6 +114,11 @@ class LikertScaleGUI(ThemedTk):
 
         ttk.Button(self.mainframe, text="Submit", command=self.get_answers_and_destroy, style='S3.TButton').grid(
             row=len(questions), column=0, pady=(10, 0))
+
+        self.mainframe.update()
+        x_coordinate = self.winfo_screenwidth() // 2 - self.mainframe.winfo_width() // 2
+        y_coordinate = self.winfo_screenheight() // 2 - self.mainframe.winfo_height() // 2
+        self.geometry(f'+{x_coordinate}+{y_coordinate}')
 
     def get_answers_and_destroy(self):
         potential_answers = [a.get() for a in self.radio_button_values]
