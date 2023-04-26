@@ -22,10 +22,10 @@ import pathlib
 temp = pathlib.PosixPath
 pathlib.PosixPath = pathlib.WindowsPath
 
+#Tobii Pro SDK
+import tobii_research as tr
 
-import pathlib
-temp = pathlib.PosixPath
-pathlib.PosixPath = pathlib.WindowsPath
+
 
 # Lab streaming layer
 from pylsl import StreamInfo, StreamOutlet, local_clock
@@ -48,7 +48,6 @@ from overcooked_ai_py.mdp.overcooked_mdp import Direction, Action, OvercookedSta
 # from overcooked_ai_py.planning.planners import MediumLevelPlanner
 from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
 from overcooked_ai_py.planning.planners import MediumLevelActionManager
-
 
 
 def pause():
@@ -116,6 +115,15 @@ class App:
         print("\n\nRefresh LSL streams\nSelect GameData stream\n Start LSL recording")
 
         pause()
+
+        found_eyetrackers = tr.find_all_eyetrackers()
+        my_eyetracker = found_eyetrackers[0]
+        print("Address: " + my_eyetracker.address)
+        print("Model: " + my_eyetracker.model)
+        print("Name (It's OK if this is empty): " + my_eyetracker.device_name)
+        print("Serial number: " + my_eyetracker.serial_number)
+
+
 
 
         self.collect_trajectory = True
