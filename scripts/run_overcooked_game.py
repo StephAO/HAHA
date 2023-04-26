@@ -181,10 +181,10 @@ class OvercookedGUI:
             "cur_gameloop": self.curr_tick,
             "layout": self.env.env.mdp.terrain_mtx,
             "layout_name": self.layout_name,
-            "trial_id": 100,  # TODO this is just for testing self.trial_id,
+            "trial_id": self.trial_id,
+            "user_id": self.user_id,
             "dimension": (self.x, self.y, self.surface_size, self.tile_size, self.grid_shape, self.hud_size),
             "timestamp": time.time(),
-            "user_id": 100,
         }
 
         trans_str = json.dumps(transition)
