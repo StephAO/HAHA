@@ -11,20 +11,24 @@ import time
 matplotlib.use('TkAgg')
 
 from os import listdir, environ, system, name
-
 from os.path import isfile, join
 import re
+import time
 
 from pathlib import Path
 import pathlib
-
+USING_WINDOWS = (name == 'nt')
 # Windows path
-if name == 'nt':
+if USING_WINDOWS:
     temp = pathlib.PosixPath
     pathlib.PosixPath = pathlib.WindowsPath
 
-# LSL testing
+# Lab streaming layer
 from pylsl import StreamInfo, StreamOutlet, local_clock
+
+# Used to activate game window at game start for immediate game play
+if USING_WINDOWS:
+    import pygetwindow as gw
 
 from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
@@ -70,8 +74,8 @@ one_counter_params = {
 class OvercookedGUI:
     """Class to run an Overcooked Gridworld game, leaving one of the agents as fixed.
     Useful for debugging. Most of the code from http://pygametutorials.wikidot.com/tutorials-basic."""
-
     def __init__(self, args, layout_name=None, agent=None, teammate=None, trial_id=None, user_id=None, fps=5):
+        self.x = None
         self._running = True
         self._display_surf = None
         self.args = args
@@ -132,8 +136,13 @@ class OvercookedGUI:
 
         self.window = pygame.display.set_mode(self.surface_size, HWSURFACE | DOUBLEBUF | RESIZABLE)
         self.window.blit(surface, (0, 0))
+        print(self.x, self.y, self.surface_size, self.tile_size, self.grid_shape, self.hud_size)
         pygame.display.flip()
         self._running = True
+
+        if USING_WINDOWS:
+            win = gw.getWindowsWithTitle('pygame window')[0]
+            win.activate()
 
     def on_event(self, event):
         if event.type == pygame.KEYDOWN:
@@ -164,7 +173,7 @@ class OvercookedGUI:
 
         obs, reward, done, info = self.env.step(agent_action)
 
-        # pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
+        pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
 
         # Log data to send to psiturk client
         curr_reward = sum(info['sparse_r_by_agent'])
@@ -264,6 +273,7 @@ class OvercookedGUI:
 
                 df['layout'] = df['layout'].apply(joiner)
                 df.to_pickle(data_path / f)
+
 
 
 class HumanManagerHRL(OAIAgent):
