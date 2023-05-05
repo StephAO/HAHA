@@ -42,7 +42,6 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return obs
 
     def action_masks(self, p_idx=None):
-        p_idx = p_idx or self.p_idx
         return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
 
     def step(self, action):
@@ -96,8 +95,6 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             self.p_idx = p_idx
         elif self.reset_p_idx is not None:
             self.p_idx = self.reset_p_idx
-        elif self.p_idx is not None:
-            self.p_idx = 1 - self.p_idx
         else:
             self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx

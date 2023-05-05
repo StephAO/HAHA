@@ -6,7 +6,7 @@ import numpy as np
 from pathlib import Path
 from stable_baselines3.common.evaluation import evaluate_policy
 from tqdm import tqdm
-import train_agents
+from scripts.train_agents import get_bc_and_human_proxy
 
 def eval_agents_with_various_teammates(agents_to_evaluate, teammates):
     eval_envs_kwargs = {'is_eval_env': True, 'args': args, 'horizon': 400, 'ret_completed_subtasks': True}
@@ -26,11 +26,6 @@ def eval_agents_with_various_teammates(agents_to_evaluate, teammates):
                     for p_idx in [0, 1]:
                         p1.set_idx(p_idx, eval_env.layout_name, is_hrl=('hrl' in p1.name), tune_subtasks="+tuned" in p1.name)
                         p2.set_idx(1-p_idx, eval_env.layout_name, is_hrl=('hrl' in p2.name), tune_subtasks="+tuned" in p2.name)
-                        # p1.p_idx, p2.idx = 0, 1
-                        # p1.set_play_params(False, "+tuned" in p1.name)
-                        # p2.set_play_params(False, "+tuned" in p2.name)
-                        # p1.layout_name = eval_env.layout_name
-                        # p2.layout_name = eval_env.layout_name
                         eval_env.set_teammate(p2)
                         eval_env.set_reset_p_idx(p_idx)
                         mean_reward, std_reward = evaluate_policy(p1, eval_env, n_eval_episodes=5,
@@ -64,12 +59,12 @@ def load_agents_population(filepaths, args):
 
 if __name__ == "__main__":
     args = get_arguments()
-    base_dir = args.base_dir / 'agent_models'
-    main_agents_fns = ["HAHA", "FCP", "SP", "BCP", "HAHA+tuned"] #, "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
+    base_dir = args.base_dir / 'agent_models_NIPS'
+    main_agents_fns = ["SP", "HAHA", "FCP"]#, "HAHA+tuned"] #, "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
     main_agents_fns = [base_dir / fn for fn in main_agents_fns]
 
     main_agents = load_agents_population(main_agents_fns, args)
-    bc, human_proxy = train_agents.get_bc_and_human_proxy(args)
+    # bc, human_proxy = get_bc_and_human_proxy(args)
 
     # Load main agents again to avoid issues with hrl object
     # tms = [*load_agents_population(main_agents_fns, args), DummyAgent('random'), human_proxy] # *load_agents_population(main_agents_fns, args),
@@ -77,7 +72,7 @@ if __name__ == "__main__":
 
     # tm_fns = ["ck_0", "ck_4", "ck_8", "ck_12", "ck_16", "best"]
     # tm_fns = [base_dir / '2l_hd128_s1997' / fn / 'agents_dir' / 'agent_0' for fn in tm_fns]
-    tms = [human_proxy] #[*load_agents_population(tm_fns, args)]
+    tms = [DummyAgent('random')]#, main_agents[0], human_proxy] #[*load_agents_population(tm_fns, args)]
     print(len(tms))
 
     score_matrices = eval_agents_with_various_teammates(main_agents, tms)

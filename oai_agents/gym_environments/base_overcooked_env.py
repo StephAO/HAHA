@@ -21,7 +21,7 @@ from stable_baselines3.common.vec_env.stacked_observations import StackedObserva
 # Max number of counters the agents should use
 # USEABLE_COUNTERS = {'counter_circuit_o_1order': 8, 'forced_coordination': 5, 'asymmetric_advantages': 2, 'cramped_room': 5, 'coordination_ring': 5} # FOR WORKER TRAINING
 USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 3, 'asymmetric_advantages': 2, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
-#USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION AND SP TRAINING
+# USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION AND SP TRAINING
 
 
 # Calculated by dividing the average overall reward by the average reward on each layout in the 2019 human trials
@@ -223,10 +223,6 @@ class OvercookedGymEnv(Env):
             shaped_r = info['shaped_r_by_agent'][self.p_idx] if self.p_idx else sum(info['shaped_r_by_agent'])
             reward = sparse_r * ratio + shaped_r * (1 - ratio)
 
-        # Scale rewards
-        if False and not self.is_eval_env and reward > 0:
-            reward *= SCALING_FACTORS[self.layout_name]
-
         self.step_count += 1
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
@@ -238,8 +234,6 @@ class OvercookedGymEnv(Env):
             self.p_idx = p_idx
         elif self.reset_p_idx is not None:
             self.p_idx = self.reset_p_idx
-        elif self.p_idx is not None:
-            self.p_idx = 1 - self.p_idx
         else:
             self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx

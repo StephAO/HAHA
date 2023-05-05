@@ -59,8 +59,8 @@ class SingleAgentTrainer(OAITrainer):
         elif use_maskable_ppo: # Essentially equivalent to is_hrl
             # self.epoch_timesteps = 2e5
             sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=500,
-                                    n_epochs=4, learning_rate=0.0003, batch_size=500, ent_coef=0.001, vf_coef=0.3)#
-                                    # gamma=0.99, gae_lambda=0.95)
+                                    n_epochs=4, learning_rate=0.0003, batch_size=500, ent_coef=0.001, vf_coef=0.3,
+                                    gamma=0.99, gae_lambda=0.95)
             agent_name = f'{name}'
         else:
             sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=500,
@@ -116,7 +116,7 @@ class SingleAgentTrainer(OAITrainer):
             # Evaluate
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.learning_agent.agent.ep_info_buffer])
             best_training_rew *= 0.98
-            if (epoch + 1) % 5 == 0 or mean_training_rew > best_training_rew: # and curr_timesteps > 5e6):
+            if (epoch + 1) % 5 == 0 or (mean_training_rew > best_training_rew and curr_timesteps > 5e6):
                 if mean_training_rew >= best_training_rew:
                     best_training_rew = mean_training_rew
 

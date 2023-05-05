@@ -371,7 +371,7 @@ class OAITrainer(ABC):
             return lr
         return linear_anneal
 
-    def evaluate(self, eval_agent, num_eps_per_layout_per_tm=4, visualize=False, timestep=None, log_wandb=True,
+    def evaluate(self, eval_agent, num_eps_per_layout_per_tm=5, visualize=False, timestep=None, log_wandb=True,
                  deterministic=False):
         tot_mean_reward = []
         rew_per_layout = {}
@@ -382,11 +382,13 @@ class OAITrainer(ABC):
             rew_per_layout[env.layout_name] = []
             for tm in tms:
                 env.set_teammate(tm)
-                mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_eps_per_layout_per_tm,
-                                                          deterministic=deterministic, warn=False, render=visualize)
-                tot_mean_reward.append(mean_reward)
-                rew_per_layout[env.layout_name].append(mean_reward)
-                print(f'Eval at timestep {timestep} for layout {env.layout_name} with tm {tm.name}: {mean_reward}')
+                for p_idx in [0, 1]:
+                    env.set_reset_p_idx(p_idx)
+                    mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_eps_per_layout_per_tm,
+                                                              deterministic=deterministic, warn=False, render=visualize)
+                    tot_mean_reward.append(mean_reward)
+                    rew_per_layout[env.layout_name].append(mean_reward)
+                    print(f'Eval at timestep {timestep} for layout {env.layout_name} at p{i+1} with tm {tm.name}: {mean_reward}')
             rew_per_layout[env.layout_name] = np.mean(rew_per_layout[env.layout_name])
             if log_wandb:
                 wandb.log({f'eval_mean_reward_{env.layout_name}': rew_per_layout[env.layout_name], 'timestep': timestep})

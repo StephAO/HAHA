@@ -21,7 +21,8 @@ from oai_agents.common.arguments import get_arguments
 from oai_agents.common.subtasks import Subtasks, get_doable_subtasks
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
 from oai_agents.agents.agent_utils import load_agent, DummyAgent
-# from oai_agents.gym_environments import OvercookedSubtaskGymEnv
+from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
+from oai_agents.gym_environments.manager_env import OvercookedManagerGymEnv
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
 from overcooked_ai_py.mdp.overcooked_mdp import Direction, Action, OvercookedState, OvercookedGridworld
 # from overcooked_ai_py.planning.planners import MediumLevelPlanner
@@ -63,6 +64,8 @@ class App:
             kwargs = {'single_subtask_id': 10, 'args': args, 'is_eval_env': True}
             self.env = OvercookedSubtaskGymEnv(**p_kwargs, **kwargs)
         else:
+            # worker = MultiAgentSubtaskWorker.load(Path('agent_models_NIPS/HAHA/worker'), args)
+            # self.env = OvercookedManagerGymEnv(worker, layout_name=self.layout_name, args=args, ret_completed_subtasks=True, is_eval_env=True)
             self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True, is_eval_env=True)
         self.env.set_teammate(teammate)
         self.env.reset(p_idx=0)
@@ -88,12 +91,12 @@ class App:
             self.trial_id = max(trial_ids) + 1 if len(trial_ids) > 0 else 1
 
     def on_init(self):
-        surface = StateVisualizer(tile_size=175).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0})
+        self.tile_size = 50
+        surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0})
 
         pygame.init()
         self.surface_size = surface.get_size()
         self.x, self.y = (1920 - self.surface_size[0]) // 2, (1080 - self.surface_size[1]) // 2
-        self.tile_size = StateVisualizer().tile_size
         self.grid_shape = self.env.mdp.shape
         self.hud_size = self.surface_size[1] - (self.grid_shape[1] * self.tile_size)
         environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (self.x, self.y)
@@ -158,7 +161,7 @@ class App:
         return done
 
     def on_render(self, pidx=None):
-        surface = StateVisualizer(tile_size=175).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": self.curr_tick})
+        surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": self.curr_tick})
         self.window = pygame.display.set_mode(surface.get_size(), HWSURFACE | DOUBLEBUF | RESIZABLE)
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
@@ -336,8 +339,8 @@ if __name__ == "__main__":
 
     # print(map_eye_tracking_to_grid([(680, 400), (680, 750), (1290, 400), (1290, 750), (680, 350), (0, 0)], 622, 327, (675, 425), 75, (9, 5), 50))
 
-    tm = load_agent(Path('agent_models/HAHA'), args) # 'agent_models/HAHA' 'agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'
-    agent = 'human' #load_agent(Path('agent_models/HAHA_nips'), args) #'human' #HumanPlayer('agent', args) # 'human'
+    agent = load_agent(Path('agent_models/HAHA/manager'), args) # 'agent_models/HAHA' 'agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'
+    tm = DummyAgent('random') #load_agent(Path('agent_models/HAHA_nips'), args) #'human' #HumanPlayer('agent', args) # 'human'
 
     dc = App(args, agent=agent, teammate=tm)
     dc.on_execute()
