@@ -173,7 +173,7 @@ def get_fcp_population(args, training_steps=2e7):
 def get_fcp_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     eval_tms = get_eval_teammates(args)
-    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_nips', use_subtask_counts=False, inc_sp=False, use_policy_clone=False, seed=2602)
+    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_nips_idx', use_subtask_counts=False, inc_sp=False, use_policy_clone=False, seed=2602)
     fcp_trainer.train_agents(total_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 
@@ -195,7 +195,7 @@ def get_hrl_agent(args, training_steps=1e7):
     worker = get_hrl_worker(args)
     eval_tms = get_eval_teammates(args)
     # Create manager
-    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name='HAHA_nips', inc_sp=False, use_policy_clone=False, seed=2602)
+    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name='HAHA_nips_idx', inc_sp=False, use_policy_clone=False, seed=2602)
     #rlmt.load_agents()
     rlmt.train_agents(total_timesteps=training_steps)
     manager = rlmt.get_agents()[0]

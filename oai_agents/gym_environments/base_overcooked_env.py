@@ -73,7 +73,8 @@ class OvercookedGymEnv(Env):
             self.obs_dict['player_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
             self.obs_dict['teammate_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=np.int)
             self.obs_dict['subtask_mask'] = spaces.MultiBinary(Subtasks.NUM_SUBTASKS)
-        # self.obs_dict['layout_idx'] = spaces.MultiBinary(5)
+        self.obs_dict['layout_idx'] = spaces.MultiBinary(5)
+        self.obs_dict['p_idx'] = spaces.MultiBinary(2)
         self.observation_space = spaces.Dict(self.obs_dict)
         self.return_completed_subtasks = ret_completed_subtasks
         # Default stack frames to false since we don't currently know who is playing what - properly set in reset
@@ -161,10 +162,14 @@ class OvercookedGymEnv(Env):
     def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False):
         enc_fn = enc_fn or self.encoding_fn
         obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
-        #obs['layout_idx'] = np.eye(5)[self.env_idx]
+        obs['layout_idx'] = np.eye(5)[self.env_idx]
         # obs['layout_idx'] = np.zeros(5)
         # obs['layout_idx'][self.env_idx] = 1
-        # obs['layout_idx'] = obs['layout_idx'].astype(bool)
+        obs['layout_idx'] = obs['layout_idx'].astype(bool)
+
+        obs['p_idx'] = np.eye(2)[self.env_idx]
+        obs['p_idx'] = obs['p_idx'].astype(bool)
+
         if self.stack_frames[p_idx]:
             obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
             if self.stack_frames_need_reset[p_idx]: # On reset
