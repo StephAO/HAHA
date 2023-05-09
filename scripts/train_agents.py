@@ -305,7 +305,7 @@ if __name__ == '__main__':
     #get_behavioral_cloning_play_agent(args, training_steps=1e8)
 
     # get_fcp_population(args, 2e7)
-    # get_fcp_agent(args, training_steps=1e8)
+    #get_fcp_agent(args, training_steps=1e8)
     # get_hrl_worker(args)
     get_hrl_agent(args, 5e7)
 
