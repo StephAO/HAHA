@@ -164,7 +164,7 @@ class OvercookedGymEnv(Env):
         obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
         obs['layout_idx'] = np.eye(5)[self.env_idx or 0]
         obs['layout_idx'] = obs['layout_idx'].astype(bool)
-        obs['p_idx'] = np.eye(2)[self.env_idx]
+        obs['p_idx'] = np.eye(2)[p_idx]
         obs['p_idx'] = obs['p_idx'].astype(bool)
 
         if self.stack_frames[p_idx]:
@@ -192,10 +192,10 @@ class OvercookedGymEnv(Env):
             obs['player_completed_subtasks'] =  self.completed_tasks[p_idx]
             obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
             obs['subtask_mask'] = self.action_masks(p_idx)
-            if p_idx == self.t_idx:
-                obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}
-            else:
-                obs = {k: v for k, v in obs.items() if k in self.observation_space.keys()}
+        if p_idx == self.t_idx and self.teammate is not None:
+            obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}
+        else:
+            obs = {k: v for k, v in obs.items() if k in self.observation_space.keys()}
 
         return obs
 
