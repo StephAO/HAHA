@@ -26,20 +26,20 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.worker_failures = {k: 0 for k in range(Subtasks.NUM_SUBTASKS)}
         return (self.layout_name, failures)
 
-    def get_low_level_obs(self, p_idx, done=False, enc_fn=None):
-        enc_fn = enc_fn or self.encoding_fn
-        obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
-        if p_idx == self.p_idx:
-            obs['curr_subtask'] = self.curr_subtask
-        if self.stack_frames[p_idx]:
-            obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
-            if self.stack_frames_need_reset[p_idx]: # On reset
-                obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
-                self.stack_frames_need_reset[p_idx] = False
-            else:
-                obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
-            obs['visual_obs'] = obs['visual_obs'].squeeze()
-        return obs
+    # def get_low_level_obs(self, p_idx, done=False, enc_fn=None):
+    #     enc_fn = enc_fn or self.encoding_fn
+    #     obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
+    #     if p_idx == self.p_idx:
+    #         obs['curr_subtask'] = self.curr_subtask
+    #     if self.stack_frames[p_idx]:
+    #         obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
+    #         if self.stack_frames_need_reset[p_idx]: # On reset
+    #             obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
+    #             self.stack_frames_need_reset[p_idx] = False
+    #         else:
+    #             obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
+    #         obs['visual_obs'] = obs['visual_obs'].squeeze()
+    #     return obs
 
     def action_masks(self, p_idx=None):
         p_idx = p_idx or self.p_idx
@@ -50,9 +50,10 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.curr_subtask = action.cpu() if type(action) == th.tensor else action
         joint_action = [Action.STAY, Action.STAY]
         # while (not ready_for_next_subtask and not done):
-        joint_action[self.p_idx] = self.worker.predict(self.get_low_level_obs(self.p_idx), deterministic=False)[0]
-        tm_obs = self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn) if self.teammate.use_hrl_obs else \
-                 self.get_low_level_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
+        obs = {k: v for k, v in self.get_obs(self.p_idx).items() if k in self.worker.observation_space.keys()}
+        joint_action[self.p_idx] = self.worker.predict(obs, deterministic=False)[0]
+        tm_obs = self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
+            # if self.teammate.use_hrl_obs else self.get_low_level_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
         joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=False)[0] # self.is_eval_env
         joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
 

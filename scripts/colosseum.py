@@ -60,19 +60,19 @@ def load_agents_population(filepaths, args):
 if __name__ == "__main__":
     args = get_arguments()
     base_dir = args.base_dir / 'agent_models_NIPS'
-    main_agents_fns = ["SP", "HAHA", "FCP"]#, "HAHA+tuned"] #, "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
+    main_agents_fns = ["HAHA", "FCP", "HAHA+tuned"] #, "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
     main_agents_fns = [base_dir / fn for fn in main_agents_fns]
 
     main_agents = load_agents_population(main_agents_fns, args)
-    # bc, human_proxy = get_bc_and_human_proxy(args)
+    bc, human_proxy = get_bc_and_human_proxy(args)
 
     # Load main agents again to avoid issues with hrl object
-    # tms = [*load_agents_population(main_agents_fns, args), DummyAgent('random'), human_proxy] # *load_agents_population(main_agents_fns, args),
+    # tms = [*load_agents_population(["SP"], args), DummyAgent('random'), human_proxy] # *load_agents_population(main_agents_fns, args),
     # tms = get_fcp_population(args, training_steps)
 
     # tm_fns = ["ck_0", "ck_4", "ck_8", "ck_12", "ck_16", "best"]
     # tm_fns = [base_dir / '2l_hd128_s1997' / fn / 'agents_dir' / 'agent_0' for fn in tm_fns]
-    tms = [DummyAgent('random')]#, main_agents[0], human_proxy] #[*load_agents_population(tm_fns, args)]
+    tms = [*load_agents_population([base_dir / "SP"], args), human_proxy] #[*load_agents_population(tm_fns, args)]
     print(len(tms))
 
     score_matrices = eval_agents_with_various_teammates(main_agents, tms)

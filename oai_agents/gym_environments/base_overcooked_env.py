@@ -20,8 +20,8 @@ from stable_baselines3.common.vec_env.stacked_observations import StackedObserva
 # more during subtask worker training for robustness
 # Max number of counters the agents should use
 # USEABLE_COUNTERS = {'counter_circuit_o_1order': 8, 'forced_coordination': 5, 'asymmetric_advantages': 2, 'cramped_room': 5, 'coordination_ring': 5} # FOR WORKER TRAINING
-USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 3, 'asymmetric_advantages': 2, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
-# USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 3, 'asymmetric_advantages': 1, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION AND SP TRAINING
+# USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 3, 'asymmetric_advantages': 2, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
+USEABLE_COUNTERS = {'counter_circuit_o_1order': 4, 'forced_coordination': 3, 'asymmetric_advantages': 2, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION AND SP TRAINING
 
 
 # Calculated by dividing the average overall reward by the average reward on each layout in the 2019 human trials
@@ -162,11 +162,8 @@ class OvercookedGymEnv(Env):
     def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False):
         enc_fn = enc_fn or self.encoding_fn
         obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
-        obs['layout_idx'] = np.eye(5)[self.env_idx]
-        # obs['layout_idx'] = np.zeros(5)
-        # obs['layout_idx'][self.env_idx] = 1
+        obs['layout_idx'] = np.eye(5)[self.env_idx or 0]
         obs['layout_idx'] = obs['layout_idx'].astype(bool)
-
         obs['p_idx'] = np.eye(2)[self.env_idx]
         obs['p_idx'] = obs['p_idx'].astype(bool)
 

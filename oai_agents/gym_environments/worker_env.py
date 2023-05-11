@@ -45,20 +45,20 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         env = OvercookedEnv.from_mdp(self.mdp, horizon=100, start_state_fn=ss_fn)
         super(OvercookedSubtaskGymEnv, self).init_base_env(env_index=env_index, base_env=env, **kwargs)
 
-    def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False):
-        enc_fn = enc_fn or self.encoding_fn
-        obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
-        if p_idx == self.p_idx:
-            obs['curr_subtask'] = self.goal_subtask_id
-        if self.stack_frames[p_idx]:
-            obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
-            if self.stack_frames_need_reset[p_idx]:  # On reset
-                obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
-                self.stack_frames_need_reset[p_idx] = False
-            else:
-                obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
-            obs['visual_obs'] = obs['visual_obs'].squeeze()
-        return obs
+    # def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False):
+    #     enc_fn = enc_fn or self.encoding_fn
+    #     obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
+    #     if p_idx == self.p_idx:
+    #         obs['curr_subtask'] = self.goal_subtask_id
+    #     if self.stack_frames[p_idx]:
+    #         obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
+    #         if self.stack_frames_need_reset[p_idx]:  # On reset
+    #             obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
+    #             self.stack_frames_need_reset[p_idx] = False
+    #         else:
+    #             obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
+    #         obs['visual_obs'] = obs['visual_obs'].squeeze()
+    #     return obs
 
     def get_putdown_proximity_reward(self, feature_locations):
         # Calculate bonus reward for putting an object down on the pass.
@@ -72,9 +72,9 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             if adj_tile not in self.mdp.get_valid_player_positions():
                 continue
             if adj_tile == self.state.players[self.p_idx].position:
-                curr_dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, Direction.NORTH), feature_locations)
+                curr_dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, tuple(-1 * direction)), feature_locations)
             else:
-                dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, Direction.NORTH), feature_locations)
+                dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, tuple(-1 * direction)), feature_locations)
                 if dist < smallest_dist:
                     smallest_dist = dist
 
@@ -97,17 +97,17 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         # Calculate bonus reward for picking up an object on the pass.
         # Reward should be proportional to how much time is saved by using the pass
         largest_dist = 0
-        object_location = np.array(self.state.players[self.p_idx].position) + np.array(
-            self.state.players[self.p_idx].orientation)
+        agent_dir = self.state.players[self.p_idx].orientation
+        object_location = np.array(self.state.players[self.p_idx].position) + np.array(agent_dir)
         for direction in [np.array([0, 1]), np.array([0, -1]), np.array([1, 0]), np.array([-1, 0])]:
             adj_tile = tuple(np.array(object_location) + direction)
             # Can't pick up from a terrain location that is not walkable
             if adj_tile not in self.mdp.get_valid_player_positions():
                 continue
             if adj_tile == self.state.players[self.p_idx].position:
-                curr_dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, Direction.NORTH), feature_locations)
+                curr_dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, agent_dir), feature_locations)
             else:
-                dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, Direction.NORTH), feature_locations)
+                dist = self.mlam.motion_planner.min_cost_to_feature((adj_tile, agent_dir), feature_locations)
                 if dist != float('inf') and dist > largest_dist:
                     largest_dist = dist
 
@@ -137,6 +137,10 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         return max(0, (chosen_pot_num_onions - other_pot_num_onions) * 0.1)
 
+    def get_non_full_pot_locations(self, state):
+        pot_states = self.mdp.get_pot_states(state)
+        return pot_states['empty'] + pot_states['1_items'] + pot_states['2_items']
+
     def step(self, action):
         if self.teammate is None:
             raise ValueError('set_teammate must be set called before starting game.')
@@ -154,7 +158,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         next_state, _, done, info = self.env.step(joint_action)
         self.state = deepcopy(next_state)
 
-        reward = -0.01  # existence penalty
+        reward = -0.1  # existence penalty
         if joint_action[self.p_idx] == Action.INTERACT:
             subtask = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx)
             done = True
@@ -162,26 +166,25 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             if reward == 1:
                 # Extra rewards to incentivize petter placements
                 if self.goal_subtask == 'put_onion_closer':
-                    pot_locations = self.mdp.get_pot_locations()
+                    pot_locations = self.get_non_full_pot_locations(self.state)
                     reward += self.get_putdown_proximity_reward(pot_locations)
                 elif self.goal_subtask == 'put_plate_closer':
-                    pot_locations = self.mdp.get_pot_locations()
+                    pot_locations = self.get_non_full_pot_locations(self.state)
                     reward += self.get_putdown_proximity_reward(pot_locations)
                 elif self.goal_subtask == 'put_soup_closer':
                     serving_locations = self.mdp.get_serving_locations()
                     reward += self.get_putdown_proximity_reward(serving_locations)
                 elif self.goal_subtask == 'get_onion_from_counter':
-                    pot_locations = self.mdp.get_pot_locations()
+                    pot_locations = self.get_non_full_pot_locations(self.state)
                     reward += self.get_pickup_proximity_reward(pot_locations)
                 elif self.goal_subtask == 'get_plate_from_counter':
-                    pot_locations = self.mdp.get_pot_locations()
+                    pot_locations = self.get_non_full_pot_locations(self.state)
                     reward += self.get_pickup_proximity_reward(pot_locations)
                 elif self.goal_subtask == 'get_soup_from_counter':
                     serving_locations = self.mdp.get_serving_locations()
                     reward += self.get_pickup_proximity_reward(serving_locations)
                 elif self.goal_subtask == 'put_onion_in_pot':
                     reward += self.get_fuller_pot_reward(self.state, self.mdp.terrain_mtx)
-
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self, evaluation_trial_num=-1, p_idx=None):
@@ -209,15 +212,14 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             elif self.goal_subtask in ['put_onion_in_pot', 'get_soup', 'serve_soup']:
                 self.p_idx = 0
             else:
-                self.p_idx = (1 - self.p_idx) if self.p_idx is not None else (p_idx or np.random.randint(2))
+                self.p_idx = p_idx or np.random.randint(2)
         elif self.layout_name == 'asymmetric_advantages':
-            self.p_idx = (1 - self.p_idx) if self.p_idx is not None else (p_idx or np.random.randint(2))
+            self.p_idx = p_idx or np.random.randint(2)
             useless_subtasks = ['put_soup_closer', 'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']
             if self.goal_subtask in useless_subtasks:
                 raise ValueError(f"{useless_subtasks} are not valid subtasks for asymmetric_advantages")
         else:
-            self.p_idx = (1 - self.p_idx) if self.p_idx is not None else (p_idx or np.random.randint(2))
-
+            self.p_idx = p_idx or np.random.randint(2)
 
         self.t_idx = 1 - self.p_idx
         # Setup correct agent observation stacking for agents that need it

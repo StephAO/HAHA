@@ -52,11 +52,11 @@ one_counter_params = {
 class App:
     """Class to run an Overcooked Gridworld game, leaving one of the agents as fixed.
     Useful for debugging. Most of the code from http://pygametutorials.wikidot.com/tutorials-basic."""
-    def __init__(self, args, agent=None, teammate=None, fps=5):
+    def __init__(self, args, agent=None, teammate=None, layout=None, fps=5):
         self._running = True
         self._display_surf = None
         self.args = args
-        self.layout_name = 'asymmetric_advantages' #'counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room' # args.layout_names[0]
+        self.layout_name = layout or 'asymmetric_advantages' #'counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room' # args.layout_names[0]
         # self.layout_name = np.random.choice(self.layout_names)
 
         self.use_subtask_env = False
@@ -91,7 +91,7 @@ class App:
             self.trial_id = max(trial_ids) + 1 if len(trial_ids) > 0 else 1
 
     def on_init(self):
-        self.tile_size = 50
+        self.tile_size = 75
         surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0})
 
         pygame.init()
@@ -336,13 +336,15 @@ if __name__ == "__main__":
     # parser.add_argument('--agent-file', type=str, default=None, help='trajectory file to run')
 
     args = get_arguments(additional_args)
+    layout = 'forced_coordination'
 
     # print(map_eye_tracking_to_grid([(680, 400), (680, 750), (1290, 400), (1290, 750), (680, 350), (0, 0)], 622, 327, (675, 425), 75, (9, 5), 50))
 
-    agent = load_agent(Path('agent_models/HAHA/manager'), args) # 'agent_models/HAHA' 'agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'
-    tm = DummyAgent('random') #load_agent(Path('agent_models/HAHA_nips'), args) #'human' #HumanPlayer('agent', args) # 'human'
+    tm = load_agent(Path('agent_models_NIPS/HAHA'), args) # 'agent_models/HAHA' 'agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'
+    tm.set_idx(0, layout, is_hrl=True, tune_subtasks=True)
+    agent = load_agent(Path('agent_models_NIPS/SP'), args) #load_agent(Path('agent_models/HAHA_nips'), args) #'human' #HumanPlayer('agent', args) # 'human'
 
-    dc = App(args, agent=agent, teammate=tm)
+    dc = App(args, agent=agent, teammate=tm, layout=layout)
     dc.on_execute()
 
 

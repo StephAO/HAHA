@@ -129,9 +129,12 @@ class MultiAgentSubtaskWorker(OAIAgent):
             # Create trainer
             name = f'subtask_worker_{i}'
             rl_sat = SingleAgentTrainer(tms, args, eval_tms=eval_tms, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
+            # Currently put soup closer is a useless subtasks, so don't spend any training timtesteps on it
+            if i != Subtasks.SUBTASKS_TO_IDS['put_soup_closer']:
+                agents.extend(rl_sat.get_agents())
             # Train if it makes sense to (can't train on an unknown task)
             if i != Subtasks.SUBTASKS_TO_IDS['unknown']:
-                rl_sat.train_agents(total_timesteps=4.5e6)
+                rl_sat.train_agents(total_timesteps=5e6)
                 agents.extend(rl_sat.get_agents())
 
         args.layout_names = original_layout_names
@@ -249,7 +252,7 @@ class HierarchicalRL(OAIAgent):
 
     def adjust_distributions(self, probs, indices, weights):
         new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
-        if np.sum(new_probs[indices]) > 0.99999 or np.sum(new_probs[indices]) < 0.00001:
+        if np.sum(new_probs[indices]) > 0.9999999 or np.sum(new_probs[indices]) < 0.0000001:
             # print("Agent is too decisive, no behavior changed", flush=True)
             return new_probs
         original_values = np.zeros_like(new_probs)
@@ -279,7 +282,7 @@ class HierarchicalRL(OAIAgent):
             # if self.p_idx == 0:
                 # Up weight supporting tasks
                 # print(probs)
-            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['put_onion_closer'], Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']]
+            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]#, Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']]
             subtask_weighting = [100 for _ in subtasks_to_weigh]
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
 
@@ -324,44 +327,26 @@ class HierarchicalRL(OAIAgent):
         elif self.layout_name == 'asymmetric_advantages':
             if self.p_idx == 0:
                 # Up weight all plate related tasks
-                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'],
-                                     Subtasks.SUBTASKS_TO_IDS['get_soup'],
-                                     Subtasks.SUBTASKS_TO_IDS['serve_soup']]
-                subtask_weighting = [0.0001 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+                subtask_weighting = [5e3 for _ in subtasks_to_weigh]
 
-                # Down weight any task related to onions (and put down plate to avoid side issues)
-                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'],
-                                     Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot'],
-                                     Subtasks.SUBTASKS_TO_IDS['put_onion_closer'],
-                                     Subtasks.SUBTASKS_TO_IDS['put_plate_closer']]
-                subtask_weighting = [1000 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
-            if self.p_idx == 1:
-                # NOTE: THIS ASSUMES BEING P2
-                # Up weight all plate related tasks
-                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'],
-                                     Subtasks.SUBTASKS_TO_IDS['get_soup'],
-                                     Subtasks.SUBTASKS_TO_IDS['serve_soup']]
-                subtask_weighting = [1000 for _ in subtasks_to_weigh]
                 new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-
-                # Down weight any task related to onions (and put down plate to avoid side issues)
-                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'],
-                                     Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot'],
-                                     Subtasks.SUBTASKS_TO_IDS['put_onion_closer'],
-                                     Subtasks.SUBTASKS_TO_IDS['put_plate_closer']]
-                subtask_weighting = [0.0001 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
+            # if self.p_idx == 1:
+            #     # NOTE: THIS ASSUMES BEING P2
+            #     # Up weight all plate related tasks
+            #     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]
+            #     subtask_weighting = [1000 for _ in subtasks_to_weigh]
+            #     new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
         else:
             new_probs = probs
+        print('--------------\n', new_probs, '\n--->\n', probs)
         return np.argmax(new_probs, axis=-1) if deterministic else Categorical(probs=th.tensor(new_probs)).sample()
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         # TODO consider forcing new subtask if none has been completed in x timesteps
         # print(obs['player_completed_subtasks'],  self.prev_player_comp_st, (obs['player_completed_subtasks'] != self.prev_player_comp_st).any(), flush=True)
-        if np.sum(obs['player_completed_subtasks']) == 1 or np.sum(obs['teammate_completed_subtasks']) == 1 or \
-            self.num_steps_since_new_subtask > 10 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
+        if True: #np.sum(obs['player_completed_subtasks']) == 1 or np.sum(obs['teammate_completed_subtasks']) == 1 or \
+            # self.num_steps_since_new_subtask >= 5 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
             if np.sum(obs['player_completed_subtasks'][:-1]) == 1:
                 self.subtask_step += 1
             # Completed previous subtask, set new subtask
@@ -374,7 +359,7 @@ class HierarchicalRL(OAIAgent):
             self.num_steps_since_new_subtask = 0
         obs['curr_subtask'] = self.curr_subtask_id
         self.num_steps_since_new_subtask += 1
-        return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
+        return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=False)
 
     def get_agent_output(self):
         return Subtasks.IDS_TO_HR_SUBTASKS[int(self.curr_subtask_id)] if self.output_message else ' '

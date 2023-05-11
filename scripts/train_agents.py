@@ -94,7 +94,7 @@ def get_bc_and_human_proxy(args):
     for layout_name in all_layouts:
         bct = BehavioralCloningTrainer(args.dataset, args, name=f'bc_{layout_name}', layout_names=[layout_name])
         try:
-            bct.load_agents(tag='ijcai')
+            bct.load_bc_and_human_proxy(tag='ijcai')
         except FileNotFoundError as e:
             print(f'Could not find saved BC and human proxy, creating them from scratch...\nFull Error: {e}')
             bct.train_agents(epochs=500)
@@ -179,7 +179,7 @@ def get_fcp_agent(args, training_steps=1e7):
 
 def get_hrl_worker(args):
     # Create subtask worker
-    name = 'multi_agent_subtask_worker'
+    name = 'multi_agent_subtask_worker_nips'
     try:
         worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
     except FileNotFoundError as e:
@@ -196,7 +196,6 @@ def get_hrl_agent(args, training_steps=1e7):
     eval_tms = get_eval_teammates(args)
     # Create manager
     rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name='HAHA_nips_idx', inc_sp=False, use_policy_clone=False, seed=2602)
-    #rlmt.load_agents()
     rlmt.train_agents(total_timesteps=training_steps)
     manager = rlmt.get_agents()[0]
     hrl = HierarchicalRL(worker, manager, args, name='HAHA')
