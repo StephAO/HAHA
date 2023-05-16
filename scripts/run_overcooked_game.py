@@ -338,7 +338,7 @@ if __name__ == "__main__":
     # parser.add_argument('--agent-file', type=str, default=None, help='trajectory file to run')
 
     args = get_arguments(additional_args)
-    layout = 'cramped_room' #'counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room'
+    layout = 'counter_circuit_o_1order' #'counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room'
 
     bc, human_proxy = get_bc_and_human_proxy(args)
 

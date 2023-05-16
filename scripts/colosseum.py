@@ -61,7 +61,7 @@ def load_agents_population(filepaths, args):
 if __name__ == "__main__":
     args = get_arguments()
     base_dir = args.base_dir / 'agent_models_NIPS'
-    main_agents_fns = ["HAHA+tuned", "HAHA"]#, "HAHA+tuned", "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
+    main_agents_fns = ["HAHA+tuned"]#, "HAHA"]#, "HAHA+tuned", "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
     main_agents_fns = [base_dir / fn for fn in main_agents_fns]
 
     main_agents = load_agents_population(main_agents_fns, args)
