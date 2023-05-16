@@ -54,7 +54,7 @@ one_counter_params = {
 class App:
     """Class to run an Overcooked Gridworld game, leaving one of the agents as fixed.
     Useful for debugging. Most of the code from http://pygametutorials.wikidot.com/tutorials-basic."""
-    def __init__(self, args, agent=None, teammate=None, layout=None, fps=25, p_idx=0):
+    def __init__(self, args, agent=None, teammate=None, layout=None, fps=5, p_idx=0):
         self._running = True
         self._display_surf = None
         self.args = args
@@ -338,19 +338,19 @@ if __name__ == "__main__":
     # parser.add_argument('--agent-file', type=str, default=None, help='trajectory file to run')
 
     args = get_arguments(additional_args)
-    layout = 'asymmetric_advantages' #'counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room'
+    layout = 'counter_circuit_o_1order' #'counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room'
 
     bc, human_proxy = get_bc_and_human_proxy(args)
 
     # print(map_eye_tracking_to_grid([(680, 400), (680, 750), (1290, 400), (1290, 750), (680, 350), (0, 0)], 622, 327, (675, 425), 75, (9, 5), 50))
     p_idx = 1
-    agent = load_agent(Path('agent_models_NIPS/HAHA'), args) # 'agent_models/HAHA' 'agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'
-    agent.set_idx(p_idx, layout, is_hrl=True, tune_subtasks=True)
-    tm = human_proxy[layout][0]#load_agent(Path('agent_models_NIPS/SP'))#DummyAgent('random')#load_agent(Path('agent_models_NIPS/SP'))#DummyAgent('random')#human_proxy['counter_circuit_o_1order'][0]#load_agent(Path('agent_models_NIPS/SP'))
+    tm = load_agent(Path('agent_models_NIPS/HAHA'), args) # 'agent_models/HAHA' 'agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'
+    tm.set_idx(p_idx, layout, is_hrl=True, tune_subtasks=True)
+    agent = 'human'#human_proxy[layout][0]#load_agent(Path('agent_models_NIPS/SP'))#DummyAgent('random')#load_agent(Path('agent_models_NIPS/SP'))#DummyAgent('random')#human_proxy['counter_circuit_o_1order'][0]#load_agent(Path('agent_models_NIPS/SP'))
     # tm.set_idx(1, layout, is_hrl=True, tune_subtasks=True)
     # print(agent)
 
-    dc = App(args, agent=agent, teammate=tm, layout=layout, p_idx=p_idx)
+    dc = App(args, agent=agent, teammate=tm, layout=layout, p_idx=1-p_idx)
     dc.on_execute()
 
 

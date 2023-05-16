@@ -332,7 +332,7 @@ class HierarchicalRL(OAIAgent):
                     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['put_onion_closer'],
                                          Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter'],
                                          Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]
-                    subtask_weighting = [100, 100, 0.001]
+                    subtask_weighting = [10, 10, 0.1]
                     new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
                     # subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]#, Subtasks.SUBTASKS_TO_IDS['unknown']]
                     # subtask_weighting = [1e-4 for _ in subtasks_to_weigh]

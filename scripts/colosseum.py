@@ -10,7 +10,7 @@ from scripts.train_agents import get_bc_and_human_proxy
 
 def eval_agents_with_various_teammates(agents_to_evaluate, teammates):
     eval_envs_kwargs = {'is_eval_env': True, 'args': args, 'horizon': 400, 'ret_completed_subtasks': True}
-    args.layout_names = ['asymmetric_advantages', 'counter_circuit_o_1order', 'forced_coordination']
+    args.layout_names = ['counter_circuit_o_1order']#asymmetric_advantages', 'counter_circuit_o_1order', 'forced_coordination']
     score_matrices = {ln: np.zeros((len(agents_to_evaluate), len(teammates))) for ln in args.layout_names}
 
     tot_rounds = len(args.layout_names) * len(agents_to_evaluate) * len(teammates)
@@ -61,7 +61,7 @@ def load_agents_population(filepaths, args):
 if __name__ == "__main__":
     args = get_arguments()
     base_dir = args.base_dir / 'agent_models_NIPS'
-    main_agents_fns = ["HAHA+tuned"]#, "HAHA"]#, "HAHA+tuned", "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
+    main_agents_fns = ["HAHA+tuned", "HAHA"]#, "HAHA+tuned", "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
     main_agents_fns = [base_dir / fn for fn in main_agents_fns]
 
     main_agents = load_agents_population(main_agents_fns, args)
