@@ -18,6 +18,12 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.worker_failures = {k: 0 for k in range(Subtasks.NUM_SUBTASKS)}
         self.base_env_timesteps = 0
 
+    def get_obs(self, p_idx, **kwargs):
+        obs = super().get_obs(p_idx, **kwargs)
+        if p_idx == self.p_idx:
+            obs['curr_subtask'] = self.curr_subtask
+        return obs
+
     def get_base_env_timesteps(self):
         return self.base_env_timesteps
 

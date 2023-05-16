@@ -154,16 +154,16 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
         for obj in loose_objects:
             if layout_name == 'forced_coordination' and obj.position not in [(2, 1), (2, 2), (2, 3)]: # Only valid counter tops in forced coord
                 continue
-            if obj.name == 'onion':# and prev_subtask != 'put_onion_closer':
+            if obj.name == 'onion' and prev_subtask != 'put_onion_closer':
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']] = 1
-            elif obj.name == 'dish':# and prev_subtask != 'put_plate_closer':
+            elif obj.name == 'dish' and prev_subtask != 'put_plate_closer':
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']] = 1
-            elif obj.name == 'soup':# and prev_subtask != 'put_soup_closer':
+            elif obj.name == 'soup' and prev_subtask != 'put_soup_closer':
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_soup_from_counter']] = 1
     # The player is holding an onion, so it can only accomplish tasks that involve putting the onion somewhere
     elif state.players[p_idx].held_object.name == 'onion':
         # There must be an empty counter to put something down
-        if len(loose_objects) < n_counters: # and prev_subtask != 'get_onion_from_counter':
+        if len(loose_objects) < n_counters and prev_subtask != 'get_onion_from_counter':
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_closer']] = 1
         # There must be an empty pot to put an onion into
         if not (layout_name == 'forced_coordination' and p_idx == 1):
@@ -172,7 +172,7 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
     # The player is holding a plate, so it can only accomplish tasks that involve putting the plate somewhere
     elif state.players[p_idx].held_object.name == 'dish':
         # There must be an empty counter to put something down
-        if len(loose_objects) < n_counters:
+        if len(loose_objects) < n_counters and prev_subtask != 'get_plate_from_counter':
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_plate_closer']] = 1
         if not (layout_name == 'forced_coordination' and p_idx == 1):
             # Can only grab the soup using the plate if a soup is currently cooking
@@ -188,7 +188,8 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
         # There must be an empty counter to put something down
         if len(loose_objects) < n_counters:
             # if layout_name != 'asymmetric_advantages':
-            subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_soup_closer']] = 1
+            # NOTE: not useful on current layouts
+            subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_soup_closer']] = 0
 
     # If no other subtask is possible, then set subtask to unknown
     #if np.sum(subtask_mask) == 0:

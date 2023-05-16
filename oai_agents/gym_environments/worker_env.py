@@ -45,8 +45,15 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         env = OvercookedEnv.from_mdp(self.mdp, horizon=100, start_state_fn=ss_fn)
         super(OvercookedSubtaskGymEnv, self).init_base_env(env_index=env_index, base_env=env, **kwargs)
 
-    # def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False):
-    #     enc_fn = enc_fn or self.encoding_fn
+    def get_obs(self, p_idx, **kwargs):
+        obs = super().get_obs(p_idx, **kwargs)
+        if p_idx == self.p_idx:
+            obs['curr_subtask'] = self.goal_subtask_id
+        return obs
+
+
+
+        # enc_fn = enc_fn or self.encoding_fn
     #     obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
     #     if p_idx == self.p_idx:
     #         obs['curr_subtask'] = self.goal_subtask_id
@@ -158,7 +165,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         next_state, _, done, info = self.env.step(joint_action)
         self.state = deepcopy(next_state)
 
-        reward = -0.1  # existence penalty
+        reward = -0.01  # existence penalty
         if joint_action[self.p_idx] == Action.INTERACT:
             subtask = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx)
             done = True

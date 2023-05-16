@@ -138,13 +138,10 @@ class BehavioralCloningTrainer(OAITrainer):
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
         self.num_players = 2
         self.dataset = dataset
-        layout_names = layout_names or args.layout_names
-        self.full_ds = OvercookedDataset(dataset, layout_names, args)
-        train_size = len(self.full_ds) // 2
-        train1, train2 = random_split(self.full_ds, [train_size, train_size])
-        self.datasets = [train1, train2]
+        self.datasets = None
+        self.layout_names = layout_names or args.layout_names
         self.eval_envs = [OvercookedGymEnv(shape_rewards=False, is_eval_env=True, enc_fn='OAI_feats', horizon=400,
-                                           layout_name=ln, args=args) for ln in layout_names]
+                                           layout_name=ln, args=args) for ln in self.layout_names]
         obs = self.eval_envs[0].get_obs(p_idx=0)
         visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
         agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0
@@ -154,10 +151,16 @@ class BehavioralCloningTrainer(OAITrainer):
         self.teammates = self.agents
         self.optimizers = [th.optim.Adam(self.agents[0].parameters(), lr=args.lr),
                            th.optim.Adam(self.agents[1].parameters(), lr=args.lr)]
-        action_weights = th.tensor(self.full_ds.get_action_weights(), dtype=th.float32, device=self.device)
-        self.action_criterion = nn.CrossEntropyLoss(weight=action_weights)
         if vis_eval:
             self.eval_envs.setup_visualization()
+
+    def setup_datasets(self):
+        self.full_ds = OvercookedDataset(self.dataset, self.layout_names, self.args)
+        train_size = len(self.full_ds) // 2
+        train1, train2 = random_split(self.full_ds, [train_size, train_size])
+        self.datasets = [train1, train2]
+        action_weights = th.tensor(self.full_ds.get_action_weights(), dtype=th.float32, device=self.device)
+        self.action_criterion = nn.CrossEntropyLoss(weight=action_weights)
 
     def run_batch(self, agent_idx, batch):
         """Train BC agent on a batch of data"""
@@ -184,6 +187,8 @@ class BehavioralCloningTrainer(OAITrainer):
 
     def train_agents(self, epochs=100, exp_name=None):
         """ Training routine """
+        if self.datasets is None:
+            self.setup_dataset()
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
                          dir=str(self.args.base_dir / 'wandb'),

@@ -200,6 +200,7 @@ class MultipleAgentsTrainer(OAITrainer):
         self.agents = []
         self.agents_in_training = np.ones(num_agents)
         self.agents_timesteps = np.zeros(num_agents)
+        self.epoch_timesteps = 1e6
         if use_lstm:
             print('USING LSTM')
             policy_kwargs['n_lstm_layers'] = 2

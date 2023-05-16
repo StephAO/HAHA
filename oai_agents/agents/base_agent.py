@@ -101,20 +101,22 @@ class OAIAgent(nn.Module, ABC):
                     comp_st[i] = cst
                 # If a subtask has been completed, update counts
                 if comp_st[self.p_idx] is not None:
-                    self.player_completed_tasks[comp_st[self.p_idx]] += 1
+                    player_completed_tasks = np.eye(Subtasks.NUM_SUBTASKS)[comp_st[self.p_idx]]
                     self.prev_subtask = comp_st[self.p_idx]
+                else:
+                    player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
                     # print(f'Agent completed: {comp_st[self.p_idx]}')
                 if comp_st[1 - self.p_idx] is not None:
-                    self.player_completed_tasks[comp_st[1 - self.p_idx]] += 1
+                    tm_completed_tasks = np.eye(Subtasks.NUM_SUBTASKS)[comp_st[1 - self.p_idx]]
+                else:
+                    tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
                     # print(f'Teammate completed: {comp_st[1 - self.p_idx]}')
                 # If this is the first step of the game, reset subtask counts to 0
             else:
-                self.player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
-                self.tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
-            obs['player_completed_subtasks'] = np.eye(Subtasks.NUM_SUBTASKS)[comp_st[self.p_idx]] \
-                                               if comp_st[self.p_idx] is not None else \
-                                               np.zeros(Subtasks.NUM_SUBTASKS) #self.player_completed_tasks
-            obs['teammate_completed_subtasks'] = self.tm_completed_tasks
+                player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
+                tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
+            obs['player_completed_subtasks'] = player_completed_tasks
+            obs['teammate_completed_subtasks'] = tm_completed_tasks
         if 'subtask_mask' in self.policy.observation_space.keys():
             obs['subtask_mask'] = get_doable_subtasks(state, self.prev_subtask, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
             # print(f'DOABLE SUBTASKS: {[Subtasks.IDS_TO_SUBTASKS[i] for i in obs["subtask_mask"]]}', flush=True)
