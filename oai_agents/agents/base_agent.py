@@ -131,6 +131,8 @@ class OAIAgent(nn.Module, ABC):
             agent_msg = ' '
 
         action, _ = self.predict(obs, deterministic=deterministic)
+        print(action, type(action), flush=True)
+        action = int(action[0])
         return Action.INDEX_TO_ACTION[action], agent_msg
 
     def _get_constructor_parameters(self):
