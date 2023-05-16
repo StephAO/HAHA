@@ -92,7 +92,7 @@ class App:
             self.trial_id = max(trial_ids) + 1 if len(trial_ids) > 0 else 1
 
     def on_init(self):
-        self.tile_size = 75
+        self.tile_size = 100
         surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0})
 
         pygame.init()
@@ -138,7 +138,7 @@ class App:
 
         obs, reward, done, info = self.env.step(agent_action)
 
-        # pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
+        pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
 
         # Log data to send to psiturk client
         curr_reward = sum(info['sparse_r_by_agent'])
@@ -168,7 +168,7 @@ class App:
         pygame.display.flip()
         # save = input('press y to save')
         # if save.lower() == 'y':
-        #     pygame.image.save(self.window, "screenshot.png")
+        # pygame.image.save(self.window, "screenshot.png")
 
     def on_cleanup(self):
         pygame.quit()
@@ -338,7 +338,7 @@ if __name__ == "__main__":
     # parser.add_argument('--agent-file', type=str, default=None, help='trajectory file to run')
 
     args = get_arguments(additional_args)
-    layout = 'counter_circuit_o_1order' #'counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room'
+    layout = 'cramped_room' #'counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room'
 
     bc, human_proxy = get_bc_and_human_proxy(args)
 
