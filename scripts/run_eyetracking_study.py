@@ -14,29 +14,32 @@ from scripts.run_overcooked_game import OvercookedGUI
 from oai_agents.agents.agent_utils import load_agent, DummyAgent
 from oai_agents.common.arguments import get_arguments
 
+ROOT = tk.Tk()
+ROOT.title("Survey")
+ROOT.resizable(False, False)  # This code helps to disable windows from resizing
+ROOT.eval('tk::PlaceWindow . center')
 
-def read_trial_and_user_id():
+
+def get_trial_and_user_id():
     try:
         with open('data/eye_tracking_data/trial_user_ids.txt', 'r') as f:
-            trial_id, user_id = [int(digit) for digit in f.readline().split(',')]
+            user_id = [int(digit) for digit in f.readline().split(',')]
     except:
-        trial_id, user_id = 0, 0
-    return trial_id, user_id
+        user_id = 0, 0
+    return 0, user_id
 
 
-def write_trial_and_user_id(trial_id, user_id):
-    with open('data/eye_tracking_data/trial_user_ids.txt', 'w+') as f:
-        f.write(f'{trial_id},{user_id}')
+def save_user_id(user_id):
+    with open('data/eye_tracking_data/user_ids.txt', 'w+') as f:
+        f.write(f'{user_id}')
 
 
 def run_study(args, teammates, layouts):
-    np.random.shuffle(teammates)
-    np.random.shuffle(layouts)
-    trial_id, user_id = read_trial_and_user_id()
+    trial_id, user_id = get_trial_and_user_id()
     # Set up demographic answer file
     if not os.path.exists('data/eye_tracking_data/demographic_answers.csv'):
         with open('data/eye_tracking_data/demographic_answers.csv', 'w+') as f:
-            questions_col_headers = ','.join([f'q{i}' for i in range(len(DemographicSurveyGUI.questions_and_answers))])
+            questions_col_headers = ','.join([f'q{i}' for i in range(len(DemographicSurveyGUI.questions_and_answers) + 1)])
             f.write(f'user_id,{questions_col_headers}\n')
     # Set up likert answer file
     if not os.path.exists('data/eye_tracking_data/likert_answers.csv'):
@@ -50,8 +53,10 @@ def run_study(args, teammates, layouts):
             answer_file.write(f'{user_id},{",".join([str(i) for i in demo_answers])}\n')
         # Run study and gather likert answers
         with open('data/eye_tracking_data/likert_answers.csv', 'a') as answer_file:
-            for teammate in teammates:
-                for layout in layouts:
+            np.random.shuffle(layouts)
+            for layout in layouts:
+                np.random.shuffle(teammates)
+                for teammate in teammates:
                     args.horizon = 20
                     trial_id += 1
                     game = OvercookedGUI(args, layout_name=layout, agent='human', teammate=teammate, trial_id=trial_id,
@@ -62,7 +67,7 @@ def run_study(args, teammates, layouts):
     except BaseException as e:
         print(e)
     user_id += 1
-    write_trial_and_user_id(trial_id, user_id)
+    save_user_id(trial_id, user_id)
 
 
 class LikertScaleGUI():
@@ -76,13 +81,13 @@ class LikertScaleGUI():
 
     def __init__(self):
         super().__init__()
-        self.root = tk.Tk()
-        self.root.title("Survey")
-        self.root.resizable(False, False)  # This code helps to disable windows from resizing
+        # self.root = tk.Tk()
+        # self.root.title("Survey")
+        # self.root.resizable(False, False)  # This code helps to disable windows from resizing
+        #
+        # self.root.eval('tk::PlaceWindow . center')
 
-        self.root.eval('tk::PlaceWindow . center')
-
-        self.mainframe = tk.Frame(self.root)
+        self.mainframe = tk.Frame(ROOT)#self.root)
         self.mainframe.grid(column=0, row=0, sticky=(N, W, E, S))
         self.mainframe.columnconfigure(0, weight=1)
         self.mainframe.rowconfigure(0, weight=1)
@@ -93,10 +98,10 @@ class LikertScaleGUI():
         print(max_answer_length)
         for i, q in enumerate(LikertScaleGUI.questions):
 
-            self.radio_button_values.append(IntVar())
+            self.radio_button_values.append(IntVar(self.mainframe, value=DemographicSurveyGUI.NON_ANSWERED_VALUE))
             rowframe = tk.Frame(self.mainframe)
             rowframe.grid(row=i, column=0, columnspan=7, pady=(2), sticky='w')
-            tk.Label(rowframe, text=f'{i + 1}. {q}', font=('Helvetica', 20)).grid(row=0, column=0, columnspan=7,
+            tk.Label(rowframe, text=f'{i + 1}. {q}', font=('Helvetica', 15)).grid(row=0, column=0, columnspan=7,
                                                                                   padx=(5, 0), sticky='w')
             for j, label in enumerate(labels):
                 label = f'{label:^{max_answer_length}}'
@@ -104,15 +109,13 @@ class LikertScaleGUI():
                 tk.Label(rowframe, text=label, font=('TkFixedFont', 15)).grid(row=1, column=j, padx=padx)
                 tk.Radiobutton(rowframe, variable=self.radio_button_values[-1], value=j - 3).grid(row=2, column=j, padx=padx, pady=(0, 10))
 
-            self.radio_button_values[-1].set(LikertScaleGUI.NON_ANSWERED_VALUE)
-
         tk.Button(self.mainframe, text="Submit", font=('TkFixedFont', 15), command=self.get_answers_and_destroy)\
                  .grid(row=len(LikertScaleGUI.questions), column=0, pady=(10, 10))
 
         self.mainframe.update()
-        x_coordinate = self.root.winfo_screenwidth() // 2 - self.root.winfo_width() // 2
-        y_coordinate = self.root.winfo_screenheight() // 2 - self.root.winfo_height() // 2
-        self.root.geometry(f'+{x_coordinate}+{y_coordinate}')
+        x_coordinate = ROOT.winfo_screenwidth() // 2 - ROOT.winfo_width() // 2
+        y_coordinate = ROOT.winfo_screenheight() // 2 - ROOT.winfo_height() // 2
+        ROOT.geometry(f'+{x_coordinate}+{y_coordinate}')
 
     def get_answers_and_destroy(self):
         potential_answers = [a.get() for a in self.radio_button_values]
@@ -120,20 +123,23 @@ class LikertScaleGUI():
             pass
         else:
             self.answers = potential_answers
-            self.root.destroy()
+            ROOT.quit()
+            ROOT.withdraw()
+            self.mainframe.destroy()
             print(self.answers)
 
     def run(self):
         for rbv in self.radio_button_values:
             rbv.set(LikertScaleGUI.NON_ANSWERED_VALUE)
-        self.root.mainloop()
+        ROOT.deiconify()
+        ROOT.mainloop()
         return self.answers
 
 
 class DemographicSurveyGUI():
     NON_ANSWERED_VALUE = -1
 
-    questions_and_answers = [('Gender:', ['Male', 'Female', 'Non-binary', 'Other', 'Prefer not to say']),
+    questions_and_answers = [('Gender:', ['Male', 'Female', 'Non-binary', 'Prefer not to say']),
                              ('Handedness:', ['Right', 'Left', 'Ambidextrous']),
                              ('What is your highest level of education:', ['No formal Education', 'High School', 'College', 'Vocational Training', 'Bachelors', 'Masters', 'Doctorate/Phd']),
                              ('How much experience do you have playing video games:', ['Never played', '6 months', '1 year', '2-5 years', '5-10 years', '10+ years']),
@@ -145,31 +151,25 @@ class DemographicSurveyGUI():
 
     def __init__(self):
         super().__init__()
-        self.root = tk.Tk()
-        self.root.title("Survey")
-        self.root.resizable(False, False)  # This code helps to disable windows from resizing
-
-        self.root.eval('tk::PlaceWindow . center')
-
-        self.mainframe = tk.Frame(self.root)
+        self.mainframe = tk.Frame(ROOT)
         self.mainframe.grid(column=0, row=0, sticky=(N, W, E, S))
         self.mainframe.columnconfigure(0, weight=1)
         self.mainframe.rowconfigure(0, weight=1)
 
         rowframe = tk.Frame(self.mainframe)
         rowframe.grid(row=0, column=0, columnspan=7, pady=(2), sticky='w')
-        tk.Label(rowframe, text=f'{1}. Age (years):', font=('Helvetica', 20)).grid(row=0, column=0, columnspan=7, padx=(5, 0), sticky='w')
-        self.age_value = tk.Text(rowframe, height=1, width = 5, font=('Helvetica', 20))
+        tk.Label(rowframe, text=f'{1}. Age (years):', font=('Helvetica', 15)).grid(row=0, column=0, columnspan=7, padx=(5, 0), sticky='w')
+        self.age_value = tk.Text(rowframe, height=1, width = 5, font=('Helvetica', 15))
         self.age_value.grid(row=1, column=0, columnspan=7, padx=(32, 5), sticky='w')
 
         self.radio_button_values = []
         max_answer_length = max([len(a) for qas in DemographicSurveyGUI.questions_and_answers for a in qas[1]])
         for i, (question, answers) in enumerate(DemographicSurveyGUI.questions_and_answers):
-            self.radio_button_values.append(IntVar())
+            self.radio_button_values.append(IntVar(self.mainframe, value=DemographicSurveyGUI.NON_ANSWERED_VALUE))
             rowframe = tk.Frame(self.mainframe)
             rowframe.grid(row=i+1, column=0, columnspan=7, pady=(2), sticky='w')
 
-            tk.Label(rowframe, text=f'{i + 2}. {question}', font=('Helvetica', 20)).grid(row=0, column=0, columnspan=7,
+            tk.Label(rowframe, text=f'{i + 2}. {question}', font=('Helvetica', 15)).grid(row=0, column=0, columnspan=7,
                                                                                         padx=(5, 0), sticky='w')
 
             for j, answer in enumerate(answers):
@@ -177,16 +177,14 @@ class DemographicSurveyGUI():
                 columnspan = (1 if j < (len(answers) - 1) else 8 - len(answers))
                 padx = (35, 5) if j == 0 else ((5, 20) if j == (len(answer) - 1) else (5, 5))
                 tk.Label(rowframe, text=answer, font=('TkFixedFont', 15)).grid(row=1, column=j, padx=padx, columnspan=columnspan)
-                tk.Radiobutton(rowframe, variable=self.radio_button_values[-1], value=j).grid(row=2, column=j, padx=padx, pady=(0, 10), columnspan=columnspan)
-
-            self.radio_button_values[-1].set(DemographicSurveyGUI.NON_ANSWERED_VALUE)
+                tk.Radiobutton(rowframe, variable=self.radio_button_values[-1], value=j).grid(row=2, column=j, padx=padx, pady=(0, 5), columnspan=columnspan)
 
         tk.Button(self.mainframe, text="Submit", font=('TkFixedFont', 15), command=self.get_answers_and_destroy).grid(row=len(DemographicSurveyGUI.questions_and_answers)+1, column=0, pady=(10, 10))
 
         self.mainframe.update()
-        x_coordinate = self.root.winfo_screenwidth() // 2 - self.root.winfo_width() // 2
-        y_coordinate = self.root.winfo_screenheight() // 2 - self.root.winfo_height() // 2
-        self.root.geometry(f'+{x_coordinate}+{y_coordinate}')
+        x_coordinate = ROOT.winfo_screenwidth() // 2 - ROOT.winfo_width() // 2
+        y_coordinate = ROOT.winfo_screenheight() // 2 - ROOT.winfo_height() // 2
+        ROOT.geometry(f'+{x_coordinate}+{y_coordinate}')
 
     def get_answers_and_destroy(self):
         age_value = self.age_value.get(1.0, "end-1c")
@@ -200,13 +198,16 @@ class DemographicSurveyGUI():
         else:
             self.answers = [age_value] + potential_answers
             # self.answers = [age_value] + [DemographicSurveyGUI.questions_and_answers[i][1][a] for i, a in enumerate(potential_answers)]
-            self.root.destroy()
+            ROOT.quit()
+            ROOT.withdraw()
+            self.mainframe.destroy()
             print(self.answers)
 
     def run(self):
         for rbv in self.radio_button_values:
-            rbv.set(LikertScaleGUI.NON_ANSWERED_VALUE)
-        self.root.mainloop()
+            rbv.set(DemographicSurveyGUI.NON_ANSWERED_VALUE)
+        ROOT.deiconify()
+        ROOT.mainloop()
         return self.answers
 
 
