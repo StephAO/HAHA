@@ -9,7 +9,7 @@ if os.name == 'nt':
     pathlib.PosixPath = pathlib.WindowsPath
 from tkinter import *
 import tkinter as tk
-
+from tkinter import simpledialog
 from scripts.run_overcooked_game import OvercookedGUI
 from oai_agents.agents.agent_utils import load_agent, DummyAgent
 from oai_agents.common.arguments import get_arguments
@@ -19,14 +19,20 @@ ROOT.title("Survey")
 ROOT.resizable(False, False)  # This code helps to disable windows from resizing
 ROOT.eval('tk::PlaceWindow . center')
 
+def get_user_id_popup():
+    root = tk.Tk()
+    root.withdraw()
 
-def get_trial_and_user_id():
-    try:
-        with open('data/eye_tracking_data/trial_user_ids.txt', 'r') as f:
-            user_id = [int(digit) for digit in f.readline().split(',')]
-    except:
-        user_id = 0, 0
+    user_id = simpledialog.askinteger("User ID", "Enter User ID:")
     return 0, user_id
+
+# def get_trial_and_user_id():
+#     try:
+#         with open('data/eye_tracking_data/trial_user_ids.txt', 'r') as f:
+#             user_id = [int(digit) for digit in f.readline().split(',')]
+#     except:
+#         user_id = 0, 0
+#     return user_id[0], user_id
 
 
 def save_user_id(user_id):
@@ -35,7 +41,7 @@ def save_user_id(user_id):
 
 
 def run_study(args, teammates, layouts):
-    trial_id, user_id = get_trial_and_user_id()
+    trial_id, user_id = get_user_id_popup()
     # Set up demographic answer file
     if not os.path.exists('data/eye_tracking_data/demographic_answers.csv'):
         with open('data/eye_tracking_data/demographic_answers.csv', 'w+') as f:
@@ -66,8 +72,8 @@ def run_study(args, teammates, layouts):
                     answer_file.write(f'{trial_id},{user_id},{",".join([str(i) for i in answers])}\n')
     except BaseException as e:
         print(e)
-    user_id += 1
-    save_user_id(trial_id, user_id)
+    trial_id += 1
+    save_user_id(user_id)
 
 
 class LikertScaleGUI():
