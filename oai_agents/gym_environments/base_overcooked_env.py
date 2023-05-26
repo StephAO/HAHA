@@ -24,15 +24,6 @@ from stable_baselines3.common.vec_env.stacked_observations import StackedObserva
 USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 4, 'asymmetric_advantages': 4, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION AND SP TRAINING
 
 
-# Calculated by dividing the average overall reward by the average reward on each layout in the 2019 human trials
-SCALING_FACTORS = {
-    'asymmetric_advantages': 0.612,
-    'coordination_ring': 1.116,
-    'cramped_room': 0.946,
-    'forced_coordination': 1.371,
-    'counter_circuit_o_1order': 1.461
-}
-
 class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
 
@@ -92,16 +83,18 @@ class OvercookedGymEnv(Env):
         self.p_idx = None
         self.joint_action = [None, None]
         if full_init:
-            self.init_base_env(**kwargs)
+            self.set_env_layout(**kwargs)
 
-    # TODO rename
-    def init_base_env(self, env_index=None, layout_name=None, base_env=None, horizon=None):
+
+    def set_env_layout(self, env_index=None, layout_name=None, base_env=None, horizon=None):
         '''
-        :param shape_rewards: Shape rewards for RL
+        Required to play nicely with sb3 make_vec_env. make_vec_env doesn't allow different arguments for each env,
+        so to specify the layouts, they must first be created then each this is called.
+        :param env_index: int. Used to index the layouts form self.layout_names
+        :param layout_name: str, directly pass in layout name
         :param base_env: Base overcooked environment. If None, create env from layout name. Useful if special parameters
                          are required when creating the environment
-        :param horizon: How many steps to run the env for. If None, default to args.horizon value
-        :param args: Experiment arguments (see arguments.py)
+        :param horizon: horizon for environment. Will default to args.horizon if not provided
         '''
         assert env_index is not None or layout_name is not None or base_env is not None
 
@@ -109,7 +102,6 @@ class OvercookedGymEnv(Env):
             self.env_idx = env_index
             self.layout_name = layout_name or self.args.layout_names[env_index]
             self.mdp = OvercookedGridworld.from_layout_name(self.layout_name)
-            horizon = horizon or self.args.horizon
             all_counters = self.mdp.get_counter_locations()
             COUNTERS_PARAMS = {
                 'start_orientations': False,
@@ -120,18 +112,19 @@ class OvercookedGymEnv(Env):
                 'same_motion_goals': True
             }
             self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
-            # To ensure that an agent is on both sides of the counter, remove random starts for forced coord
-            ss_fn = self.mdp.get_fully_random_start_state_fn(self.mlam)
-            self.env = OvercookedEnv.from_mdp(self.mdp, horizon=horizon, start_state_fn=ss_fn)
+            self.env = OvercookedEnv.from_mdp(self.mdp, **self.get_overcooked_from_mdp_kwargs(horizon=horizon))
         else:
             self.env = base_env
             self.layout_name = self.env.mdp.layout_name
             self.env_idx = self.args.layout_names.index(self.layout_name)
 
-
         self.terrain = self.mdp.terrain_mtx
         self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]
         obs = self.reset()
+
+    def get_overcooked_from_mdp_kwargs(self, horizon=None):
+        horizon = horizon or self.args.horizon
+        return {'start_state_fn': self.mdp.get_fully_random_start_state_fn(self.mlam), 'horizon': horizon}
 
     def get_layout_name(self):
         return self.layout_name

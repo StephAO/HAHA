@@ -1,4 +1,4 @@
-from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv, USEABLE_COUNTERS, SCALING_FACTORS
+from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv, USEABLE_COUNTERS
 from oai_agents.common.subtasks import Subtasks, get_doable_subtasks, calculate_completed_subtask
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action, Direction

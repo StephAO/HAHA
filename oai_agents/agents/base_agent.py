@@ -411,27 +411,6 @@ class OAITrainer(ABC):
             teammate = teammates[np.random.randint(len(teammates))]
             self.env.env_method('set_teammate', teammate, indices=i)
 
-    def set_new_envs(self):
-        if self.args.multi_env_mode == 'splits':
-            # NOTE: If using this method, make sure that args.n_envs is divisible by all split sizes
-            curr_split = self.splits[self.curr_split]
-            n_envs_per_layout = self.args.n_envs / len(curr_split)
-            assert n_envs_per_layout.is_integer()
-            n_envs_per_layout = int(n_envs_per_layout)
-            for i, env_idx in enumerate(curr_split):
-                indices = list(range(n_envs_per_layout * i, n_envs_per_layout * (i + 1)))
-                self.env.env_method('init_base_env', indices=indices, env_index=env_idx)
-            self.curr_split = (self.curr_split + 1) % len(self.splits)
-        elif self.args.multi_env_mode == 'random':
-            for i in range(self.args.n_envs):
-                env_idx = np.random.randint(self.n_layouts)
-                self.env.env_method('init_base_env', indices=i, env_index=env_idx)
-        elif self.args.multi_env_mode == 'uniform':
-            for i in range(self.args.n_envs):
-                self.env.env_method('init_base_env', indices=i, env_index= i % self.n_layouts)
-        else:
-            raise NotImplementedError(f"{self.args.multi_env_mode} has not been implemented. try: splits, random, or uniform")
-
     def get_agents(self) -> List[OAIAgent]:
         """
         Structure should be the same as agents created using stable baselines:

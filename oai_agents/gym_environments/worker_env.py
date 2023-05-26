@@ -26,46 +26,15 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         super(OvercookedSubtaskGymEnv, self).__init__(**kwargs)
         self.obs_dict['curr_subtask'] = spaces.Discrete(Subtasks.NUM_SUBTASKS)
         self.observation_space = spaces.Dict(self.obs_dict)
-        assert not (use_curriculum and self.use_single_subtask)  # only one of them can be true
 
-    def init_base_env(self, env_index=None, **kwargs):
-        assert env_index is not None
-        self.mdp = OvercookedGridworld.from_layout_name(self.args.layout_names[env_index])
-        all_counters = self.mdp.get_counter_locations()
-        COUNTERS_PARAMS = {
-            'start_orientations': False,
-            'wait_allowed': False,
-            'counter_goals': all_counters,
-            'counter_drop': all_counters,
-            'counter_pickup': all_counters,
-            'same_motion_goals': True
-        }
-        self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
-        ss_fn = self.mdp.get_subtask_start_state_fn(self.mlam)
-        env = OvercookedEnv.from_mdp(self.mdp, horizon=100, start_state_fn=ss_fn)
-        super(OvercookedSubtaskGymEnv, self).init_base_env(env_index=env_index, base_env=env, **kwargs)
+    def get_overcooked_from_mdp_kwargs(self):
+        return {'start_state_fn': self.mdp.get_subtask_start_state_fn(self.mlam), 'horizon': 100}
 
     def get_obs(self, p_idx, **kwargs):
         obs = super().get_obs(p_idx, **kwargs)
         if p_idx == self.p_idx:
             obs['curr_subtask'] = self.goal_subtask_id
         return obs
-
-
-
-        # enc_fn = enc_fn or self.encoding_fn
-    #     obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
-    #     if p_idx == self.p_idx:
-    #         obs['curr_subtask'] = self.goal_subtask_id
-    #     if self.stack_frames[p_idx]:
-    #         obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
-    #         if self.stack_frames_need_reset[p_idx]:  # On reset
-    #             obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
-    #             self.stack_frames_need_reset[p_idx] = False
-    #         else:
-    #             obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
-    #         obs['visual_obs'] = obs['visual_obs'].squeeze()
-    #     return obs
 
     def get_putdown_proximity_reward(self, feature_locations):
         # Calculate bonus reward for putting an object down on the pass.

@@ -1,5 +1,5 @@
 from oai_agents.agents.il import BehavioralCloningTrainer
-from oai_agents.agents.rl import SingleAgentTrainer, MultipleAgentsTrainer, SB3Wrapper
+from oai_agents.agents.rl import SingleAgentTrainer, SB3Wrapper
 from oai_agents.agents.hrl import MultiAgentSubtaskWorker, RLManagerTrainer, HierarchicalRL, DummyAgent
 from oai_agents.common.arguments import get_arguments
 
@@ -44,7 +44,7 @@ def create_pop_from_agents(args):
                 pop_agents += [next_agent]
             # print(agent_name, worst_idx, mid_idx)
 
-        mat = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}', num_agents=0)
+        mat = SingleAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
         mat.set_agents(pop_agents)
         mat.save_agents()
 
@@ -54,11 +54,11 @@ def combine_populations(args): #, pop_names, new_name):
     full_pop = {k: [] for k in args.layout_names}
     for layout_name in args.layout_names:
         for pop_name in pop_names:
-            mat = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}_{pop_name}', num_agents=0)
+            mat = SingleAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}_{pop_name}', num_agents=0)
             full_pop[layout_name] += mat.load_agents()
         # verify = input('WARNING: You are about to overwrite fcp_pop. Press Y to continue, or anything else to cancel.')
         # if verify.lower() == 'y':
-        mat = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}', num_agents=0)
+        mat = SingleAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}', num_agents=0)
         mat.set_agents(full_pop[layout_name])
         print(len(mat.agents))
         mat.save_agents()
@@ -77,9 +77,9 @@ def get_eval_teammates(args):
 
 # SP
 def get_selfplay_agent(args, training_steps=1e7, tag=None):
-    self_play_trainer = MultipleAgentsTrainer(args, name='selfplay', num_agents=1, seed=499, use_cnn=False, use_frame_stack=True)
+    self_play_trainer = SingleAgentTrainer([], args, selfplay=True, name='selfplay', seed=499, use_cnn=False, use_frame_stack=False)
     try:
-        tag = tag or 'ijcai_testing2'
+        tag = tag or 'testing3'
         self_play_trainer.load_agents(tag=tag)
     except FileNotFoundError as e:
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
@@ -118,22 +118,12 @@ def get_behavioral_cloning_play_agent(args, training_steps=1e7):
         bcp = self_play_trainer.get_agents()
     return bcp
 
-# PP
-def get_population_play_agent(args, pop_size=8, training_steps=1e7):
-    pop_play_trainer = MultipleAgentsTrainer(args, name='pop_play', num_agents=pop_size, use_lstm=False, hidden_dim=64)
-    pop_play_trainer.train_agents(total_timesteps=training_steps)
-    all_agents = pop_play_trainer.get_agents()
-    score_matrix = calculate_agent_pairing_score_matrix(all_agents, args)
-    avg_score_per_agent = np.mean(score_matrix, axis=1)
-    best_agent = all_agents[np.argmax(avg_score_per_agent)]
-    return best_agent
-
 # FCP
 def get_fcp_population(args, training_steps=2e7):
     try:
         fcp_pop = {}
         for layout_name in args.layout_names:
-            mat = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}', num_agents=0)
+            mat = SingleAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
             fcp_pop[layout_name] = mat.load_agents(tag='ijcai')
             print(f'Loaded fcp_pop with {len(fcp_pop)} agents.')
     except FileNotFoundError as e:
@@ -158,13 +148,13 @@ def get_fcp_population(args, training_steps=2e7):
                 name += f'hd{h_dim}_'
                 name += f'seed{seed}'
                 print(f'Starting training for: {name}')
-                mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, use_frame_stack=use_fs,
+                mat = SingleAgentTrainer([], args, selfplay=True, name=name, hidden_dim=h_dim, use_frame_stack=use_fs,
                                             fcp_ck_rate=ck_rate, seed=seed, num_layers=num_layers)
                 mat.train_agents(total_timesteps=training_steps)
 
                 for layout_name in args.layout_names:
                     agents = mat.get_fcp_agents(layout_name)
-                    pop = MultipleAgentsTrainer(args, name=f'fcp_pop_{layout_name}_{name}', num_agents=0)
+                    pop = SingleAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}_{name}')
                     pop.set_agents(agents)
                     pop.save_agents()
                     fcp_pop[layout_name] = pop.get_agents()
@@ -299,14 +289,14 @@ def create_test_population(args, training_steps=1e7):
 
 if __name__ == '__main__':
     args = get_arguments()
-    #get_selfplay_agent(args, training_steps=1e8)
+    get_selfplay_agent(args, training_steps=5e4)
     # get_bc_and_human_proxy(args)
     #get_behavioral_cloning_play_agent(args, training_steps=1e8)
 
     # get_fcp_population(args, 2e7)
-    #get_fcp_agent(args, training_steps=1e8)
+    # get_fcp_agent(args, training_steps=1e8)
     # get_hrl_worker(args)
-    get_hrl_agent(args, 5e7)
+    # get_hrl_agent(args, 5e7)
 
     # create_test_population(args, 1e3)
     # create_pop_from_agents(args)

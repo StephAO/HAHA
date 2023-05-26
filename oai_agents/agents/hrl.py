@@ -1,6 +1,6 @@
 from oai_agents.agents.base_agent import OAIAgent, PolicyClone
 from oai_agents.agents.il import BehavioralCloningTrainer
-from oai_agents.agents.rl import MultipleAgentsTrainer, SingleAgentTrainer, SB3Wrapper, SB3LSTMWrapper, VEC_ENV_CLS
+from oai_agents.agents.rl import SingleAgentTrainer, SB3Wrapper, SB3LSTMWrapper, VEC_ENV_CLS
 from oai_agents.agents.agent_utils import DummyAgent, is_held_obj, load_agent
 from oai_agents.common.arguments import get_arguments, get_args_to_save, set_args_from_load
 from oai_agents.common.subtasks import Subtasks
@@ -91,19 +91,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         return cls(agents=agents, args=args)
 
     @classmethod
-    def create_model_from_scratch(cls, args, teammates=None, eval_tms=None, dataset_file=None) -> Tuple['OAIAgent', List['OAIAgent']]:
-        # Define teammates
-        if teammates is not None:
-            tms = teammates
-        elif dataset_file is not None:
-            bct = BehavioralCloningTrainer(dataset_file, args)
-            bct.train_agents(epochs=100)
-            tms = bct.get_agents()
-        else:
-            tsa = MultipleAgentsTrainer(args)
-            tsa.train_agents(total_timesteps=1e7)
-            tms = tsa.get_agents()
-
+    def create_model_from_scratch(cls, args, teammates, eval_tms=None, dataset_file=None) -> Tuple['OAIAgent', List['OAIAgent']]:
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
@@ -175,7 +163,7 @@ class RLManagerTrainer(SingleAgentTrainer):
 
         self.worker = worker
         super(RLManagerTrainer, self).__init__(teammates, args, eval_tms=eval_tms, name=name, env=env,
-                                               eval_envs=eval_envs, inc_sp=False, use_subtask_counts=use_subtask_counts,
+                                               eval_envs=eval_envs, use_subtask_counts=use_subtask_counts,
                                                use_hrl=True, use_policy_clone=use_policy_clone, use_maskable_ppo=True,
                                                seed=seed)
         # COMMENTED CODE BELOW IS TO ADD SELFPLAY
@@ -225,7 +213,7 @@ class RLManagerTrainer(SingleAgentTrainer):
 
 class HierarchicalRL(OAIAgent):
     def __init__(self, worker, manager, args, name=None):
-        name = name or 'hrl'
+        name = name or 'haha'
         super(HierarchicalRL, self).__init__(name, args)
         self.worker = worker
         self.manager = manager
