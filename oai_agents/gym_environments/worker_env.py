@@ -206,7 +206,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         self.stack_frames_need_reset = [True, True]
 
         if evaluation_trial_num >= 0:
-            counters = evaluation_trial_num % max(USEABLE_COUNTERS[self.layout_name], 1)
+            counters = evaluation_trial_num % max(USEABLE_COUNTERS[self.layout_name] - 1, 1)
             ss_kwargs = {'p_idx': self.p_idx, 'random_pos': True, 'random_dir': True,
                          'curr_subtask': self.goal_subtask, 'num_random_objects': counters}
         else:

@@ -32,21 +32,6 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.worker_failures = {k: 0 for k in range(Subtasks.NUM_SUBTASKS)}
         return (self.layout_name, failures)
 
-    # def get_low_level_obs(self, p_idx, done=False, enc_fn=None):
-    #     enc_fn = enc_fn or self.encoding_fn
-    #     obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx)
-    #     if p_idx == self.p_idx:
-    #         obs['curr_subtask'] = self.curr_subtask
-    #     if self.stack_frames[p_idx]:
-    #         obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
-    #         if self.stack_frames_need_reset[p_idx]: # On reset
-    #             obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
-    #             self.stack_frames_need_reset[p_idx] = False
-    #         else:
-    #             obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
-    #         obs['visual_obs'] = obs['visual_obs'].squeeze()
-    #     return obs
-
     def action_masks(self, p_idx=None):
         p_idx = p_idx or self.p_idx
         return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
