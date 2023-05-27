@@ -71,10 +71,9 @@ class SingleAgentTrainer(OAITrainer):
                                     gamma=0.99, gae_lambda=0.95)
             agent_name = f'{name}'
         else:
-            # ne = 16 if selfplay else 4
-
+            ne, bs = (16, 125) if selfplay else (4, 500)
             sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=500,
-                            n_epochs=4, learning_rate=0.0003, batch_size=500, ent_coef=0.001, vf_coef=0.3,
+                            n_epochs=ne, learning_rate=0.0003, batch_size=bs, ent_coef=0.001, vf_coef=0.3,
                             gamma=0.99, gae_lambda=0.95)
             agent_name = f'{name}'
         self.learning_agent = self.wrap_agent(sb3_agent, agent_name)
