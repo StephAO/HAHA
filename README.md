@@ -1,5 +1,6 @@
 # Hierarchical Ad Hoc Agents (HAHA)
-Code for [Hierarchical Reinforcement Learning for Ad Hoc Teaming](https://www.southampton.ac.uk/~eg/AAMAS2023/pdfs/p2337.pdf). Used to a variety of agents for the overcooked domain.
+Code for [Hierarchical Reinforcement Learning for Ad Hoc Teaming](https://www.southampton.ac.uk/~eg/AAMAS2023/pdfs/p2337.pdf). Used to train a variety of agents for the overcooked domain.  
+For the most up-to-date version of this repository, please see: https://github.com/StephAO/HAHA
 
 ## Set up guide
 1. Create conda environment:`conda create -n oai python=3.9`
