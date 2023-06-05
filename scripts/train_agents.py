@@ -1,5 +1,5 @@
 from oai_agents.agents.il import BehavioralCloningTrainer
-from oai_agents.agents.rl import SingleAgentTrainer, SB3Wrapper
+from oai_agents.agents.rl import RLAgentTrainer, SB3Wrapper
 from oai_agents.agents.hrl import MultiAgentSubtaskWorker, RLManagerTrainer, HierarchicalRL, DummyAgent
 from oai_agents.common.arguments import get_arguments
 
@@ -39,7 +39,7 @@ def create_pop_from_agents(args):
                 next_agent = SB3Wrapper.load(base_path / agent_name / f'ck_{i}' / 'agents_dir' / 'agent_0', args)
                 pop_agents += [next_agent]
 
-        mat = SingleAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
+        mat = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
         mat.set_agents(pop_agents)
         mat.save_agents()
 
@@ -49,11 +49,11 @@ def combine_populations(args): #, pop_names, new_name):
     full_pop = {k: [] for k in args.layout_names}
     for layout_name in args.layout_names:
         for pop_name in pop_names:
-            mat = SingleAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}_{pop_name}', num_agents=0)
+            mat = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}_{pop_name}', num_agents=0)
             full_pop[layout_name] += mat.load_agents()
         # verify = input('WARNING: You are about to overwrite fcp_pop. Press Y to continue, or anything else to cancel.')
         # if verify.lower() == 'y':
-        mat = SingleAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}', num_agents=0)
+        mat = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}', num_agents=0)
         mat.set_agents(full_pop[layout_name])
         print(len(mat.agents))
         mat.save_agents()
@@ -72,7 +72,7 @@ def get_eval_teammates(args):
 
 # SP
 def get_selfplay_agent(args, training_steps=1e7, tag=None):
-    self_play_trainer = SingleAgentTrainer([], args, selfplay=True, name='selfplay', seed=499, use_cnn=False, use_frame_stack=False)
+    self_play_trainer = RLAgentTrainer([], args, selfplay=True, name='selfplay', seed=499, use_cnn=False, use_frame_stack=False)
     try:
         tag = tag or 'testing3'
         self_play_trainer.load_agents(tag=tag)
@@ -104,7 +104,7 @@ def get_bc_and_human_proxy(args):
 def get_behavioral_cloning_play_agent(args, training_steps=1e7):
     bcs, human_proxies = get_bc_and_human_proxy(args)
     teammates = bcs
-    self_play_trainer = SingleAgentTrainer(teammates, args, name='bcp')
+    self_play_trainer = RLAgentTrainer(teammates, args, name='bcp')
     try:
         bcp = self_play_trainer.load_agents(tag='ijcai')
     except FileNotFoundError as e:
@@ -118,7 +118,7 @@ def get_fcp_population(args, training_steps=2e7):
     try:
         fcp_pop = {}
         for layout_name in args.layout_names:
-            mat = SingleAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
+            mat = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
             fcp_pop[layout_name] = mat.load_agents(tag='ijcai')
             print(f'Loaded fcp_pop with {len(fcp_pop)} agents.')
     except FileNotFoundError as e:
@@ -138,13 +138,13 @@ def get_fcp_population(args, training_steps=2e7):
                 name += f'hd{h_dim}_'
                 name += f'seed{seed}'
                 print(f'Starting training for: {name}')
-                mat = SingleAgentTrainer([], args, selfplay=True, name=name, hidden_dim=h_dim, use_frame_stack=use_fs,
-                                            fcp_ck_rate=ck_rate, seed=seed, num_layers=num_layers)
+                mat = RLAgentTrainer([], args, selfplay=True, name=name, hidden_dim=h_dim, use_frame_stack=use_fs,
+                                     fcp_ck_rate=ck_rate, seed=seed, num_layers=num_layers)
                 mat.train_agents(total_timesteps=training_steps)
 
                 for layout_name in args.layout_names:
                     agents = mat.get_fcp_agents(layout_name)
-                    pop = SingleAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}_{name}')
+                    pop = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}_{name}')
                     pop.set_agents(agents)
                     pop.save_agents()
                     fcp_pop[layout_name] = pop.get_agents()
@@ -153,7 +153,7 @@ def get_fcp_population(args, training_steps=2e7):
 def get_fcp_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     eval_tms = get_eval_teammates(args)
-    fcp_trainer = SingleAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_nips_idx', use_subtask_counts=False, inc_sp=False, use_policy_clone=False, seed=2602)
+    fcp_trainer = RLAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_nips_idx', use_subtask_counts=False, inc_sp=False, use_policy_clone=False, seed=2602)
     fcp_trainer.train_agents(total_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 

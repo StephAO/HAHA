@@ -13,14 +13,14 @@ import wandb
 
 VEC_ENV_CLS = DummyVecEnv #
 
-class SingleAgentTrainer(OAITrainer):
+class RLAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, teammates, args, selfplay=False, eval_tms=None, name=None, env=None, eval_envs=None,
                  use_cnn=False, use_lstm=False, use_frame_stack=False, taper_layers=False, use_subtask_counts=False,
                  use_policy_clone=False, num_layers=2, hidden_dim=256, use_subtask_eval=False, use_hrl=False,
                  fcp_ck_rate=None, seed=None):
         name = name or 'rl_agent'
-        super(SingleAgentTrainer, self).__init__(name, args, seed=seed)
+        super(RLAgentTrainer, self).__init__(name, args, seed=seed)
         if not teammates and not selfplay:
             raise ValueError('Either a list of teammates with len > 0 must be passed in or selfplay must be true')
         self.args = args

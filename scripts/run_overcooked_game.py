@@ -17,7 +17,7 @@ from oai_agents.agents.agent_utils import DummyPolicy
 from oai_agents.agents.agent_utils import DummyPolicy
 from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
-from oai_agents.agents.rl import MultipleAgentsTrainer
+from oai_agents.agents.rl import RLAgentTrainer
 from oai_agents.agents.hrl import MultiAgentSubtaskWorker, HierarchicalRL
 # from oai_agents.agents import Manager
 from oai_agents.common.arguments import get_arguments
@@ -290,7 +290,7 @@ class HumanPlayer(OAIAgent):
 if __name__ == "__main__":
     """
     Sample commands
-    python scripts/run_overcooked_game.py --agent human --teammate a
+    python scripts/run_overcooked_game.py --agent human --teammate agent_models/HAHA
     """
     additional_args = [
         ('--agent', {'type': str, 'default': 'human', 'help': '"human" to used keyboard inputs or a path to a saved agent'}),

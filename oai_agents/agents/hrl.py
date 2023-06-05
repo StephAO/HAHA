@@ -1,6 +1,6 @@
 from oai_agents.agents.base_agent import OAIAgent, PolicyClone
 from oai_agents.agents.il import BehavioralCloningTrainer
-from oai_agents.agents.rl import SingleAgentTrainer, SB3Wrapper, SB3LSTMWrapper, VEC_ENV_CLS
+from oai_agents.agents.rl import RLAgentTrainer, SB3Wrapper, SB3LSTMWrapper, VEC_ENV_CLS
 from oai_agents.agents.agent_utils import DummyAgent, is_held_obj, load_agent
 from oai_agents.common.arguments import get_arguments, get_args_to_save, set_args_from_load
 from oai_agents.common.subtasks import Subtasks
@@ -117,7 +117,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
                          for n in range(n_layouts)]
             # Create trainer
             name = f'subtask_worker_{i}'
-            rl_sat = SingleAgentTrainer(tms, args, eval_tms=eval_tms, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
+            rl_sat = RLAgentTrainer(tms, args, eval_tms=eval_tms, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
             # Currently put soup closer is a useless subtasks, so don't spend any training timtesteps on it
             if i != Subtasks.SUBTASKS_TO_IDS['put_soup_closer']:
                 agents.extend(rl_sat.get_agents())
@@ -148,7 +148,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         model.save(path / args.exp_name)
         return model
 
-class RLManagerTrainer(SingleAgentTrainer):
+class RLManagerTrainer(RLAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, worker, teammates, args, eval_tms=None, use_frame_stack=False, use_subtask_counts=False,
                  inc_sp=False, use_policy_clone=False, name=None, seed=None):

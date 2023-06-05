@@ -38,7 +38,9 @@ def get_arguments(additional_args=[]):
     parser.add_argument('-c', type=str, default='', help='for stupid reasons, but dont delete')
     parser.add_argument('args', nargs='?', type=str, default='', help='')
 
+    print('?????')
     for parser_arg, parser_kwargs in additional_args:
+        print(parser_arg, parser_kwargs)
         parser.add_argument(parser_arg, **parser_kwargs)
 
 
