@@ -1,3 +1,4 @@
+from gym import spaces
 import json
 import numpy as np
 import pandas as pd
@@ -12,6 +13,8 @@ from os.path import isfile, join
 import re
 import time
 
+from oai_agents.agents.agent_utils import DummyPolicy
+from oai_agents.agents.agent_utils import DummyPolicy
 from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
 from oai_agents.agents.rl import MultipleAgentsTrainer
@@ -227,30 +230,7 @@ class App:
                 df['layout'] = df['layout'].apply(joiner)
                 df.to_pickle(data_path / f)
 
-
-def map_eye_tracking_to_grid(eye_data, top_left_x, top_left_y, surface_size, tile_size, grid_shape, hud_size):
-    import matplotlib.pyplot as plt
-    grid_top_left = (top_left_x, top_left_y + hud_size)
-    heat_map = np.zeros(grid_shape)
-    x_bins = list(range(tile_size, surface_size[0], tile_size))
-    y_bins = list(range(tile_size, surface_size[1] - hud_size, tile_size))
-    for x, y in eye_data:
-        x -= grid_top_left[0]
-        y -= grid_top_left[1]
-        if not (0 < x < surface_size[0] and 0 < y < surface_size[1] - 50):
-            # Out of bounds
-            continue
-        x_bin = np.digitize(x, x_bins)
-        y_bin = np.digitize(y, y_bins)
-        heat_map[x_bin][y_bin] += 1
-
-    heat_map /= np.sum(heat_map)
-    plt.imshow(np.transpose(heat_map), cmap='hot', interpolation='nearest')
-    plt.show()
-    return heat_map
-
-
-
+# Just for testing
 class HumanManagerHRL(OAIAgent):
     def __init__(self, worker, args):
         super(HumanManagerHRL, self).__init__('hierarchical_rl', args)
@@ -281,8 +261,7 @@ class HumanManagerHRL(OAIAgent):
         obs.pop('teammate_completed_subtasks')
         return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=True)
 
-from oai_agents.agents.agent_utils import DummyPolicy
-from gym import spaces
+# Just for testing
 class HumanPlayer(OAIAgent):
     def __init__(self, name, args):
         super(HumanPlayer, self).__init__(name, args)
@@ -311,77 +290,26 @@ class HumanPlayer(OAIAgent):
 if __name__ == "__main__":
     """
     Sample commands
-    -> pbt
-    python overcooked_interactive.py -t pbt -r pbt_simple -a 0 -s 8015
-    ->
-    python overcooked_interactive.py -t ppo -r ppo_sp_simple -s 386
-    -> BC
-    python overcooked_interactive.py -t bc -r simple_bc_test_seed4
+    python scripts/run_overcooked_game.py --agent human --teammate a
     """
-
-    # parser.add_argument("-t", "--type", dest="type",
-    #                     help="type of run, (i.e. pbt, bc, ppo, etc)", required=True)
-    # parser.add_argument("-r", "--run_dir", dest="run",
-    #                     help="tag of run dir in data/*_runs/", required=True)
     additional_args = [
-        ('--combine', {'action': 'store_true', 'help': 'Combine all previous trials'}),
-        ('--traj-file', {'type': str, 'default': None, 'help': 'trajectory file to run'}),
-        ('--agent-file', {'type': str, 'default': None, 'help': 'agent file to load'}),
+        ('--agent', {'type': str, 'default': 'human', 'help': '"human" to used keyboard inputs or a path to a saved agent'}),
+        ('--teammate', {'type': str, 'default': 'agent_models/HAHA', 'help': 'Path to saved agent to use as teammate'}),
+        ('--layout', {'type': str, 'default': 'counter_circuit_o_1order', 'help': 'Layout to play on'}),
+        ('--p_idx', {'type': int, 'default': 0, 'help': 'Player idx of agent (teammate will have other player idx), Can be 0 or 1.'})
     ]
-    # parser.add_argument("-no_slowed", "--no_slowed_down", dest="slow",
-    #                     help="Slow down time for human to simulate actual test time", action='store_false')
-    # parser.add_argument("-s", "--seed", dest="seed", required=False, default=0)
-    # parser.add_argument("-a", "--agent_num", dest="agent_num", default=0)
-    # parser.add_argument("-i", "--idx", dest="idx", default=0)
-    # parser.add_argument('--combine', action='store_true', help='Combine all previous trials')
-    # parser.add_argument('--traj-file', type=str, default=None, help='trajectory file to run') # '2019_hh_trials_all.pickle'
-    # parser.add_argument('--agent-file', type=str, default=None, help='trajectory file to run')
 
     args = get_arguments(additional_args)
-    layout = 'counter_circuit_o_1order' #'counter_circuit_o_1order,coordination_ring,forced_coordination,asymmetric_advantages,cramped_room'
-
     bc, human_proxy = get_bc_and_human_proxy(args)
 
-    # print(map_eye_tracking_to_grid([(680, 400), (680, 750), (1290, 400), (1290, 750), (680, 350), (0, 0)], 622, 327, (675, 425), 75, (9, 5), 50))
-    p_idx = 1
-    tm = load_agent(Path('agent_models_NIPS/HAHA'), args) # 'agent_models/HAHA' 'agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'
-    tm.set_idx(p_idx, layout, is_hrl=True, tune_subtasks=True)
-    agent = 'human'#human_proxy[layout][0]#load_agent(Path('agent_models_NIPS/SP'))#DummyAgent('random')#load_agent(Path('agent_models_NIPS/SP'))#DummyAgent('random')#human_proxy['counter_circuit_o_1order'][0]#load_agent(Path('agent_models_NIPS/SP'))
-    # tm.set_idx(1, layout, is_hrl=True, tune_subtasks=True)
-    # print(agent)
+    t_idx = 1 - args.p_idx
+    tm = load_agent(Path(args.teammate), args)
+    tm.set_idx(t_idx, layout, is_hrl=isinstance(agent, HierarchicalRL), tune_subtasks=False)
+    if args.agent == 'human':
+        agent = args.agent
+    else:
+        agent = load_agent(Path(args.agent), args)
+        agent.set_idx(t_idx, layout, is_hrl=isinstance(agent, HierarchicalRL), tune_subtasks=False)
 
-    dc = App(args, agent=agent, teammate=tm, layout=layout, p_idx=1-p_idx)
+    dc = App(args, agent=agent, teammate=tm, layout=args.layout, p_idx=args.p_idx)
     dc.on_execute()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # if args.agent_file is not None:
-    #     env = OvercookedGymEnv(args=args)
-    #     obs = env.get_obs()
-    #     visual_obs_shape = obs['visual_obs'][0].shape
-    #     agent_obs_shape = obs['agent_obs'][0].shape
-    #     agents = [Manager(visual_obs_shape, agent_obs_shape, 0, args),
-    #               Manager(visual_obs_shape, agent_obs_shape, 1, args)]
-    #     for i, agent in enumerate(agents):
-    #         path = args.base_dir / 'agent_models' / 'IL_agents' / (args.agent_file + f'_p{i + 1}')
-    #         agent.load(path)
-    #
-    #     agents[0] = 'human'
-    #
-    # if args.combine:
-    #     App.combine_df(data_path)
-    # else:
-    #     layout_name = 'asymmetric_advantages'
-    #     dc = App(args, traj_file=args.traj_file, agents=agents, slowmo_rate=8, )
-    #     dc.on_execute()

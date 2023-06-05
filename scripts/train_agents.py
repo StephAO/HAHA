@@ -28,7 +28,6 @@ def calculate_agent_pairing_score_matrix(agents, args):
 def create_pop_from_agents(args):
     # WARNING: THIS IS JUST TEMPLATE CODE. This function requires hand figuring out each ck to use for the mid ck
     base_path = args.base_dir / 'agent_models'
-    # for agent_name, mid_ck in zip(['fs_16_s16384', 'fs_256_s16384', 'no_fs_16_s16384', 'no_fs_256_s16384'], ['ck_5', 'ck_4', 'ck_7', 'ck_7']):
     mid_indices = {'forced_coordination': [2, 9], 'counter_circuit_o_1order': [0, 7], 'asymmetric_advantages': [0, 1], 'cramped_room': [0, 2], 'coordination_ring': [0, 3]}
     for layout_name in args.layout_names:
         pop_agents = []
@@ -37,12 +36,8 @@ def create_pop_from_agents(args):
             best = SB3Wrapper.load(base_path / agent_name / 'best' / 'agents_dir' / 'agent_0', args)
             pop_agents += [best]
             for i in mid_indices[layout_name]:
-                # worst_idx = np.random.randint(0, 3) # checkpoints up to ~45% of final training scores
                 next_agent = SB3Wrapper.load(base_path / agent_name / f'ck_{i}' / 'agents_dir' / 'agent_0', args)
-                # mid_idx = np.random.randint(3, 13) # checkpoints betwee 45-90% of final training scores
-                # mid = SB3Wrapper.load(base_path / agent_name / f'ck_{mid_idx}' / 'agents_dir' / 'agent_0', args)
                 pop_agents += [next_agent]
-            # print(agent_name, worst_idx, mid_idx)
 
         mat = SingleAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
         mat.set_agents(pop_agents)
@@ -129,12 +124,7 @@ def get_fcp_population(args, training_steps=2e7):
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
         fcp_pop = {}
-        #layout_names = deepcopy(args.layout_names)
-        #args.layout_names = [layout_name]
         agents = []
-        # use_fs = False
-        # use_cnn = False
-        # taper_layers = False
         num_layers = 2
         seed = 105
         for use_fs in [True, False]:
@@ -199,92 +189,10 @@ def get_all_agents(args, training_steps=1e7, agents_to_train='all'):
         agents['sp'] = get_selfplay_agent(args, training_steps=5e6)
     if agents_to_train == 'all' or 'bcp' in agents_to_train:
         agents['bcp'] = get_behavioral_cloning_play_agent(args, training_steps=5e6)
-    # if agents_to_train == 'all' or 'pp' in agents_to_train:
-    #     agents['pp'] = get_population_play_agent(args, training_steps=training_steps)
     if agents_to_train == 'all' or 'fcp' in agents_to_train:
         agents['fcp'] = get_fcp_agent(args, training_steps)
     if agents_to_train == 'all' or 'hrl' in agents_to_train:
         agents['hrl'] = get_hrl_agent(args, training_steps)
-
-
-### TESTING STUFF ###
-def create_test_population(args, training_steps=1e7):
-    agents = []
-    h_dim= 64
-    seed = 8
-
-    # name = 'frame_stack'
-    # print(f'Starting training for: {name}')
-    # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, use_frame_stack=True, hidden_dim=h_dim, seed=seed)
-    # mat.train_agents(total_timesteps=1e6)
-    a = False
-    if a:
-        args.layout_names = ['counter_circuit_o_1order', 'forced_coordination', 'asymmetric_advantages']
-        get_behavioral_cloning_play_agent(args, training_steps=3e6)
-
-    # name = 'multi_env_uniform'
-    # print(f'Starting training for: {name}')
-    # args.layout_names = ['counter_circuit_o_1order','forced_coordination','asymmetric_advantages']
-    # args.multi_env_mode = 'uniform'
-    # mat = MultipleAgentsTrainer(args, name=name, num_agents=1, hidden_dim=h_dim, seed=seed)
-    # mat.train_agents(total_timesteps=3e6)
-
-    else:
-        # args.layout_names = ['counter_circuit_o_1order']
-        # # get subtask worker
-        # name = 'multi_agent_subtask_worker'
-        # worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
-        #
-        # name = 'hrl_default'
-        # mat = MultipleAgentsTrainer(args, name='fcp_pop', num_agents=0)
-        # tms = mat.load_agents()
-        # inc_sp = False
-
-        from oai_agents.common.subtasks import Subtasks
-        from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
-        name = 'multi_agent_subtask_worker'
-        worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
-        tms = get_eval_teammates(args)
-        total_f = 0
-        for env_idx, ln in enumerate(args.layout_names):
-            print('--------------------')
-            print(f'layout: {ln}')
-            print('--------------------')
-            for i in range(Subtasks.NUM_SUBTASKS - 1):
-                if ln == 'asymmetric_advantages' and  Subtasks.IDS_TO_SUBTASKS[i] in ['put_soup_closer', 'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']:
-                    continue
-
-                print(f"Subtask {i}: {Subtasks.IDS_TO_SUBTASKS[i]}, layout: {ln}")
-                env_kwargs = {'single_subtask_id': i, 'stack_frames': False, 'full_init': True, 'args': args}
-                eval_env1 = OvercookedSubtaskGymEnv(**{'env_index': env_idx, 'is_eval_env': True, **env_kwargs})
-                # eval_env1.setup_visualization()
-                tms = tms[ln] if type(tms) == dict else tms
-                for tm in tms:
-                # tm = DummyAgent('random')
-                    eval_env1.set_teammate(tm)
-                    # print("Running with determinism")
-                    # w = SB3Wrapper.load(Path(f'/home/miguel/Documents/projects/oai_agents/agent_models/subtask_worker_{i}/best/agents_dir/agent_0'), args)
-                    _, tot_f = eval_env1.evaluate(worker.agents[i]) #
-                    total_f += tot_f
-                # eval_env2 = OvercookedSubtaskGymEnv(**{'env_index': 0, 'is_eval_env': False, **env_kwargs})
-                # eval_env2.set_teammate(tms)
-                # print("Running without determinism")
-                # eval_env2.evaluate(worker.agents[i])
-        print(total_f)
-        exit(0)
-
-        # b = True
-        # if b:
-        #     inc_sp = True
-        #     tms = []
-        #     name = 'hrl_sp'
-        #
-        # # Create manager
-        # rlmt = RLManagerTrainer(worker, tms, args, use_subtask_counts=True, inc_sp=inc_sp, name=name)
-        # rlmt.train_agents(total_timesteps=training_steps)
-        # manager = rlmt.get_agents()[0]
-        # hrl = HierarchicalRL(worker, manager, args, name='hrl_sp')
-        # hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))
 
 
 if __name__ == '__main__':
