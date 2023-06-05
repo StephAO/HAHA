@@ -38,15 +38,15 @@ class BehaviouralCloningPolicy(nn.Module):
 
         # Define CNN for grid-like observations
         if self.use_visual_obs:
-            self.obs_dict['visual_obs'] = spaces.Box(0, 20, visual_obs_shape, dtype=long)
+            self.obs_dict['visual_obs'] = spaces.Box(0, 20, visual_obs_shape, dtype=int)
             self.cnn = GridEncoder(visual_obs_shape)
             self.cnn_output_shape = get_output_shape(self.cnn, [1, *visual_obs_shape])[0]
         else:
-            self.obs_dict['visual_obs'] = spaces.Box(0, 1, (1,), dtype=long)
+            self.obs_dict['visual_obs'] = spaces.Box(0, 1, (1,), dtype=int)
             self.cnn_output_shape = 0
 
         if self.use_agent_obs:
-            self.obs_dict['agent_obs'] = spaces.Box(0, 400, agent_obs_shape, dtype=long)
+            self.obs_dict['agent_obs'] = spaces.Box(0, 400, agent_obs_shape, dtype=int)
         self.observation_space = spaces.Dict(self.obs_dict)
 
         # Define MLP for vector/feature based observations
