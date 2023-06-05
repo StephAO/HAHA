@@ -83,6 +83,7 @@ class App:
         self.curr_tick = 0
         self.data_path = args.base_dir / args.data_path
         self.data_path.mkdir(parents=True, exist_ok=True)
+        self.tile_size = 100
 
         self.collect_trajectory = False
         if self.collect_trajectory:
@@ -95,10 +96,9 @@ class App:
             self.trial_id = max(trial_ids) + 1 if len(trial_ids) > 0 else 1
 
     def on_init(self):
-        self.tile_size = 100
+        pygame.init()
         surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": 0})
 
-        pygame.init()
         self.surface_size = surface.get_size()
         self.x, self.y = (1920 - self.surface_size[0]) // 2, (1080 - self.surface_size[1]) // 2
         self.grid_shape = self.env.mdp.shape
@@ -107,7 +107,6 @@ class App:
 
         self.window = pygame.display.set_mode(self.surface_size, HWSURFACE | DOUBLEBUF | RESIZABLE)
         self.window.blit(surface, (0, 0))
-        print(self.x, self.y, self.surface_size, self.tile_size, self.grid_shape, self.hud_size)
         pygame.display.flip()
         self._running = True
 
@@ -141,7 +140,7 @@ class App:
 
         obs, reward, done, info = self.env.step(agent_action)
 
-        pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
+        # pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
 
         # Log data to send to psiturk client
         curr_reward = sum(info['sparse_r_by_agent'])
@@ -166,7 +165,6 @@ class App:
 
     def on_render(self, pidx=None):
         surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state, grid=self.env.env.mdp.terrain_mtx, hud_data={"timestep": self.curr_tick})
-        self.window = pygame.display.set_mode(surface.get_size(), HWSURFACE | DOUBLEBUF | RESIZABLE)
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
         # save = input('press y to save')
@@ -192,7 +190,7 @@ class App:
             else:
                 obs = self.env.get_obs(self.env.p_idx, on_reset=False)
                 action = self.agent.predict(obs, state=self.env.state, deterministic=False)[0]
-                pygame.time.wait(sleep_time)
+                # pygame.time.wait(sleep_time)
 
             done = self.step_env(action)
             self.human_action = None
@@ -300,16 +298,15 @@ if __name__ == "__main__":
     ]
 
     args = get_arguments(additional_args)
-    bc, human_proxy = get_bc_and_human_proxy(args)
 
     t_idx = 1 - args.p_idx
     tm = load_agent(Path(args.teammate), args)
-    tm.set_idx(t_idx, layout, is_hrl=isinstance(agent, HierarchicalRL), tune_subtasks=False)
+    tm.set_idx(t_idx, args.layout, is_hrl=isinstance(tm, HierarchicalRL), tune_subtasks=False)
     if args.agent == 'human':
         agent = args.agent
     else:
         agent = load_agent(Path(args.agent), args)
-        agent.set_idx(t_idx, layout, is_hrl=isinstance(agent, HierarchicalRL), tune_subtasks=False)
+        agent.set_idx(args.p_idx, args.layout, is_hrl=isinstance(agent, HierarchicalRL), tune_subtasks=False)
 
     dc = App(args, agent=agent, teammate=tm, layout=args.layout, p_idx=args.p_idx)
     dc.on_execute()
