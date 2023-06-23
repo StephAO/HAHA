@@ -1,7 +1,8 @@
 from oai_agents.agents.il import BehavioralCloningTrainer
-from oai_agents.agents.rl import RLAgentTrainer, SB3Wrapper
-from oai_agents.agents.hrl import MultiAgentSubtaskWorker, RLManagerTrainer, HierarchicalRL, DummyAgent
+from oai_agents.agents.rl import RLAgentTrainer, SB3Wrapper, VEC_ENV_CLS
+from oai_agents.agents.hrl import RLManagerTrainer, HierarchicalRL, DummyAgent
 from oai_agents.common.arguments import get_arguments
+from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
@@ -10,6 +11,8 @@ from gym import Env, spaces
 import numpy as np
 from pathlib import Path
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.env_util import make_vec_env
+
 
 
 def calculate_agent_pairing_score_matrix(agents, args):
@@ -49,8 +52,7 @@ def combine_populations(args): #, pop_names, new_name):
     full_pop = {k: [] for k in args.layout_names}
     for layout_name in args.layout_names:
         for pop_name in pop_names:
-            mat = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}_{pop_name}', num_agents=0)
-            full_pop[layout_name] += mat.load_agents()
+            full_pop[layout_name] += RLAgentTrainer.load_agents(args, name=f'fcp_pop_{layout_name}_{pop_name}')
         # verify = input('WARNING: You are about to overwrite fcp_pop. Press Y to continue, or anything else to cancel.')
         # if verify.lower() == 'y':
         mat = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}', num_agents=0)
@@ -60,7 +62,7 @@ def combine_populations(args): #, pop_names, new_name):
 
 ### EVALUATION AGENTS ###
 def get_eval_teammates(args):
-    sp = get_selfplay_agent(args, training_steps=1e7, tag='ijcai_tm')
+    sp = get_selfplay_agent(args, training_steps=1e7, tag='testing')
     bcs, human_proxies = get_bc_and_human_proxy(args)
     random_agent = DummyAgent('random')
     eval_tms = {}
@@ -72,28 +74,30 @@ def get_eval_teammates(args):
 
 # SP
 def get_selfplay_agent(args, training_steps=1e7, tag=None):
-    self_play_trainer = RLAgentTrainer([], args, selfplay=True, name='selfplay', seed=499, use_cnn=False, use_frame_stack=False)
+    name = 'selfplay'
     try:
-        tag = tag or 'testing3'
-        self_play_trainer.load_agents(tag=tag)
+        tag = tag or 'testing'
+        agents = RLAgentTrainer.load_agents(args, name=name, tag=tag)
     except FileNotFoundError as e:
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
-        self_play_trainer.train_agents(total_timesteps=training_steps)
-    return self_play_trainer.get_agents()
+        selfplay_trainer = RLAgentTrainer([], args, selfplay=True, name=name, seed=499)
+        selfplay_trainer.train_agents(total_timesteps=training_steps)
+        agents = selfplay_trainer.get_agents()
+    return agents
 
 # BC and Human Proxy
-def get_bc_and_human_proxy(args):
+def get_bc_and_human_proxy(args, epochs=500):
     bcs, human_proxies = {}, {}
     # This is required because loading agents will overwrite args.layout_names
     all_layouts = deepcopy(args.layout_names)
     for layout_name in all_layouts:
-        bct = BehavioralCloningTrainer(args.dataset, args, name=f'bc_{layout_name}', layout_names=[layout_name])
         try:
-            bct.load_bc_and_human_proxy(tag='ijcai')
+            bc, human_proxy = BehavioralCloningTrainer.load_bc_and_human_proxy(args, name=f'bc_{layout_name}', tag='testing')
         except FileNotFoundError as e:
             print(f'Could not find saved BC and human proxy, creating them from scratch...\nFull Error: {e}')
-            bct.train_agents(epochs=500)
-        bc, human_proxy = bct.get_agents()
+            bct = BehavioralCloningTrainer(args.dataset, args, name=f'bc_{layout_name}', layout_names=[layout_name])
+            bct.train_agents(epochs=epochs)
+            bc, human_proxy = bct.get_agents()
         bcs[layout_name] = [bc]
         human_proxies[layout_name] = [human_proxy]
 
@@ -102,13 +106,13 @@ def get_bc_and_human_proxy(args):
 
 # BCP
 def get_behavioral_cloning_play_agent(args, training_steps=1e7):
-    bcs, human_proxies = get_bc_and_human_proxy(args)
-    teammates = bcs
-    self_play_trainer = RLAgentTrainer(teammates, args, name='bcp')
+    name = 'bcp'
     try:
-        bcp = self_play_trainer.load_agents(tag='ijcai')
+        bcp = RLAgentTrainer.load_agents(args, name=name, tag='testing')
     except FileNotFoundError as e:
         print(f'Could not find saved BCP, creating them from scratch...\nFull Error: {e}')
+        teammates, _ = get_bc_and_human_proxy(args)
+        self_play_trainer = RLAgentTrainer(teammates, args, name=name)
         self_play_trainer.train_agents(total_timesteps=training_steps)
         bcp = self_play_trainer.get_agents()
     return bcp
@@ -118,12 +122,11 @@ def get_fcp_population(args, training_steps=2e7):
     try:
         fcp_pop = {}
         for layout_name in args.layout_names:
-            mat = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
-            fcp_pop[layout_name] = mat.load_agents(tag='ijcai')
+            fcp_pop[layout_name] = RLAgentTrainer.load_agents(args, name=f'fcp_pop_{layout_name}', tag='testing')
             print(f'Loaded fcp_pop with {len(fcp_pop)} agents.')
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
-        fcp_pop = {}
+        fcp_pop = {layout_name: [] for layout_name in args.layout_names}
         agents = []
         num_layers = 2
         seed = 105
@@ -138,36 +141,47 @@ def get_fcp_population(args, training_steps=2e7):
                 name += f'hd{h_dim}_'
                 name += f'seed{seed}'
                 print(f'Starting training for: {name}')
-                mat = RLAgentTrainer([], args, selfplay=True, name=name, hidden_dim=h_dim, use_frame_stack=use_fs,
+                rlat = RLAgentTrainer([], args, selfplay=True, name=name, hidden_dim=h_dim, use_frame_stack=use_fs,
                                      fcp_ck_rate=ck_rate, seed=seed, num_layers=num_layers)
-                mat.train_agents(total_timesteps=training_steps)
+                rlat.train_agents(total_timesteps=training_steps)
 
                 for layout_name in args.layout_names:
-                    agents = mat.get_fcp_agents(layout_name)
-                    pop = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}_{name}')
-                    pop.set_agents(agents)
-                    pop.save_agents()
-                    fcp_pop[layout_name] = pop.get_agents()
+                    agents = rlat.get_fcp_agents(layout_name)
+                    fcp_pop[layout_name] += agents
+
+        for layout_name in args.layout_names:
+            pop = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
+            pop.agents = fcp_pop[layout_name]
+            pop.save_agents(tag='testing')
     return fcp_pop
 
 def get_fcp_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     eval_tms = get_eval_teammates(args)
-    fcp_trainer = RLAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp_nips_idx', use_subtask_counts=False, inc_sp=False, use_policy_clone=False, seed=2602)
+    fcp_trainer = RLAgentTrainer(teammates, args, eval_tms=eval_tms, name='fcp', use_subtask_counts=False, use_policy_clone=False, seed=2602)
     fcp_trainer.train_agents(total_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 
-def get_hrl_worker(args):
-    # Create subtask worker
-    name = 'multi_agent_subtask_worker_nips'
+def get_hrl_worker(args, training_steps=1e7):
+    name = 'subtask_worker'
     try:
-        worker = MultiAgentSubtaskWorker.load(Path(args.base_dir / 'agent_models' / name / args.exp_name), args)
+        worker = RLAgentTrainer.load_agents(args, name=name, tag='testing')[0]
     except FileNotFoundError as e:
-        print(f'Could not find saved subtask worker, creating them from scratch...\nFull Error: {e}')
-        #worker = MultiAgentSubtaskWorker.create_model_from_pretrained_subtask_workers(args)
+        print(f'Could not find saved worker agent, creating them from scratch...\nFull Error: {e}')
         eval_tms = get_eval_teammates(args)
         teammates = get_fcp_population(args, 1e7)
-        worker, _ = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates, eval_tms=eval_tms)
+        # Create subtask worker
+        env_kwargs = {'stack_frames': False, 'full_init': False, 'args': args}
+        env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs,
+                           vec_env_cls=VEC_ENV_CLS)
+        env_kwargs['full_init'] = True
+        eval_envs = [OvercookedSubtaskGymEnv(**{'env_index': n, 'is_eval_env': True, **env_kwargs})
+                     for n in range(len(args.layout_names))]
+        worker_trainer = RLAgentTrainer(teammates, args, eval_tms=eval_tms, name=name, env=env, eval_envs=eval_envs,
+                                        use_subtask_eval=True)
+        worker_trainer.train_agents(total_timesteps=training_steps)
+        worker = worker_trainer.get_agents()[0]
+
     return worker
 
 def get_hrl_agent(args, training_steps=1e7):
@@ -197,7 +211,19 @@ def get_all_agents(args, training_steps=1e7, agents_to_train='all'):
 
 if __name__ == '__main__':
     args = get_arguments()
-    get_selfplay_agent(args, training_steps=5e4)
+    get_selfplay_agent(args, training_steps=1e3)
+    print('GOT SP', flush=True)
+    get_bc_and_human_proxy(args, epochs=2)
+    print('GOT BC&HP', flush=True)
+    get_behavioral_cloning_play_agent(args, training_steps=1e3)
+    print('GOT BCP', flush=True)
+    get_fcp_population(args, training_steps=1e4)
+    print('GOT FCP', flush=True)
+    get_hrl_worker(args, training_steps=1e3)
+    print('GOT WORK', flush=True)
+    get_hrl_agent(args, training_steps=1e3)
+    print('GOT HAHA', flush=True)
+
     # get_bc_and_human_proxy(args)
     #get_behavioral_cloning_play_agent(args, training_steps=1e8)
 

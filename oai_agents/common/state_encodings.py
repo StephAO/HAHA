@@ -5,7 +5,8 @@ import numpy as np
 
 def OAI_feats_closure():
     mlams = {}
-    def OAI_get_feats(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int, num_pots: int = 2, p_idx=None):
+    def OAI_get_feats(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int,
+                      num_pots: int = 2, p_idx=None, goal_objects=None):
         """
         Uses Overcooked-ai's BC 96 dim BC featurization. Only returns agent_obs
         """
@@ -33,11 +34,12 @@ def OAI_feats_closure():
 OAI_feats = OAI_feats_closure()
 
 
-def OAI_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int, p_idx=None):
+def OAI_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int, p_idx=None,
+                     goal_objects=None):
     """
-    Uses Overcooked-ai's RL lossless encoding by stacking 26 binary masks (26xNxM). Only returns visual_obs.
+    Uses Overcooked-ai's RL lossless encoding by stacking 27 binary masks (27xNxM). Only returns visual_obs.
     """
-    visual_obs = mdp.lossless_state_encoding(state, horizon=horizon)
+    visual_obs = mdp.lossless_state_encoding(state, horizon=horizon, goal_objects=goal_objects)
     visual_obs = np.stack(visual_obs, axis=0)
     # Reorder to channels first
     visual_obs = np.transpose(visual_obs, (0, 3, 1, 2))
@@ -52,7 +54,7 @@ def OAI_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shap
 
 
 def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState,
-                                grid_shape: tuple, horizon: int, p_idx=None) -> Dict[str, np.array]:
+                                grid_shape: tuple, horizon: int, p_idx=None, goal_objects=None) -> Dict[str, np.array]:
     """
     Returns the egocentric encode state. Player will always be facing down (aka. SOUTH).
     grid_shape: The desired padded output shape from the egocentric view
@@ -61,7 +63,7 @@ def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState
         raise ValueError(f'Ego grid shape must be 2D and both dimensions must be odd! {grid_shape} is invalid.')
 
     # Get np.array representing current state
-    visual_obs = mdp.lossless_state_encoding(state, horizon=horizon)  # This returns 2xNxMxF (F is # features)
+    visual_obs = mdp.lossless_state_encoding(state, horizon=horizon, goal_objects=goal_objects)  # This returns 2xNxMxF (F is # features)
     visual_obs = np.stack(visual_obs, axis=0)
     visual_obs = np.transpose(visual_obs, (0, 3, 1, 2))  # Reorder to features first --> 2xFxNxM
     num_players, num_features = visual_obs.shape[0], visual_obs.shape[1]

@@ -58,7 +58,7 @@ class RLAgentTrainer(OAITrainer):
                 features_extractor_kwargs=dict(hidden_dim=hidden_dim)
             )
 
-        self.epoch_timesteps = 1e5 if self.use_subtask_eval else 1e6
+        self.epoch_timesteps = 1e6
         if use_lstm:
             policy_kwargs['n_lstm_layers'] = 2
             policy_kwargs['lstm_hidden_size'] = hidden_dim
@@ -129,7 +129,8 @@ class RLAgentTrainer(OAITrainer):
             # Evaluate
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.learning_agent.agent.ep_info_buffer])
             best_training_rew *= 0.98
-            if (epoch + 1) % 5 == 0 or (mean_training_rew > best_training_rew and curr_timesteps > 5e6):
+            if (epoch + 1) % 5 == 0 or (mean_training_rew > best_training_rew and curr_timesteps > 5e6) or \
+                (self.fcp_ck_rate and curr_timesteps // self.fcp_ck_rate > (len(self.ck_list) - 1)):
                 if mean_training_rew >= best_training_rew:
                     best_training_rew = mean_training_rew
 
@@ -156,7 +157,7 @@ class RLAgentTrainer(OAITrainer):
                     mean_reward, rew_per_layout = self.evaluate(self.learning_agent, timestep=curr_timesteps)
                     # FCP pop checkpointing
                     if self.fcp_ck_rate:
-                        if self.agents_timesteps[0] // self.fcp_ck_rate > (len(self.ck_list) - 1):
+                        if curr_timesteps // self.fcp_ck_rate > (len(self.ck_list) - 1):
                             path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
                             self.ck_list.append((rew_per_layout, path, tag))
                     # Save best model
@@ -165,8 +166,8 @@ class RLAgentTrainer(OAITrainer):
                         print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
                         best_score = mean_reward
             epoch += 1
-        path, tag = self.save_agents()
-        self.load_agents(best_path, best_tag)
+        self.save_agents()
+        self.agents = RLAgentTrainer.load_agents(self.args, self.name, best_path, best_tag)
         run.finish()
 
     def get_fcp_agents(self, layout_name):
@@ -181,12 +182,12 @@ class RLAgentTrainer(OAITrainer):
             if score > best_score:
                 best_score = score
                 best_path, best_tag = path, tag
-        best = self.load_agents(best_path, best_tag)
+        best = RLAgentTrainer.load_agents(self.args, path=best_path, tag=best_tag)
         agents.extend(best)
         del best
         # Worst agent for this layout
         _, worst_path, worst_tag = self.ck_list[0]
-        worst = self.load_agents(worst_path, worst_tag)
+        worst = RLAgentTrainer.load_agents(self.args, path=worst_path, tag=worst_tag)
         agents.extend(worst)
         del worst
         # Middle agent for this layout
@@ -197,7 +198,7 @@ class RLAgentTrainer(OAITrainer):
             if abs((best_score / 2) - score) < closest_to_mid_score:
                 closest_to_mid_score = score
                 mid_path, mid_tag = path, tag
-        mid = self.load_agents(mid_path, mid_tag)
+        mid = RLAgentTrainer.load_agents(self.args, path=mid_path, tag=mid_tag)
         agents.extend(mid)
         del mid
         return agents

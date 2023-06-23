@@ -68,7 +68,6 @@ class OAISinglePlayerFeatureExtractor(BaseFeaturesExtractor):
         super(OAISinglePlayerFeatureExtractor, self).__init__(observation_space, hidden_dim)
         self.use_visual_obs = 'visual_obs' in observation_space.keys()
         self.use_vector_obs = 'agent_obs' in observation_space.keys()
-        self.use_subtask_obs = 'curr_subtask' in observation_space.keys()
         self.use_pl_comp_st = 'player_completed_subtasks' in observation_space.keys()
         self.use_tm_comp_st = 'teammate_completed_subtasks' in observation_space.keys()
         input_dim = 0
@@ -78,8 +77,6 @@ class OAISinglePlayerFeatureExtractor(BaseFeaturesExtractor):
             input_dim += get_output_shape(self.vis_encoder, test_shape)[0]
         if self.use_vector_obs:
             input_dim += np.prod(observation_space['agent_obs'].shape)
-        #if self.use_subtask_obs:
-        #    input_dim += observation_space['curr_subtask'].n
         #if self.use_pl_comp_st:
         #    input_dim += np.prod(observation_space['player_completed_subtasks'].shape)
         if self.use_tm_comp_st:
@@ -97,8 +94,6 @@ class OAISinglePlayerFeatureExtractor(BaseFeaturesExtractor):
             latent_state.append(self.vis_encoder.forward(observations['visual_obs']))
         if self.use_vector_obs:
             latent_state.append(th.flatten(observations['agent_obs'], start_dim=1))
-        #if self.use_subtask_obs:
-        #    latent_state.append(th.flatten(observations['curr_subtask'], start_dim=1))
         #if self.use_pl_comp_st:
         #    latent_state.append(th.flatten(observations['player_completed_subtasks'], start_dim=1))
         if self.use_tm_comp_st:

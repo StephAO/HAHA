@@ -18,7 +18,7 @@ from oai_agents.agents.agent_utils import DummyPolicy
 from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
 from oai_agents.agents.rl import RLAgentTrainer
-from oai_agents.agents.hrl import MultiAgentSubtaskWorker, HierarchicalRL
+from oai_agents.agents.hrl import SubtaskWorker, HierarchicalRL
 # from oai_agents.agents import Manager
 from oai_agents.common.arguments import get_arguments
 from oai_agents.common.subtasks import Subtasks, get_doable_subtasks
@@ -68,7 +68,7 @@ class App:
             kwargs = {'single_subtask_id': 10, 'args': args, 'is_eval_env': True}
             self.env = OvercookedSubtaskGymEnv(**p_kwargs, **kwargs)
         else:
-            # worker = MultiAgentSubtaskWorker.load(Path('agent_models_NIPS/HAHA/worker'), args)
+            # worker = SubtaskWorker.load(Path('agent_models_NIPS/HAHA/worker'), args)
             # self.env = OvercookedManagerGymEnv(worker, layout_name=self.layout_name, args=args, ret_completed_subtasks=True, is_eval_env=True)
             self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True, is_eval_env=True, horizon=400)
         self.env.set_teammate(teammate)
@@ -242,7 +242,11 @@ class HumanManagerHRL(OAIAgent):
             print(f'GOAL: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id]}, DONE: {obs["player_completed_subtasks"]}')
             next_st = input("Enter next subtask (0-10): ")
             self.curr_subtask_id = int(next_st)
-        obs['curr_subtask'] = self.curr_subtask_id
+
+        worker_obs = self.enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=self.p_idx,
+                                 goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+        obs.update(worker_obs)
+
         return self.worker.get_distribution(obs, sample=sample)
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
@@ -254,7 +258,9 @@ class HumanManagerHRL(OAIAgent):
             print('DOABLE SUBTASKS:', doable_st)
             next_st = input("Enter next subtask (0-10): ")
             self.curr_subtask_id = int(next_st)
-        obs['curr_subtask'] = self.curr_subtask_id
+        worker_obs = self.enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=self.p_idx,
+                                 goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+        obs.update(worker_obs)
         obs.pop('player_completed_subtasks')
         obs.pop('teammate_completed_subtasks')
         return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=True)

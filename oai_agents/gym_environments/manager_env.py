@@ -12,17 +12,16 @@ import torch as th
 class OvercookedManagerGymEnv(OvercookedGymEnv):
     def __init__(self, worker=None, **kwargs):
         kwargs['ret_completed_subtasks'] = True
+        # Use worker num encoding channel to get worker obs easier
         super(OvercookedManagerGymEnv, self).__init__(**kwargs)
         self.action_space = spaces.Discrete(Subtasks.NUM_SUBTASKS)
         self.worker = worker
         self.worker_failures = {k: 0 for k in range(Subtasks.NUM_SUBTASKS)}
         self.base_env_timesteps = 0
 
-    def get_obs(self, p_idx, **kwargs):
-        obs = super().get_obs(p_idx, **kwargs)
-        if p_idx == self.p_idx:
-            obs['curr_subtask'] = self.curr_subtask
-        return obs
+    def get_obs(self, p_idx, for_worker=False, **kwargs):
+        goal_objects = Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask] if (p_idx == self.p_idx and for_worker) else None
+        return super().get_obs(p_idx, goal_objects=goal_objects, **kwargs)
 
     def get_base_env_timesteps(self):
         return self.base_env_timesteps
@@ -41,7 +40,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.curr_subtask = action.cpu() if type(action) == th.tensor else action
         joint_action = [Action.STAY, Action.STAY]
         # while (not ready_for_next_subtask and not done):
-        obs = {k: v for k, v in self.get_obs(self.p_idx).items() if k in self.worker.observation_space.keys()}
+        obs = {k: v for k, v in self.get_obs(self.p_idx, for_worker=True).items() if k in self.worker.policy.observation_space.keys()}
         joint_action[self.p_idx] = self.worker.predict(obs, deterministic=False)[0]
         tm_obs = self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
             # if self.teammate.use_hrl_obs else self.get_low_level_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
@@ -55,10 +54,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
 
         self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
         next_state, reward, done, info = self.env.step(joint_action)
-        # self.base_env_timesteps += 1
         self.state = deepcopy(next_state)
-        # reward += r
-
         self.step_count += 1
 
         if joint_action[self.p_idx] == Action.INTERACT:
@@ -67,7 +63,6 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
                 self.worker_failures[self.curr_subtask] += 1
                 self.failures_in_a_row += 1
                 if self.failures_in_a_row >= 5 and not self.is_eval_env:
-                    # reward += -1
                     done = True
             else:
                 self.failures_in_a_row = 0
@@ -91,11 +86,6 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         else:
             self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
-        # Setup correct agent observation stacking for agents that need it
-        self.stack_frames[self.p_idx] = self.main_agent_stack_frames
-        if self.teammate is not None:
-            self.stack_frames[self.t_idx] = self.teammate.policy.observation_space['visual_obs'].shape[0] == \
-                                            (self.enc_num_channels * self.args.num_stack)
         self.stack_frames_need_reset = [True, True]
         self.curr_subtask = 0
         self.unknowns_in_a_row = 0
