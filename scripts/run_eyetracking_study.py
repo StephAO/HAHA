@@ -32,7 +32,7 @@ def get_user_id_popup():
     # root = tk.Tk()
     ROOT.withdraw()
 
-    user_id = simpledialog.askinteger("User ID", "Enter User ID:")
+    user_id = simpledialog.askstring("User ID", "Enter User ID:")
     return 0, user_id
 
 # def get_trial_and_user_id():
@@ -55,10 +55,10 @@ def run_study(args, teammates, layouts):
 
 
     # Set up demographic answer file
-    if not os.path.exists('data/eye_tracking_data/demographic_answers.csv'):
-        with open('data/eye_tracking_data/demographic_answers.csv', 'w+') as f:
-            questions_col_headers = ','.join([f'q{i}' for i in range(len(DemographicSurveyGUI.questions_and_answers) + 1)])
-            f.write(f'user_id,{questions_col_headers}\n')
+    # if not os.path.exists('data/eye_tracking_data/demographic_answers.csv'):
+    #     with open('data/eye_tracking_data/demographic_answers.csv', 'w+') as f:
+    #         questions_col_headers = ','.join([f'q{i}' for i in range(len(DemographicSurveyGUI.questions_and_answers) + 1)])
+    #         f.write(f'user_id,{questions_col_headers}\n')
     # Set up likert answer file
     if not os.path.exists('data/eye_tracking_data/likert_answers.csv'):
         with open('data/eye_tracking_data/likert_answers.csv', 'w+') as f:
@@ -66,9 +66,9 @@ def run_study(args, teammates, layouts):
             f.write(f'trial_id,user_id,{questions_col_headers}\n')
     try:
         # Get demographic answers
-        with open('data/eye_tracking_data/demographic_answers.csv', 'a') as answer_file:
-            demo_answers = DemographicSurveyGUI().run()
-            answer_file.write(f'{user_id},{",".join([str(i) for i in demo_answers])}\n')
+        # with open('data/eye_tracking_data/demographic_answers.csv', 'a') as answer_file:
+        #     demo_answers = DemographicSurveyGUI().run()
+        #     answer_file.write(f'{user_id},{",".join([str(i) for i in demo_answers])}\n')
         # Run study and gather likert answers
         with open('data/eye_tracking_data/likert_answers.csv', 'a') as answer_file:
             info_stream = StreamInfo(name="GameData", type="GameData", channel_count=1, nominal_srate=5,channel_format='string', source_id='game')
