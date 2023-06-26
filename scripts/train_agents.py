@@ -80,7 +80,7 @@ def get_selfplay_agent(args, training_steps=1e7, tag=None):
         agents = RLAgentTrainer.load_agents(args, name=name, tag=tag)
     except FileNotFoundError as e:
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
-        selfplay_trainer = RLAgentTrainer([], args, selfplay=True, name=name, seed=499)
+        selfplay_trainer = RLAgentTrainer([], args, selfplay=True, name=name, seed=499, use_frame_stack=False, use_lstm=False, use_cnn=False)
         selfplay_trainer.train_agents(total_timesteps=training_steps)
         agents = selfplay_trainer.get_agents()
     return agents
@@ -130,24 +130,25 @@ def get_fcp_population(args, training_steps=2e7):
         agents = []
         num_layers = 2
         seed = 105
-        for use_fs in [True, False]:
-            for h_dim in [32, 256]: # [8,16], [32, 64], [128, 256], [512, 1024]
-                ck_rate = training_steps // 20
-                # name = f'cnn_{num_layers}l_' if use_cnn else f'eval_{num_layers}l_'
-                name = 'sp_'
-                # name += 'pc_' if use_policy_clone else ''
-                # name += 'tpl_' if taper_layers else ''
-                name += f'fs_' if use_fs else ''
-                name += f'hd{h_dim}_'
-                name += f'seed{seed}'
-                print(f'Starting training for: {name}')
-                rlat = RLAgentTrainer([], args, selfplay=True, name=name, hidden_dim=h_dim, use_frame_stack=use_fs,
-                                     fcp_ck_rate=ck_rate, seed=seed, num_layers=num_layers)
-                rlat.train_agents(total_timesteps=training_steps)
+        h_dim = 128
+        for use_fs in [True]:
+            # for h_dim in [32, 256]: # [8,16], [32, 64], [128, 256], [512, 1024]
+            ck_rate = training_steps // 20
+            # name = f'cnn_{num_layers}l_' if use_cnn else f'eval_{num_layers}l_'
+            name = 'sp_'
+            # name += 'pc_' if use_policy_clone else ''
+            # name += 'tpl_' if taper_layers else ''
+            name += f'fs_' if use_fs else ''
+            name += f'hd{h_dim}_'
+            name += f'seed{seed}'
+            print(f'Starting training for: {name}')
+            rlat = RLAgentTrainer([], args, selfplay=True, name=name, hidden_dim=h_dim, use_frame_stack=use_fs,
+                                 fcp_ck_rate=ck_rate, seed=seed, num_layers=num_layers)
+            rlat.train_agents(total_timesteps=training_steps)
 
-                for layout_name in args.layout_names:
-                    agents = rlat.get_fcp_agents(layout_name)
-                    fcp_pop[layout_name] += agents
+            for layout_name in args.layout_names:
+                agents = rlat.get_fcp_agents(layout_name)
+                fcp_pop[layout_name] += agents
 
         for layout_name in args.layout_names:
             pop = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
@@ -211,18 +212,18 @@ def get_all_agents(args, training_steps=1e7, agents_to_train='all'):
 
 if __name__ == '__main__':
     args = get_arguments()
-    get_selfplay_agent(args, training_steps=1e3)
+    get_selfplay_agent(args, training_steps=1e7)
     print('GOT SP', flush=True)
-    get_bc_and_human_proxy(args, epochs=2)
-    print('GOT BC&HP', flush=True)
-    get_behavioral_cloning_play_agent(args, training_steps=1e3)
-    print('GOT BCP', flush=True)
-    get_fcp_population(args, training_steps=1e4)
-    print('GOT FCP', flush=True)
-    get_hrl_worker(args, training_steps=1e3)
-    print('GOT WORK', flush=True)
-    get_hrl_agent(args, training_steps=1e3)
-    print('GOT HAHA', flush=True)
+    # get_bc_and_human_proxy(args, epochs=2)
+    # print('GOT BC&HP', flush=True)
+    # get_behavioral_cloning_play_agent(args, training_steps=1e3)
+    # print('GOT BCP', flush=True)
+    # get_fcp_population(args, training_steps=1e4)
+    # print('GOT FCP', flush=True)
+    # get_hrl_worker(args, training_steps=1e3)
+    # print('GOT WORK', flush=True)
+    # get_hrl_agent(args, training_steps=1e3)
+    # print('GOT HAHA', flush=True)
 
     # get_bc_and_human_proxy(args)
     #get_behavioral_cloning_play_agent(args, training_steps=1e8)
