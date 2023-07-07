@@ -3,8 +3,6 @@ from pathlib import Path
 import pathlib
 import os
 
-import shutil
-from datetime import datetime
 
 # Windows path
 if os.name == 'nt':
@@ -19,7 +17,7 @@ from oai_agents.common.arguments import get_arguments
 from run_overcooked_game import pause
 from itertools import product
 
-from pylsl import StreamInfo, StreamOutlet, local_clock
+from pylsl import StreamInfo, StreamOutlet
 
 
 
@@ -35,24 +33,20 @@ def get_user_id_popup():
     user_id = simpledialog.askstring("User ID", "Enter User ID:")
     return 0, user_id
 
-# def get_trial_and_user_id():
-#     try:
-#         with open('data/eye_tracking_data/trial_user_ids.txt', 'r') as f:
-#             user_id = [int(digit) for digit in f.readline().split(',')]
-#     except:
-#         user_id = 0, 0
-#     return user_id[0], user_id
-
-
-# def save_user_id(user_id):
-#     with open('data/eye_tracking_data/user_ids.txt', 'w+') as f:
-#         f.write(f'{user_id}')
-
-
 def run_study(args, teammates, layouts):
     trial_id, user_id = get_user_id_popup()
     agt_envt = list(product(teammates, layouts))
 
+    info_stream = StreamInfo(name="GameData", type="GameData", channel_count=1,
+                             channel_format='string', source_id='game')
+    outlet = StreamOutlet(info_stream)
+    unix_time_info_stream = StreamInfo(name="UnixTime", type="UnixTime", channel_count=1, nominal_srate=5,
+                                  channel_format='double64', source_id='unixtime')
+    unix_time_outlet = StreamOutlet(unix_time_info_stream)
+
+    lsl_time_info_stream = StreamInfo(name="LSLTime", type="LSLTime", channel_count=1, nominal_srate=5,
+                                  channel_format='double64', source_id='lsltime')
+    lsl_time_outlet = StreamOutlet(lsl_time_info_stream)
 
     # Set up demographic answer file
     # if not os.path.exists('data/eye_tracking_data/demographic_answers.csv'):
@@ -71,8 +65,8 @@ def run_study(args, teammates, layouts):
         #     answer_file.write(f'{user_id},{",".join([str(i) for i in demo_answers])}\n')
         # Run study and gather likert answers
         with open('data/eye_tracking_data/likert_answers.csv', 'a') as answer_file:
-            info_stream = StreamInfo(name="GameData", type="GameData", channel_count=1, nominal_srate=5,channel_format='string', source_id='game')
-            outlet = StreamOutlet(info_stream)
+
+
 
             print("\n\n\nRefresh LSL streams\nSelect GameData stream\nStart LSL recording")
             pause()
@@ -82,15 +76,14 @@ def run_study(args, teammates, layouts):
                 args.horizon = 20
                 trial_id += 1
                 game = OvercookedGUI(args, layout_name=layout, agent='human', teammate=teammate, trial_id=trial_id,
-                                         user_id=user_id, stream=info_stream, outlet=outlet)
+                                         user_id=user_id, stream=info_stream, outlet=outlet, unix_time_stream=unix_time_info_stream,
+                                         unix_time_outlet=unix_time_outlet, lsl_time_stream=lsl_time_info_stream, lsl_time_outlet=lsl_time_outlet)
                 game.on_execute()
                 answers = LikertScaleGUI().run()
                 answer_file.write(f'{trial_id},{user_id},{",".join([str(i) for i in answers])}\n')
     except BaseException as e:
         print(e)
     trial_id += 1
-    # save_user_id(user_id)
-
 
 
 class LikertScaleGUI():
@@ -132,7 +125,7 @@ class LikertScaleGUI():
                 tk.Label(rowframe, text=label, font=('TkFixedFont', 15)).grid(row=1, column=j, padx=padx)
                 tk.Radiobutton(rowframe, variable=self.radio_button_values[-1], value=j - 3).grid(row=2, column=j, padx=padx, pady=(0, 10))
 
-        tk.Button(self.mainframe, text="Submit", font=('TkFixedFont', 15), command=self.get_answers_and_destroy)\
+        tk.Button(self.mainframe, text="Submit and Continue to Next Trial\nTrial Will Begin Immediately", font=('TkFixedFont', 15), command=self.get_answers_and_destroy)\
                  .grid(row=len(LikertScaleGUI.questions), column=0, pady=(10, 10))
 
         self.mainframe.update()
@@ -245,7 +238,9 @@ if __name__ == '__main__':
     teammates = [load_agent(Path('agent_models/BCP'), args), DummyAgent('random'),
                  load_agent(Path('agent_models/SP'), args)]
     # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages', 'cramped_room', 'coordination_ring']
-    layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages']
+    # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages']
+    layouts = ['asymmetric_advantages']
+    # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages', 'forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages']
     # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages', 'forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages']
 
     run_study(args, teammates, layouts)

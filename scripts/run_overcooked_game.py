@@ -53,7 +53,9 @@ from overcooked_ai_py.mdp.overcooked_mdp import Direction, Action, OvercookedSta
 from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
 from overcooked_ai_py.planning.planners import MediumLevelActionManager
 
-# from run_eyetracking_study_AJR1 import run_study
+
+
+frames_per_trial =25
 
 def pause():
     programPause = input("\n\n\nPress the <Enter> key to continue...")
@@ -78,10 +80,13 @@ one_counter_params = {
     'same_motion_goals': True
 }
 
+
+
 class OvercookedGUI:
     """Class to run an Overcooked Gridworld game, leaving one of the agents as fixed.
     Useful for debugging. Most of the code from http://pygametutorials.wikidot.com/tutorials-basic."""
-    def __init__(self, args, layout_name=None, agent=None, teammate=None, trial_id=None, user_id=None, stream=None, outlet=None, fps=5):
+    def __init__(self, args, layout_name=None, agent=None, teammate=None, trial_id=None, user_id=None, stream=None, outlet=None,
+                 unix_time_stream=None, unix_time_outlet=None, lsl_time_stream=None, lsl_time_outlet=None, fps=5):
         self.x = None
         self._running = True
         self._display_surf = None
@@ -94,7 +99,7 @@ class OvercookedGUI:
             self.env = OvercookedSubtaskGymEnv(**p_kwargs, **kwargs)
         else:
             self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True,
-                                        is_eval_env=True, horizon=25)
+                                        is_eval_env=True, horizon=frames_per_trial)
         self.env.set_teammate(teammate)
         self.teammate_name=teammate.name
         self.env.reset(p_idx=0)
@@ -107,21 +112,18 @@ class OvercookedGUI:
         self.fps = fps
 
         self.score = 0
-        self.curr_tick = 0
+        self.curr_tick = 1
         self.tile_size = 150
         self.human_action = None
         self.data_path = args.base_dir / args.data_path
         self.data_path.mkdir(parents=True, exist_ok=True)
 
-       # self.info_stream = StreamInfo(name="GameData", type="GameData", channel_count=1, nominal_srate=self.fps,
-                                    #  channel_format='string', source_id='game')
-       # self.outlet = StreamOutlet(self.info_stream)
-
         self.info_stream = stream
         self.outlet = outlet
 
-        pause()
 
+
+       # pause()
 
         self.collect_trajectory = False
         if self.collect_trajectory:
@@ -195,7 +197,7 @@ class OvercookedGUI:
             "joint_action": json.dumps(self.env.get_joint_action()),
             # TODO get teammate action from env to create joint_action json.dumps(joint_action.item()),
             "reward": curr_reward,
-            "time_left": max((1200 - self.curr_tick) / self.fps, 0),
+            "time_left": max((frames_per_trial - self.curr_tick) / self.fps, 0),
             "score": self.score,
             "time_elapsed": self.curr_tick / self.fps,
             "cur_gameloop": self.curr_tick,
@@ -204,10 +206,10 @@ class OvercookedGUI:
             "trial_id": self.trial_id,
             "user_id": self.user_id,
             "dimension": (self.x, self.y, self.surface_size, self.tile_size, self.grid_shape, self.hud_size),
-            "timestamp": time.time(),
+            "Unix_timestamp": time.time(),
+            "LSL_timestamp": local_clock(),
             "agent": self.teammate_name,
         }
-
         trans_str = json.dumps(transition)
         self.outlet.push_sample([trans_str])
 
