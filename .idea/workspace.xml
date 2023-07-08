@@ -5,15 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="cd148558-2b34-4a00-ab82-75ce95507b7c" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/scripts/RandNumLSLtest.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/csv-editor.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/csv-editor.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/eye_tracking_data/demographic_answers.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/eye_tracking_data/demographic_answers_2023-05-26_12-28-03.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/eye_tracking_data/demographic_answers_2023-06-08_20-08-41.csv" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/data/eye_tracking_data/likert_answers.csv" beforeDir="false" afterPath="$PROJECT_DIR$/data/eye_tracking_data/likert_answers.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/eye_tracking_data/likert_answers_2023-05-26_12-28-03.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/eye_tracking_data/likert_answers_2023-06-08_20-08-41.csv" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/scripts/run_eyetracking_study.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/run_eyetracking_study.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/run_eyetracking_study_AJR1.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/scripts/run_overcooked_game.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/run_overcooked_game.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />

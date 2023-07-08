@@ -19,17 +19,18 @@ from itertools import product
 
 from pylsl import StreamInfo, StreamOutlet
 
-
-
 ROOT = tk.Tk()
 ROOT.title("Survey")
 ROOT.resizable(False, False)  # This code helps to disable windows from resizing
 ROOT.eval('tk::PlaceWindow . center')
 
+info_stream = StreamInfo(name="GameData", type="GameData", channel_count=1,
+                         channel_format='string', source_id='game')
+outlet = StreamOutlet(info_stream)
+
 def get_user_id_popup():
     # root = tk.Tk()
     ROOT.withdraw()
-
     user_id = simpledialog.askstring("User ID", "Enter User ID:")
     return 0, user_id
 
@@ -37,16 +38,6 @@ def run_study(args, teammates, layouts):
     trial_id, user_id = get_user_id_popup()
     agt_envt = list(product(teammates, layouts))
 
-    info_stream = StreamInfo(name="GameData", type="GameData", channel_count=1,
-                             channel_format='string', source_id='game')
-    outlet = StreamOutlet(info_stream)
-    unix_time_info_stream = StreamInfo(name="UnixTime", type="UnixTime", channel_count=1, nominal_srate=5,
-                                  channel_format='double64', source_id='unixtime')
-    unix_time_outlet = StreamOutlet(unix_time_info_stream)
-
-    lsl_time_info_stream = StreamInfo(name="LSLTime", type="LSLTime", channel_count=1, nominal_srate=5,
-                                  channel_format='double64', source_id='lsltime')
-    lsl_time_outlet = StreamOutlet(lsl_time_info_stream)
 
     # Set up demographic answer file
     # if not os.path.exists('data/eye_tracking_data/demographic_answers.csv'):
@@ -67,7 +58,6 @@ def run_study(args, teammates, layouts):
         with open('data/eye_tracking_data/likert_answers.csv', 'a') as answer_file:
 
 
-
             print("\n\n\nRefresh LSL streams\nSelect GameData stream\nStart LSL recording")
             pause()
 
@@ -76,8 +66,7 @@ def run_study(args, teammates, layouts):
                 args.horizon = 20
                 trial_id += 1
                 game = OvercookedGUI(args, layout_name=layout, agent='human', teammate=teammate, trial_id=trial_id,
-                                         user_id=user_id, stream=info_stream, outlet=outlet, unix_time_stream=unix_time_info_stream,
-                                         unix_time_outlet=unix_time_outlet, lsl_time_stream=lsl_time_info_stream, lsl_time_outlet=lsl_time_outlet)
+                                         user_id=user_id, stream=info_stream, outlet=outlet)
                 game.on_execute()
                 answers = LikertScaleGUI().run()
                 answer_file.write(f'{trial_id},{user_id},{",".join([str(i) for i in answers])}\n')
@@ -239,9 +228,9 @@ if __name__ == '__main__':
                  load_agent(Path('agent_models/SP'), args)]
     # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages', 'cramped_room', 'coordination_ring']
     # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages']
-    layouts = ['asymmetric_advantages']
-    # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages', 'forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages']
-    # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages', 'forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages']
+    # layouts = ['asymmetric_advantages']
+    layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages', 'forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages']
+
 
     run_study(args, teammates, layouts)
 

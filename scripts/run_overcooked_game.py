@@ -20,11 +20,6 @@ import pathlib
 USING_WINDOWS = (name == 'nt')
 # Windows path
 
-
-#Tobii Pro SDK
-import tobii_research as tr
-
-
 if USING_WINDOWS:
     temp = pathlib.PosixPath
     pathlib.PosixPath = pathlib.WindowsPath
@@ -54,8 +49,8 @@ from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
 from overcooked_ai_py.planning.planners import MediumLevelActionManager
 
 
+frames_per_trial = 100
 
-frames_per_trial =25
 
 def pause():
     programPause = input("\n\n\nPress the <Enter> key to continue...")
@@ -85,8 +80,7 @@ one_counter_params = {
 class OvercookedGUI:
     """Class to run an Overcooked Gridworld game, leaving one of the agents as fixed.
     Useful for debugging. Most of the code from http://pygametutorials.wikidot.com/tutorials-basic."""
-    def __init__(self, args, layout_name=None, agent=None, teammate=None, trial_id=None, user_id=None, stream=None, outlet=None,
-                 unix_time_stream=None, unix_time_outlet=None, lsl_time_stream=None, lsl_time_outlet=None, fps=5):
+    def __init__(self, args, layout_name=None, agent=None, teammate=None, trial_id=None, user_id=None, stream=None, outlet=None, fps=5):
         self.x = None
         self._running = True
         self._display_surf = None
@@ -140,7 +134,7 @@ class OvercookedGUI:
         pygame.init()
         surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state,
                                                                          grid=self.env.env.mdp.terrain_mtx,
-                                                                         hud_data={"timestep": 0})
+                                                                         hud_data={"timestep": 1})
         self.surface_size = surface.get_size()
         self.x, self.y = (1920 - self.surface_size[0]) // 2, (1080 - self.surface_size[1]) // 2
         self.grid_shape = self.env.mdp.shape
