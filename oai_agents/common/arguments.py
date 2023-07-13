@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 import torch as th
 
-ARGS_TO_SAVE_LOAD = ['layout_names', 'encoding_fn']
+ARGS_TO_SAVE_LOAD = ['encoding_fn']
 
 def get_arguments(additional_args=[]):
     """

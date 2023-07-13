@@ -1,3 +1,10 @@
+# Directories to ignore
+screenshots/
+data/eye_tracking_data/
+.idea/
+agent_models/
+agent_models_*/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

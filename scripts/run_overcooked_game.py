@@ -45,7 +45,7 @@ from oai_agents.agents.agent_utils import load_agent, DummyAgent
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
 from overcooked_ai_py.mdp.overcooked_mdp import Direction, Action, OvercookedState, OvercookedGridworld
 # from overcooked_ai_py.planning.planners import MediumLevelPlanner
-from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
+from overcooked_ai_py.visualization.state_visualizer import StateVisualizer, roboto_path
 from overcooked_ai_py.planning.planners import MediumLevelActionManager
 
 
@@ -96,7 +96,8 @@ class OvercookedGUI:
                                         is_eval_env=True, horizon=frames_per_trial)
         self.env.set_teammate(teammate)
         self.teammate_name=teammate.name
-        self.env.reset(p_idx=0)
+        self.p_idx = 1 if layout_name == 'forced_coordination' else 0
+        self.env.reset(p_idx=self.p_idx)
         self.env.teammate.set_idx(self.env.t_idx, self.layout_name, False, True, False)
 
         self.grid_shape = self.env.grid_shape
@@ -107,6 +108,7 @@ class OvercookedGUI:
 
         self.score = 0
         self.curr_tick = 1
+        self.num_collisions = 0
         self.tile_size = 150
         self.human_action = None
         self.data_path = args.base_dir / args.data_path
@@ -114,8 +116,6 @@ class OvercookedGUI:
 
         self.info_stream = stream
         self.outlet = outlet
-
-
 
        # pause()
 
@@ -130,11 +130,12 @@ class OvercookedGUI:
                 self.trial_id = max(trial_ids) + 1 if len(trial_ids) > 0 else 1
 
 
-    def on_init(self):
+    def start_screen(self):
         pygame.init()
         surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state,
                                                                          grid=self.env.env.mdp.terrain_mtx,
-                                                                         hud_data={"timestep": 1})
+                                                                         hud_data={"timestep": 1, "score": 0})
+
         self.surface_size = surface.get_size()
         self.x, self.y = (1920 - self.surface_size[0]) // 2, (1080 - self.surface_size[1]) // 2
         self.grid_shape = self.env.mdp.shape
@@ -142,8 +143,34 @@ class OvercookedGUI:
         environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (self.x, self.y)
 
         self.window = pygame.display.set_mode(self.surface_size, HWSURFACE | DOUBLEBUF | RESIZABLE)
+
+        pygame.font.init()
+        start_font = pygame.font.SysFont(roboto_path, 75)
+        text = start_font.render('Press Enter to Start', True, (255, 255, 255))
+        start_surface = pygame.Surface(self.surface_size)
+        start_surface.fill((155, 101, 0))
+        text_x, text_y = (self.surface_size[0] - text.get_size()[0]) // 2, (self.surface_size[1] - text.get_size()[1]) // 2
+        start_surface.blit(text, (text_x, text_y))
+
+        self.window.blit(start_surface, (0, 0))
+        pygame.display.flip()
+
+        if USING_WINDOWS:
+            win = gw.getWindowsWithTitle('pygame window')[0]
+            win.activate()
+
+        start_screen = True
+        while start_screen:
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                    start_screen = False
+
+
+    def on_init(self):
+        surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state,
+                                                                         grid=self.env.env.mdp.terrain_mtx,
+                                                                         hud_data={"timestep": 1, "score": self.score})
         self.window.blit(surface, (0, 0))
-        print(self.x, self.y, self.surface_size, self.tile_size, self.grid_shape, self.hud_size)
         pygame.display.flip()
         self._running = True
 
@@ -178,7 +205,15 @@ class OvercookedGUI:
     def step_env(self, agent_action):
         prev_state = self.env.state
 
+        prev_pos = [p.position for p in self.env.state.players]
+
         obs, reward, done, info = self.env.step(agent_action)
+
+        curr_pos = [p.position for p in self.env.state.players]
+        collision = False
+        if (curr_pos == prev_pos) and (self.env.get_joint_action()[0] in Direction.ALL_DIRECTIONS or self.env.get_joint_action()[1] in Direction.ALL_DIRECTIONS):
+            collision = True
+            self.num_collisions += 1
 
         # pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
 
@@ -186,7 +221,6 @@ class OvercookedGUI:
         curr_reward = sum(info['sparse_r_by_agent'])
         self.score += curr_reward
         transition = {
-
             "state": json.dumps(prev_state.to_dict()),
             "joint_action": json.dumps(self.env.get_joint_action()),
             # TODO get teammate action from env to create joint_action json.dumps(joint_action.item()),
@@ -203,9 +237,13 @@ class OvercookedGUI:
             "Unix_timestamp": time.time(),
             "LSL_timestamp": local_clock(),
             "agent": self.teammate_name,
+            "p_idx": self.p_idx,
+            "collision": collision,
+            "num_collisions": self.num_collisions
         }
         trans_str = json.dumps(transition)
-        self.outlet.push_sample([trans_str])
+        if self.outlet is not None:
+            self.outlet.push_sample([trans_str])
 
         if self.collect_trajectory:
             self.trajectory.append(transition)
@@ -214,7 +252,8 @@ class OvercookedGUI:
     def on_render(self, pidx=None):
         surface = StateVisualizer(tile_size=self.tile_size).render_state(self.env.state,
                                                                          grid=self.env.env.mdp.terrain_mtx,
-                                                                         hud_data={"timestep": self.curr_tick})
+                                                                         hud_data={"timestep": self.curr_tick,
+                                                                                   "score": self.score})
         self.window = pygame.display.set_mode(surface.get_size(), HWSURFACE | DOUBLEBUF | RESIZABLE)
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
@@ -226,8 +265,8 @@ class OvercookedGUI:
         pygame.quit()
 
     def on_execute(self):
-        if self.on_init() == False:
-            self._running = False
+        self.start_screen()
+        self.on_init()
         sleep_time = 1000 // (self.fps or 5)
 
         on_reset = True
@@ -368,7 +407,7 @@ if __name__ == "__main__":
     args = get_arguments(additional_args)
 
     # tm = load_agent(Path('agent_models/2l_hd128_s1997/ck_0/agents_dir/agent_0'), args) # 'agent_models/HAHA'
-    tm = load_agent(Path('agent_models/HAHA'), args)  # 'agent_models/HAHA'
+    tm = load_agent(Path('agent_models_NIPS/SP'), args)  # 'agent_models/HAHA'
     # tm = DummyAgent()
     agent = 'human'  # load_agent(Path('agent_models/SP'), args) #'human' #HumanPlayer('agent', args)
 

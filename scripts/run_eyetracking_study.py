@@ -121,6 +121,7 @@ class LikertScaleGUI():
         x_coordinate = ROOT.winfo_screenwidth() // 2 - ROOT.winfo_width() // 2
         y_coordinate = ROOT.winfo_screenheight() // 2 - ROOT.winfo_height() // 2
         ROOT.geometry(f'+{x_coordinate}+{y_coordinate}')
+        self.mainframe.update()
 
     def get_answers_and_destroy(self):
         potential_answers = [a.get() for a in self.radio_button_values]
@@ -131,7 +132,6 @@ class LikertScaleGUI():
             ROOT.quit()
             ROOT.withdraw()
             self.mainframe.destroy()
-            print(self.answers)
 
     def run(self):
         for rbv in self.radio_button_values:
