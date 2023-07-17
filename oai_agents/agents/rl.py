@@ -63,7 +63,7 @@ class RLAgentTrainer(OAITrainer):
             policy_kwargs['n_lstm_layers'] = 2
             policy_kwargs['lstm_hidden_size'] = hidden_dim
             sb3_agent = RecurrentPPO('MultiInputLstmPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1,
-                                     n_steps=2048, batch_size=64)
+                                     n_steps=500, n_epochs=4, batch_size=500)
             agent_name = f'{name}_lstm'
         elif use_hrl:
             sb3_agent = MaskablePPO('MultiInputPolicy', self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=500,
@@ -71,7 +71,7 @@ class RLAgentTrainer(OAITrainer):
                                     gamma=0.99, gae_lambda=0.95)
             agent_name = f'{name}'
         else:
-            ne, bs = (16, 125) if selfplay else (4, 500)
+            ne, bs = (4, 500) if selfplay else (4, 500)
             sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=500,
                             n_epochs=ne, learning_rate=0.0003, batch_size=bs, ent_coef=0.001, vf_coef=0.3,
                             gamma=0.99, gae_lambda=0.95)
@@ -105,7 +105,7 @@ class RLAgentTrainer(OAITrainer):
             path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
             self.ck_list.append(({k: 0 for k in self.args.layout_names}, path, tag))
         best_path, best_tag = None, None
-        best_score, fewest_failures, best_training_rew = -1, float('inf'), float('inf')
+        best_score, fewest_failures, best_training_rew = -1, float('inf'), float('-inf')
 
         epoch, curr_timesteps = 0, 0
         while curr_timesteps < total_timesteps:
