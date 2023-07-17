@@ -38,38 +38,31 @@ def run_study(args, teammates, layouts):
     trial_id, user_id = get_user_id_popup()
     agt_envt = list(product(teammates, layouts))
 
-
-    # Set up demographic answer file
-    # if not os.path.exists('data/eye_tracking_data/demographic_answers.csv'):
-    #     with open('data/eye_tracking_data/demographic_answers.csv', 'w+') as f:
-    #         questions_col_headers = ','.join([f'q{i}' for i in range(len(DemographicSurveyGUI.questions_and_answers) + 1)])
-    #         f.write(f'user_id,{questions_col_headers}\n')
     # Set up likert answer file
-    if not os.path.exists('data/eye_tracking_data/likert_answers.csv'):
-        with open('data/eye_tracking_data/likert_answers.csv', 'w+') as f:
+    if not os.path.exists('data/eye_tracking_data/all_likert_answers.csv'):
+        with open('data/eye_tracking_data/all_likert_answers.csv', 'w+') as f:
             questions_col_headers = ','.join([f'q{i}' for i in range(len(LikertScaleGUI.questions))])
             f.write(f'trial_id,user_id,{questions_col_headers}\n')
+    with open(f'data/eye_tracking_data/likert_answers_{user_id}.csv', 'w+') as f:
+        questions_col_headers = ','.join([f'q{i}' for i in range(len(LikertScaleGUI.questions))])
+        f.write(f'trial_id,{questions_col_headers}\n')
     try:
-        # Get demographic answers
-        # with open('data/eye_tracking_data/demographic_answers.csv', 'a') as answer_file:
-        #     demo_answers = DemographicSurveyGUI().run()
-        #     answer_file.write(f'{user_id},{",".join([str(i) for i in demo_answers])}\n')
         # Run study and gather likert answers
-        with open('data/eye_tracking_data/likert_answers.csv', 'a') as answer_file:
+        print("\n\n\nRefresh LSL streams\nSelect GameData stream\nStart LSL recording")
+        np.random.shuffle(agt_envt)
+        for teammate, layout in agt_envt:
+            args.horizon = 20
+            trial_id += 1
+            game = OvercookedGUI(args, layout_name=layout, agent='human', teammate=teammate, trial_id=trial_id,
+                                     user_id=user_id, stream=info_stream, outlet=outlet)
+            game.on_execute()
+            answers = LikertScaleGUI().run()
 
-
-            print("\n\n\nRefresh LSL streams\nSelect GameData stream\nStart LSL recording")
-            pause()
-
-            np.random.shuffle(agt_envt)
-            for teammate, layout in agt_envt:
-                args.horizon = 20
-                trial_id += 1
-                game = OvercookedGUI(args, layout_name=layout, agent='human', teammate=teammate, trial_id=trial_id,
-                                         user_id=user_id, stream=info_stream, outlet=outlet)
-                game.on_execute()
-                answers = LikertScaleGUI().run()
+            with open('data/eye_tracking_data/all_likert_answers.csv', 'a') as answer_file:
                 answer_file.write(f'{trial_id},{user_id},{",".join([str(i) for i in answers])}\n')
+            with open(f'data/eye_tracking_data/likert_answers_{user_id}.csv', 'a') as answer_file:
+                answer_file.write(f'{trial_id},{",".join([str(i) for i in answers])}\n')
+
     except BaseException as e:
         print(e)
     trial_id += 1
@@ -224,12 +217,12 @@ if __name__ == '__main__':
     # DemographicSurveyGUI().run()
     args = get_arguments()
    # teammates = [load_agent(Path('agent_models/BCP'), args),  DummyAgent('random'), load_agent(Path('agent_models/SP'), args), load_agent(Path('agent_models/BCP'), args),  DummyAgent('random'), load_agent(Path('agent_models/SP'), args)]
-    teammates = [load_agent(Path('agent_models/BCP'), args), DummyAgent('random'),
-                 load_agent(Path('agent_models/SP'), args)]
+    teammates = [load_agent(Path('agent_models_NIPS/BCP'), args), DummyAgent('random'),
+                 load_agent(Path('agent_models_NIPS/SP'), args)]
     # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages', 'cramped_room', 'coordination_ring']
     # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages']
     # layouts = ['asymmetric_advantages']
-    layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages', 'forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages']
+    layouts = ['coordination_ring', 'counter_circuit_o_1order', 'asymmetric_advantages', 'coordination_ring', 'counter_circuit_o_1order', 'asymmetric_advantages']
 
 
     run_study(args, teammates, layouts)

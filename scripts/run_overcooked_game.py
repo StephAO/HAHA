@@ -205,14 +205,10 @@ class OvercookedGUI:
     def step_env(self, agent_action):
         prev_state = self.env.state
 
-        prev_pos = [p.position for p in self.env.state.players]
-
         obs, reward, done, info = self.env.step(agent_action)
 
-        curr_pos = [p.position for p in self.env.state.players]
-        collision = False
-        if (curr_pos == prev_pos) and (self.env.get_joint_action()[0] in Direction.ALL_DIRECTIONS or self.env.get_joint_action()[1] in Direction.ALL_DIRECTIONS):
-            collision = True
+        collision = self.env.mdp.prev_step_was_collision
+        if collision:
             self.num_collisions += 1
 
         # pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
