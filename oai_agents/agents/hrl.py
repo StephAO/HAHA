@@ -18,136 +18,6 @@ from torch.distributions.categorical import Categorical
 import torch.nn.functional as F
 from typing import Tuple, List
 
-
-class MultiAgentSubtaskWorker(OAIAgent):
-    def __init__(self, agents, args):
-        super(MultiAgentSubtaskWorker, self).__init__('multi_agent_subtask_worker', args)
-        assert len(agents) == Subtasks.NUM_SUBTASKS - 1
-        self.agents = agents
-        self.observation_space = self.agents[0].policy.observation_space
-        self.agents.append(DummyAgent() ) # Make unknown subtask equivalent to stay
-
-    def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False):
-        assert 'curr_subtask' in obs.keys()
-        obs = {k: v for k, v in obs.items() if k in ['visual_obs', 'agent_obs', 'curr_subtask']}
-        try: # curr_subtask is iterable because this is a training batch
-            preds = [self.agents[st].predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
-                     for st in obs['curr_subtask']]
-            #action_shape = preds[0][0].shape
-            actions, states = zip(*preds)
-            
-            actions, states = np.array(actions), np.array(states)
-            #actions = actions.reshape((-1,) + action_shape)
-
-            #if len(preds) == 1:
-            #actions, states = actions.squeeze(), states.squeeze()
-
-
-        except TypeError: # curr_subtask is not iterable because this is regular run
-            actions, states = self.agents[obs['curr_subtask']].predict(obs, state=state, episode_start=episode_start,
-                                                                       deterministic=deterministic)
-        #rint(actions)
-        return actions, states
-
-    def get_distribution(self, obs: th.Tensor):
-        assert 'curr_subtask' in obs.keys()
-        return self.agents[obs['curr_subtask']].get_distribution(obs)
-
-    def _get_constructor_parameters(self):
-        return dict(name=self.name)
-
-    def save(self, path: Path) -> None:
-        args = get_args_to_save(self.args)
-        save_path = path / 'agent_file'
-        agent_dir = path / 'subtask_agents_dir'
-        Path(agent_dir).mkdir(parents=True, exist_ok=True)
-
-        save_dict = {'agent_type': type(self), 'agent_fns': [],
-                     'const_params': self._get_constructor_parameters(), 'args': args}
-        for i, agent in enumerate(self.agents):
-            # Don't save dummy unknown agent
-            if not isinstance(agent, OAIAgent):
-                continue
-            agent_path_i = agent_dir / f'subtask_{i}_agent'
-            agent.save(agent_path_i)
-            save_dict['agent_fns'].append(f'subtask_{i}_agent')
-        th.save(save_dict, save_path)
-
-    @classmethod
-    def load(cls, path: Path, args):
-        device = args.device
-        load_path = path / 'agent_file'
-        agent_dir = path / 'subtask_agents_dir'
-        saved_variables = th.load(load_path, map_location=device)
-        set_args_from_load(saved_variables['args'], args)
-        saved_variables['const_params']['args'] = args
-
-        # Load weights
-        agents = []
-        for agent_fn in saved_variables['agent_fns']:
-            agent = load_agent(agent_dir / agent_fn, args)
-            agent.to(device)
-            agents.append(agent)
-        print(f'Loaded {len(agents)} subtask worker agents')
-        return cls(agents=agents, args=args)
-
-    @classmethod
-    def create_model_from_scratch(cls, args, teammates, eval_tms=None, dataset_file=None) -> Tuple['OAIAgent', List['OAIAgent']]:
-        # Train 12 individual agents, each for a respective subtask
-        agents = []
-        original_layout_names = deepcopy(args.layout_names)
-        for i in range(Subtasks.NUM_SUBTASKS): #[1, 4, 5, 7, 6, 10, 8, 9]: # [0, 2, 3] [1, 4] [5, 7, 6] [10, 8, 9],range(Subtasks.NUM_SUBTASKS)
-            print(f'Starting subtask {i} - {Subtasks.IDS_TO_SUBTASKS[i]}')
-            # RL single subtask agents trained with teammeates
-            # Make necessary envs
-
-            # Don't bother training an agent on a subtask if that subtask is useless for that layout
-            layouts_to_use = deepcopy(original_layout_names)
-            if Subtasks.IDS_TO_SUBTASKS[i] in ['put_soup_closer', 'get_soup_from_counter', 'get_onion_from_counter', 'get_plate_from_counter']:
-                layouts_to_use.remove('asymmetric_advantages')
-            args.layout_names = layouts_to_use
-            n_layouts = len(args.layout_names)
-
-            env_kwargs = {'single_subtask_id': i, 'stack_frames': False, 'full_init': False, 'args': args}
-            env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs,
-                               vec_env_cls=VEC_ENV_CLS)
-
-            env_kwargs['full_init'] = True
-            eval_envs = [OvercookedSubtaskGymEnv(**{'env_index': n, 'is_eval_env': True, **env_kwargs})
-                         for n in range(n_layouts)]
-            # Create trainer
-            name = f'subtask_worker_{i}'
-            rl_sat = RLAgentTrainer(tms, args, eval_tms=eval_tms, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
-            # Currently put soup closer is a useless subtasks, so don't spend any training timtesteps on it
-            if i != Subtasks.SUBTASKS_TO_IDS['put_soup_closer']:
-                agents.extend(rl_sat.get_agents())
-            # Train if it makes sense to (can't train on an unknown task)
-            if i != Subtasks.SUBTASKS_TO_IDS['unknown']:
-                rl_sat.train_agents(total_timesteps=5e6)
-                agents.extend(rl_sat.get_agents())
-
-        args.layout_names = original_layout_names
-        model = cls(agents=agents, args=args)
-        path = args.base_dir / 'agent_models' / model.name
-        Path(path).mkdir(parents=True, exist_ok=True)
-        model.save(path / args.exp_name)
-        return model, tms
-
-    @classmethod
-    def create_model_from_pretrained_subtask_workers(cls, args):
-        """
-        Helper function to combine subtask workers that were trained separately (e.g. in parallel)
-        """
-        agents = []
-        for i in range(11):
-            agents.append(SB3Wrapper.load(args.base_dir / 'agent_models' / f'subtask_worker_{i}' / 'best' / 'agents_dir' / 'agent_0', args))
-
-        model = cls(agents=agents, args=args)
-        path = args.base_dir / 'agent_models' / model.name
-        Path(path).mkdir(parents=True, exist_ok=True)
-        model.save(path / args.exp_name)
-        return model
-
 class RLManagerTrainer(RLAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, worker, teammates, args, eval_tms=None, use_frame_stack=False, use_subtask_counts=False,
@@ -165,13 +35,13 @@ class RLManagerTrainer(RLAgentTrainer):
         self.worker = worker
         super(RLManagerTrainer, self).__init__(teammates, args, eval_tms=eval_tms, name=name, env=env,
                                                eval_envs=eval_envs, use_subtask_counts=use_subtask_counts,
-                                               use_hrl=True, use_policy_clone=use_policy_clone, use_maskable_ppo=True,
+                                               use_hrl=True, use_policy_clone=use_policy_clone,
                                                seed=seed)
         # COMMENTED CODE BELOW IS TO ADD SELFPLAY
         # However, currently it's just a reference to the agent, so the "self-teammate" could update the main agents subtask
         # To do this correctly, the "self-teammate" would have to be cloned before every epoch
-        playable_self = HierarchicalRL(self.worker, self.learning_agent, self.args, name=f'playable_self')
         if inc_sp:
+            playable_self = HierarchicalRL(self.worker, self.learning_agent, self.args, name=f'playable_self')
             for i in range(3):
                 if self.use_policy_clone:
                     manager = PolicyClone(self.learning_agent, self.args)
@@ -237,7 +107,9 @@ class HierarchicalRL(OAIAgent):
         if np.sum(obs['player_completed_subtasks']) == 1:
             # Completed previous subtask, set new subtask
             self.curr_subtask_id = self.manager.predict(obs, sample=sample)[0]
-        obs['curr_subtask'] = self.curr_subtask_id
+        worker_obs = self.enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=self.p_idx,
+                                 goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+        obs.update(worker_obs)
         return self.worker.get_distribution(obs, sample=sample)
 
     def adjust_distributions(self, probs, indices, weights):
@@ -449,8 +321,10 @@ class HierarchicalRL(OAIAgent):
         # if Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'unknown':
         #     print(f'SUBTASK: {Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)]}')
         # self.num_steps_since_new_subtask = 0
-        obs['curr_subtask'] = self.curr_subtask_id
         self.num_steps_since_new_subtask += 1
+        worker_obs = self.enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=self.p_idx,
+                                 goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+        obs.update(worker_obs)
         return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=False)
 
     def get_agent_output(self):

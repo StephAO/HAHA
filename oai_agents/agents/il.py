@@ -188,7 +188,7 @@ class BehavioralCloningTrainer(OAITrainer):
     def train_agents(self, epochs=100, exp_name=None):
         """ Training routine """
         if self.datasets is None:
-            self.setup_dataset()
+            self.setup_datasets()
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
                          dir=str(self.args.base_dir / 'wandb'),
@@ -241,15 +241,17 @@ class BehavioralCloningTrainer(OAITrainer):
         self.human_proxy.save(agent_path / f'human_proxy')
         return path, tag
 
-    def load_bc_and_human_proxy(self, path: Union[Path, None] = None, tag: Union[str, None] = None):
+
+    @staticmethod
+    def load_bc_and_human_proxy(args, name: str=None, path: Union[Path, None] = None, tag: Union[str, None] = None):
         ''' Loads each agent that the trainer is training '''
-        path = path or self.args.base_dir / 'agent_models_NIPS' / self.name
-        tag = tag or self.args.exp_name
+        path = path or args.base_dir / 'agent_models' / name
+        tag = tag or args.exp_name
         agent_path = path / tag / 'agents_dir'
         # Load weights
-        self.bc = load_agent(agent_path / 'bc', self.args).to(self.args.device)
-        self.human_proxy = load_agent(agent_path / 'human_proxy', self.args).to(self.args.device)
-        return self.bc, self.human_proxy
+        bc = load_agent(agent_path / 'bc', args).to(args.device)
+        human_proxy = load_agent(agent_path / 'human_proxy', args).to(args.device)
+        return bc, human_proxy
 
     def get_agents(self):
         if self.bc is None:
