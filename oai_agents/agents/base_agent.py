@@ -101,20 +101,22 @@ class OAIAgent(nn.Module, ABC):
                     comp_st[i] = cst
                 # If a subtask has been completed, update counts
                 if comp_st[self.p_idx] is not None:
-                    self.player_completed_tasks[comp_st[self.p_idx]] += 1
+                    player_completed_tasks = np.eye(Subtasks.NUM_SUBTASKS)[comp_st[self.p_idx]]
                     self.prev_subtask = comp_st[self.p_idx]
+                else:
+                    player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
                     # print(f'Agent completed: {comp_st[self.p_idx]}')
                 if comp_st[1 - self.p_idx] is not None:
-                    self.player_completed_tasks[comp_st[1 - self.p_idx]] += 1
+                    tm_completed_tasks = np.eye(Subtasks.NUM_SUBTASKS)[comp_st[1 - self.p_idx]]
+                else:
+                    tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
                     # print(f'Teammate completed: {comp_st[1 - self.p_idx]}')
                 # If this is the first step of the game, reset subtask counts to 0
             else:
-                self.player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
-                self.tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
-            obs['player_completed_subtasks'] = np.eye(Subtasks.NUM_SUBTASKS)[comp_st[self.p_idx]] \
-                                               if comp_st[self.p_idx] is not None else \
-                                               np.zeros(Subtasks.NUM_SUBTASKS) #self.player_completed_tasks
-            obs['teammate_completed_subtasks'] = self.tm_completed_tasks
+                player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
+                tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
+            obs['player_completed_subtasks'] = player_completed_tasks
+            obs['teammate_completed_subtasks'] = tm_completed_tasks
         if 'subtask_mask' in self.policy.observation_space.keys():
             obs['subtask_mask'] = get_doable_subtasks(state, self.prev_subtask, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
             # print(f'DOABLE SUBTASKS: {[Subtasks.IDS_TO_SUBTASKS[i] for i in obs["subtask_mask"]]}', flush=True)
@@ -129,7 +131,7 @@ class OAIAgent(nn.Module, ABC):
             agent_msg = ' '
 
         action, _ = self.predict(obs, deterministic=deterministic)
-        return Action.INDEX_TO_ACTION[action], agent_msg
+        return Action.INDEX_TO_ACTION[int(action)], agent_msg
 
     def _get_constructor_parameters(self):
         return dict(name=self.name, args=self.args)
@@ -371,7 +373,7 @@ class OAITrainer(ABC):
             return lr
         return linear_anneal
 
-    def evaluate(self, eval_agent, num_eps_per_layout_per_tm=4, visualize=False, timestep=None, log_wandb=True,
+    def evaluate(self, eval_agent, num_eps_per_layout_per_tm=5, visualize=False, timestep=None, log_wandb=True,
                  deterministic=False):
         tot_mean_reward = []
         rew_per_layout = {}
@@ -382,11 +384,13 @@ class OAITrainer(ABC):
             rew_per_layout[env.layout_name] = []
             for tm in tms:
                 env.set_teammate(tm)
-                mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_eps_per_layout_per_tm,
-                                                          deterministic=deterministic, warn=False, render=visualize)
-                tot_mean_reward.append(mean_reward)
-                rew_per_layout[env.layout_name].append(mean_reward)
-                print(f'Eval at timestep {timestep} for layout {env.layout_name} with tm {tm.name}: {mean_reward}')
+                for p_idx in [0, 1]:
+                    env.set_reset_p_idx(p_idx)
+                    mean_reward, std_reward = evaluate_policy(eval_agent, env, n_eval_episodes=num_eps_per_layout_per_tm,
+                                                              deterministic=deterministic, warn=False, render=visualize)
+                    tot_mean_reward.append(mean_reward)
+                    rew_per_layout[env.layout_name].append(mean_reward)
+                    print(f'Eval at timestep {timestep} for layout {env.layout_name} at p{p_idx+1} with tm {tm.name}: {mean_reward}')
             rew_per_layout[env.layout_name] = np.mean(rew_per_layout[env.layout_name])
             if log_wandb:
                 wandb.log({f'eval_mean_reward_{env.layout_name}': rew_per_layout[env.layout_name], 'timestep': timestep})
@@ -406,27 +410,6 @@ class OAITrainer(ABC):
                 teammates = self.teammates
             teammate = teammates[np.random.randint(len(teammates))]
             self.env.env_method('set_teammate', teammate, indices=i)
-
-    def set_new_envs(self):
-        if self.args.multi_env_mode == 'splits':
-            # NOTE: If using this method, make sure that args.n_envs is divisible by all split sizes
-            curr_split = self.splits[self.curr_split]
-            n_envs_per_layout = self.args.n_envs / len(curr_split)
-            assert n_envs_per_layout.is_integer()
-            n_envs_per_layout = int(n_envs_per_layout)
-            for i, env_idx in enumerate(curr_split):
-                indices = list(range(n_envs_per_layout * i, n_envs_per_layout * (i + 1)))
-                self.env.env_method('init_base_env', indices=indices, env_index=env_idx)
-            self.curr_split = (self.curr_split + 1) % len(self.splits)
-        elif self.args.multi_env_mode == 'random':
-            for i in range(self.args.n_envs):
-                env_idx = np.random.randint(self.n_layouts)
-                self.env.env_method('init_base_env', indices=i, env_index=env_idx)
-        elif self.args.multi_env_mode == 'uniform':
-            for i in range(self.args.n_envs):
-                self.env.env_method('init_base_env', indices=i, env_index= i % self.n_layouts)
-        else:
-            raise NotImplementedError(f"{self.args.multi_env_mode} has not been implemented. try: splits, random, or uniform")
 
     def get_agents(self) -> List[OAIAgent]:
         """

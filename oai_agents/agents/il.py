@@ -4,6 +4,7 @@ from oai_agents.common.networks import GridEncoder, MLP, weights_init_, get_outp
 from oai_agents.common.overcooked_dataset import OvercookedDataset
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
+from oai_agents.agents.agent_utils import load_agent
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
@@ -15,7 +16,7 @@ import torch as th
 import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 from torch.distributions.categorical import Categorical
-from typing import Dict, Any
+from typing import Dict, Any, Union
 import wandb
 
 
@@ -38,17 +39,14 @@ class BehaviouralCloningPolicy(nn.Module):
         # Define CNN for grid-like observations
         if self.use_visual_obs:
             self.obs_dict['visual_obs'] = spaces.Box(0, 20, visual_obs_shape, dtype=int)
-
             self.cnn = GridEncoder(visual_obs_shape)
             self.cnn_output_shape = get_output_shape(self.cnn, [1, *visual_obs_shape])[0]
         else:
             self.obs_dict['visual_obs'] = spaces.Box(0, 1, (1,), dtype=int)
-
             self.cnn_output_shape = 0
 
         if self.use_agent_obs:
             self.obs_dict['agent_obs'] = spaces.Box(0, 400, agent_obs_shape, dtype=int)
-
         self.observation_space = spaces.Dict(self.obs_dict)
 
         # Define MLP for vector/feature based observations
@@ -126,7 +124,6 @@ class BehaviouralCloningAgent(OAIAgent):
         return self.policy.get_distribution(obs)
 
 
-# TODO clean up and remove p_idx
 class BehavioralCloningTrainer(OAITrainer):
     def __init__(self, dataset, args, name=None, layout_names=None, vis_eval=False):
         """
@@ -141,13 +138,10 @@ class BehavioralCloningTrainer(OAITrainer):
         self.device = th.device('cuda' if th.cuda.is_available() else 'cpu')
         self.num_players = 2
         self.dataset = dataset
-        layout_names = layout_names or args.layout_names
-        self.full_ds = OvercookedDataset(dataset, layout_names, args)
-        train_size = len(self.full_ds) // 2
-        train1, train2 = random_split(self.full_ds, [train_size, train_size])
-        self.datasets = [train1, train2]
+        self.datasets = None
+        self.layout_names = layout_names or args.layout_names
         self.eval_envs = [OvercookedGymEnv(shape_rewards=False, is_eval_env=True, enc_fn='OAI_feats', horizon=400,
-                                           layout_name=ln, args=args) for ln in layout_names]
+                                           layout_name=ln, args=args) for ln in self.layout_names]
         obs = self.eval_envs[0].get_obs(p_idx=0)
         visual_obs_shape = obs['visual_obs'].shape if 'visual_obs' in obs else 0
         agent_obs_shape = obs['agent_obs'].shape if 'agent_obs' in obs else 0
@@ -157,10 +151,16 @@ class BehavioralCloningTrainer(OAITrainer):
         self.teammates = self.agents
         self.optimizers = [th.optim.Adam(self.agents[0].parameters(), lr=args.lr),
                            th.optim.Adam(self.agents[1].parameters(), lr=args.lr)]
-        action_weights = th.tensor(self.full_ds.get_action_weights(), dtype=th.float32, device=self.device)
-        self.action_criterion = nn.CrossEntropyLoss(weight=action_weights)
         if vis_eval:
             self.eval_envs.setup_visualization()
+
+    def setup_datasets(self):
+        self.full_ds = OvercookedDataset(self.dataset, self.layout_names, self.args)
+        train_size = len(self.full_ds) // 2
+        train1, train2 = random_split(self.full_ds, [train_size, train_size])
+        self.datasets = [train1, train2]
+        action_weights = th.tensor(self.full_ds.get_action_weights(), dtype=th.float32, device=self.device)
+        self.action_criterion = nn.CrossEntropyLoss(weight=action_weights)
 
     def run_batch(self, agent_idx, batch):
         """Train BC agent on a batch of data"""
@@ -187,6 +187,8 @@ class BehavioralCloningTrainer(OAITrainer):
 
     def train_agents(self, epochs=100, exp_name=None):
         """ Training routine """
+        if self.datasets is None:
+            self.setup_dataset()
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
                          dir=str(self.args.base_dir / 'wandb'),
@@ -210,27 +212,48 @@ class BehavioralCloningTrainer(OAITrainer):
                         best_path[i] = path / f'agent_{i}'
                         best_rew[i] = mean_sp_reward
 
-        rewards = [0, 0]
+        # reload best ck
         for i in range(2):
             self.agents[i] = BehaviouralCloningAgent.load(best_path[i], self.args)
             self.agents[i].to(self.device)
-            self.eval_teammates = [self.agents[i]]
-            rewards[i], _ = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=10, deterministic=False)
 
-        self.save_agents()
-        self.bc, self.human_proxy = (self.agents[0], self.agents[1]) if rewards[1] > rewards[0] else \
-                                    (self.agents[1], self.agents[0])
-
+        self.compare_agents()
         run.finish()
+
+    def compare_agents(self):
+        rewards = [-1, -1]
+        for i in range(2):
+            self.eval_teammates = [self.agents[i]]
+            rewards[i], _ = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=10, deterministic=False,
+                                          log_wandb=False)
+        self.bc, self.human_proxy = (self.agents[0], self.agents[1]) if rewards[1] > rewards[0] else\
+                                    (self.agents[1], self.agents[0])
+        self.save_bc_and_human_proxy()
+
+
+    def save_bc_and_human_proxy(self, path: Union[Path, None] = None, tag: Union[str, None] = None):
+        ''' Saves bc and human proxy that the trainer is training '''
+        path = path or self.args.base_dir / 'agent_models' / self.name
+        tag = tag or self.args.exp_name
+        agent_path = path / tag / 'agents_dir'
+        Path(agent_path).mkdir(parents=True, exist_ok=True)
+        self.bc.save(agent_path / f'bc')
+        self.human_proxy.save(agent_path / f'human_proxy')
+        return path, tag
+
+    def load_bc_and_human_proxy(self, path: Union[Path, None] = None, tag: Union[str, None] = None):
+        ''' Loads each agent that the trainer is training '''
+        path = path or self.args.base_dir / 'agent_models_NIPS' / self.name
+        tag = tag or self.args.exp_name
+        agent_path = path / tag / 'agents_dir'
+        # Load weights
+        self.bc = load_agent(agent_path / 'bc', self.args).to(self.args.device)
+        self.human_proxy = load_agent(agent_path / 'human_proxy', self.args).to(self.args.device)
+        return self.bc, self.human_proxy
 
     def get_agents(self):
         if self.bc is None:
-            rewards = [-1, -1]
-            for i in range(2):
-                self.eval_teammates = [self.agents[i]]
-                rewards[i], _ = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=10, deterministic=False, log_wandb=False)
-            self.bc, self.human_proxy = (self.agents[0], self.agents[1]) if rewards[1] > rewards[0] else \
-                                        (self.agents[1], self.agents[0])
+            self.compare_agents()
         return self.bc, self.human_proxy
 
 
