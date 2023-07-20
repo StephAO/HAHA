@@ -36,7 +36,7 @@ from oai_agents.agents.agent_utils import DummyPolicy
 from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
 from oai_agents.agents.rl import RLAgentTrainer
-from oai_agents.agents.hrl import MultiAgentSubtaskWorker, HierarchicalRL
+from oai_agents.agents.hrl import HierarchicalRL
 # from oai_agents.agents import Manager
 from oai_agents.common.arguments import get_arguments
 from oai_agents.common.subtasks import Subtasks, get_doable_subtasks
