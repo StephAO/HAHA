@@ -1,6 +1,6 @@
 from oai_agents.agents.base_agent import OAIAgent, PolicyClone
 from oai_agents.agents.il import BehavioralCloningTrainer
-from oai_agents.agents.rl import MultipleAgentsTrainer, SingleAgentTrainer, SB3Wrapper, SB3LSTMWrapper, VEC_ENV_CLS
+from oai_agents.agents.rl import RLAgentTrainer, SB3Wrapper, SB3LSTMWrapper, VEC_ENV_CLS
 from oai_agents.agents.agent_utils import DummyAgent, is_held_obj, load_agent
 from oai_agents.common.arguments import get_arguments, get_args_to_save, set_args_from_load
 from oai_agents.common.subtasks import Subtasks
@@ -24,7 +24,8 @@ class MultiAgentSubtaskWorker(OAIAgent):
         super(MultiAgentSubtaskWorker, self).__init__('multi_agent_subtask_worker', args)
         assert len(agents) == Subtasks.NUM_SUBTASKS - 1
         self.agents = agents
-        self.agents.append(DummyAgent()) #'random_dir') ) # Make unknown subtask equivalent to stay
+        self.observation_space = self.agents[0].policy.observation_space
+        self.agents.append(DummyAgent() ) # Make unknown subtask equivalent to stay
 
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool=False):
         assert 'curr_subtask' in obs.keys()
@@ -91,19 +92,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         return cls(agents=agents, args=args)
 
     @classmethod
-    def create_model_from_scratch(cls, args, teammates=None, eval_tms=None, dataset_file=None) -> Tuple['OAIAgent', List['OAIAgent']]:
-        # Define teammates
-        if teammates is not None:
-            tms = teammates
-        elif dataset_file is not None:
-            bct = BehavioralCloningTrainer(dataset_file, args)
-            bct.train_agents(epochs=100)
-            tms = bct.get_agents()
-        else:
-            tsa = MultipleAgentsTrainer(args)
-            tsa.train_agents(total_timesteps=1e7)
-            tms = tsa.get_agents()
-
+    def create_model_from_scratch(cls, args, teammates, eval_tms=None, dataset_file=None) -> Tuple['OAIAgent', List['OAIAgent']]:
         # Train 12 individual agents, each for a respective subtask
         agents = []
         original_layout_names = deepcopy(args.layout_names)
@@ -128,10 +117,13 @@ class MultiAgentSubtaskWorker(OAIAgent):
                          for n in range(n_layouts)]
             # Create trainer
             name = f'subtask_worker_{i}'
-            rl_sat = SingleAgentTrainer(tms, args, eval_tms=eval_tms, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
+            rl_sat = RLAgentTrainer(tms, args, eval_tms=eval_tms, name=name, env=env, eval_envs=eval_envs, use_subtask_eval=True)
+            # Currently put soup closer is a useless subtasks, so don't spend any training timtesteps on it
+            if i != Subtasks.SUBTASKS_TO_IDS['put_soup_closer']:
+                agents.extend(rl_sat.get_agents())
             # Train if it makes sense to (can't train on an unknown task)
             if i != Subtasks.SUBTASKS_TO_IDS['unknown']:
-                rl_sat.train_agents(total_timesteps=4.5e6)
+                rl_sat.train_agents(total_timesteps=5e6)
                 agents.extend(rl_sat.get_agents())
 
         args.layout_names = original_layout_names
@@ -156,7 +148,7 @@ class MultiAgentSubtaskWorker(OAIAgent):
         model.save(path / args.exp_name)
         return model
 
-class RLManagerTrainer(SingleAgentTrainer):
+class RLManagerTrainer(RLAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
     def __init__(self, worker, teammates, args, eval_tms=None, use_frame_stack=False, use_subtask_counts=False,
                  inc_sp=False, use_policy_clone=False, name=None, seed=None):
@@ -172,7 +164,7 @@ class RLManagerTrainer(SingleAgentTrainer):
 
         self.worker = worker
         super(RLManagerTrainer, self).__init__(teammates, args, eval_tms=eval_tms, name=name, env=env,
-                                               eval_envs=eval_envs, inc_sp=False, use_subtask_counts=use_subtask_counts,
+                                               eval_envs=eval_envs, use_subtask_counts=use_subtask_counts,
                                                use_hrl=True, use_policy_clone=use_policy_clone, use_maskable_ppo=True,
                                                seed=seed)
         # COMMENTED CODE BELOW IS TO ADD SELFPLAY
@@ -222,7 +214,7 @@ class RLManagerTrainer(SingleAgentTrainer):
 
 class HierarchicalRL(OAIAgent):
     def __init__(self, worker, manager, args, name=None):
-        name = name or 'hrl'
+        name = name or 'haha'
         super(HierarchicalRL, self).__init__(name, args)
         self.worker = worker
         self.manager = manager
@@ -239,6 +231,7 @@ class HierarchicalRL(OAIAgent):
         self.output_message = output_message
         self.tune_subtasks = tune_subtasks
         self.subtask_step = 0
+        self.waiting_steps = 0
 
     def get_distribution(self, obs, sample=True):
         if np.sum(obs['player_completed_subtasks']) == 1:
@@ -249,7 +242,7 @@ class HierarchicalRL(OAIAgent):
 
     def adjust_distributions(self, probs, indices, weights):
         new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
-        if np.sum(new_probs[indices]) > 0.99999 or np.sum(new_probs[indices]) < 0.00001:
+        if np.sum(new_probs[indices]) > (1 - 1e-12) or np.sum(new_probs[indices]) < 1e-12:
             # print("Agent is too decisive, no behavior changed", flush=True)
             return new_probs
         original_values = np.zeros_like(new_probs)
@@ -268,20 +261,75 @@ class HierarchicalRL(OAIAgent):
             new_probs[idx] = adjusted_values[idx]
         return new_probs
 
+    def other_player_has_plate(self, obs):
+        other_player_loc_idx = 1
+        dish_locations_idx= 22
+        if len(obs['visual_obs'].shape) == 4:
+            return obs['visual_obs'][0][dish_locations_idx][np.nonzero(obs['visual_obs'][0][other_player_loc_idx])] == 1
+        else:
+            return obs['visual_obs'][dish_locations_idx][np.nonzero(obs['visual_obs'][other_player_loc_idx])] == 1
+
+    def non_full_pot_exists(self, obs):
+        pot_locations_idx = 10
+        onions_in_pot_idx= 16
+        onions_in_soup_idx = 18
+        if len(obs['visual_obs'].shape) == 4:
+            for loc in zip(*np.nonzero(obs['visual_obs'][0][pot_locations_idx])):
+                if obs['visual_obs'][0][onions_in_pot_idx][loc] < 3 and obs['visual_obs'][0][onions_in_soup_idx][loc] == 0:
+                    return True
+        else:
+            for loc in zip(*np.nonzero(obs['visual_obs'][pot_locations_idx])):
+                if obs['visual_obs'][onions_in_pot_idx][loc] < 3 and obs['visual_obs'][onions_in_soup_idx][loc] == 0:
+                    return True
+        return False
+
+    def a_soup_is_almost_done(self, obs, time_left_thresh=10):
+        pot_locations_idx = 10
+        onions_in_soup_idx = 18
+        cooking_time_left_idx= 20
+        if len(obs['visual_obs'].shape) == 4:
+            for loc in zip(*np.nonzero(obs['visual_obs'][0][pot_locations_idx])):
+                if obs['visual_obs'][0][onions_in_soup_idx][loc] == 3 and obs['visual_obs'][0][cooking_time_left_idx][loc] <= time_left_thresh:
+                    return True
+        else:
+            for loc in zip(*np.nonzero(obs['visual_obs'][pot_locations_idx])):
+                if obs['visual_obs'][onions_in_soup_idx][loc] == 3 and obs['visual_obs'][cooking_time_left_idx][loc] <= time_left_thresh:
+                    return True
+        return False
+
+    def is_urgent(self, obs):
+        urgent_idx = 25
+        if len(obs['visual_obs'].shape) == 4:
+            return np.sum(obs['visual_obs'][0][urgent_idx]) > 0
+        else:
+            return np.sum(obs['visual_obs'][urgent_idx]) > 0
+
     def get_manually_tuned_action(self, obs, deterministic=False):
-        # Currently assumes p2 for hrl agent
         dist = self.manager.get_distribution(obs)
         probs = dist.distribution.probs
         probs = probs[0]
+        assert np.isclose(np.sum(probs.numpy()), 1)
         if self.layout_name == None:
             raise ValueError("Set current layout using set_curr_layout before attempting manual adjustment")
         elif self.layout_name == 'counter_circuit_o_1order':
             # if self.p_idx == 0:
                 # Up weight supporting tasks
-                # print(probs)
-            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['put_onion_closer'], Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']]
-            subtask_weighting = [50 for _ in subtasks_to_weigh]
+            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['unknown']]
+            subtask_weighting = [0.1]
             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+            if self.non_full_pot_exists(obs) and not self.is_urgent(obs):
+                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter'],
+                                         Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]
+                    subtask_weighting = [200, 0.1]
+                    new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
+                    # subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]#, Subtasks.SUBTASKS_TO_IDS['unknown']]
+                    # subtask_weighting = [1e-4 for _ in subtasks_to_weigh]
+                    # new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
+            # else:
+            #     new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
+            # else:
+            #     new_probs = probs
+
 
                 # subtasks_to_weigh = ['put_onion_closer']
                 # subtask_weighting = [25 for _ in subtasks_to_weigh]
@@ -305,9 +353,21 @@ class HierarchicalRL(OAIAgent):
             # NOTE: THIS ASSUMES BEING P2
             # Since tasks are very limited, we use a different change instead of support and coordinated.
             if self.p_idx == 1:
-                if (self.subtask_step + 2) % 8 == 0:
+            #     if (self.subtask_step + 2) % 8 == 0:
+            #         subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
+            #     elif (self.subtask_step + 1) % 8 == 0:
+            #         subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
+            #     else:
+            #         if self.subtask_step % 2 == 0:
+            #             subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']
+            #         else:
+            #             subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_onion_closer']
+
+
+
+                if (self.subtask_step + 2) % 16 == 0 or (self.subtask_step + 4) % 16 == 0:
                     subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
-                elif (self.subtask_step + 1) % 8 == 0:
+                elif (self.subtask_step + 1) % 16 == 0 or (self.subtask_step + 3) % 16 == 0:
                     subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
                 else:
                     if self.subtask_step % 2 == 0:
@@ -315,53 +375,69 @@ class HierarchicalRL(OAIAgent):
                     else:
                         subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_onion_closer']
                 subtasks_to_weigh = [subtasks_to_weigh]
-                subtask_weighting = [100000 for _ in subtasks_to_weigh]
+                subtask_weighting = [1e8 for _ in subtasks_to_weigh]
                 new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-                print(self.subtask_step, [Subtasks.IDS_TO_SUBTASKS[s] for s in subtasks_to_weigh])
+                # print(self.subtask_step, [Subtasks.IDS_TO_SUBTASKS[s] for s in subtasks_to_weigh])
             else:
-                new_probs = probs
+                new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
             # self.subtask_step += 1
         elif self.layout_name == 'asymmetric_advantages':
+            #
             if self.p_idx == 0:
-                # Up weight all plate related tasks
-                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'],
-                                     Subtasks.SUBTASKS_TO_IDS['get_soup'],
-                                     Subtasks.SUBTASKS_TO_IDS['serve_soup']]
-                subtask_weighting = [0.0001 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+                if self.non_full_pot_exists(obs):
+                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+                    subtask_weighting = [1e12 for _ in subtasks_to_weigh]
+                    new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+                # elif self.other_player_has_plate(obs):
+                #     print('plate')
+                #     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'], Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
+                #     subtask_weighting = [1e12, 1e-12, 1e-12]
+                #     new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+                #     print(new_probs[Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']])
+                elif (not self.a_soup_is_almost_done(obs, time_left_thresh=2) or self.other_player_has_plate(obs))\
+                        and self.waiting_steps < 5:
+                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['unknown'],
+                                         Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+                    subtask_weighting = [1e12 for _ in subtasks_to_weigh]
+                    new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+                    self.waiting_steps += 1
+                else:
+                    new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
+                    self.waiting_steps = 0
 
-                # Down weight any task related to onions (and put down plate to avoid side issues)
-                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'],
-                                     Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot'],
-                                     Subtasks.SUBTASKS_TO_IDS['put_onion_closer'],
-                                     Subtasks.SUBTASKS_TO_IDS['put_plate_closer']]
-                subtask_weighting = [1000 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
-            if self.p_idx == 1:
-                # NOTE: THIS ASSUMES BEING P2
-                # Up weight all plate related tasks
-                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'],
-                                     Subtasks.SUBTASKS_TO_IDS['get_soup'],
-                                     Subtasks.SUBTASKS_TO_IDS['serve_soup']]
-                subtask_weighting = [1000 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-
-                # Down weight any task related to onions (and put down plate to avoid side issues)
-                subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'],
-                                     Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot'],
-                                     Subtasks.SUBTASKS_TO_IDS['put_onion_closer'],
-                                     Subtasks.SUBTASKS_TO_IDS['put_plate_closer']]
-                subtask_weighting = [0.0001 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
+            elif self.p_idx == 1:
+                if self.non_full_pot_exists(obs) and not self.a_soup_is_almost_done(obs, time_left_thresh=14) and not self.is_urgent(obs):
+                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'], Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']]
+                    subtask_weighting = [1e8 for _ in subtasks_to_weigh]
+                    new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+                    self.waiting_steps = 0
+                elif self.other_player_has_plate(obs) and self.waiting_steps < 5:
+                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]
+                    subtask_weighting = [1e-12 for _ in subtasks_to_weigh]
+                    new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+                    self.waiting_steps += 1
+                else:
+                    new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
+                    self.waiting_steps = 0
+            # if self.p_idx == 1:
+            #     # NOTE: THIS ASSUMES BEING P2
+            #     # Up weight all plate related tasks
+            #     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]
+            #     subtask_weighting = [1000 for _ in subtasks_to_weigh]
+            #     new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
         else:
-            new_probs = probs
-        return np.argmax(new_probs, axis=-1) if deterministic else Categorical(probs=th.tensor(new_probs)).sample()
+            new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
+        while not np.isclose(np.sum(new_probs), 1, rtol=1e-3, atol=1e-3):
+            new_probs /= np.sum(new_probs)
+            # print('--------------\n', new_probs, '\n--->\n', probs)
+        subtask = np.argmax(new_probs, axis=-1) if deterministic else Categorical(probs=th.tensor(new_probs)).sample()
+        return np.expand_dims(np.array(subtask), 0)
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
         # TODO consider forcing new subtask if none has been completed in x timesteps
         # print(obs['player_completed_subtasks'],  self.prev_player_comp_st, (obs['player_completed_subtasks'] != self.prev_player_comp_st).any(), flush=True)
-        if np.sum(obs['player_completed_subtasks']) == 1 or \
-                self.num_steps_since_new_subtask > 15 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
+        if np.sum(obs['player_completed_subtasks']) == 1 or np.sum(obs['teammate_completed_subtasks']) == 1 or \
+            self.num_steps_since_new_subtask >= 2 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
             if np.sum(obs['player_completed_subtasks'][:-1]) == 1:
                 self.subtask_step += 1
             # Completed previous subtask, set new subtask
@@ -370,11 +446,12 @@ class HierarchicalRL(OAIAgent):
             else:
                 self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
                                                             deterministic=deterministic)[0]
-            # print(f'SUBTASK: {Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)]}')
-            self.num_steps_since_new_subtask = 0
+        # if Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'unknown':
+        #     print(f'SUBTASK: {Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)]}')
+        # self.num_steps_since_new_subtask = 0
         obs['curr_subtask'] = self.curr_subtask_id
         self.num_steps_since_new_subtask += 1
-        return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=deterministic)
+        return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=False)
 
     def get_agent_output(self):
         return Subtasks.IDS_TO_HR_SUBTASKS[int(self.curr_subtask_id)] if self.output_message else ' '
@@ -413,261 +490,4 @@ class HierarchicalRL(OAIAgent):
         model = cls(manager=manager, worker=worker, args=args)  # pytype: disable=not-instantiable
         model.to(device)
         return model
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-### EVERYTHING BELOW IS A DRAFT AT BEST
-class ValueBasedManager():
-    """
-    Follows a few basic rules. (tm = teammate)
-    1. All independent tasks values:
-       a) Get onion from dispenser = (3 * num_pots) - 0.5 * num_onions
-       b) Get plate from dish rack = num_filled_pots * (2
-       c)
-       d)
-    2. Supporting tasks
-       a) Start at a value of zero
-       b) Always increases in value by a small amount (supporting is good)
-       c) If one is performed and the tm completes the complementary task, then the task value is increased
-       d) If the tm doesn't complete the complementary task, after a grace period the task value starts decreasing
-          until the object is picked up
-    3. Complementary tasks:
-       a) Start at a value of zero
-       b) If a tm performs a supporting task, then its complementary task value increases while the object remains
-          on the counter.
-       c) If the object is removed from the counter, the complementary task value is reset to zero (the
-          complementary task cannot be completed if there is no object to pick up)
-    :return:
-    """
-    def __init__(self, worker, p_idx, args):
-        super(ValueBasedManager, self).__init__(worker,'value_based_subtask_adaptor', p_idx, args)
-        self.worker = worker
-        assert worker.p_idx == p_idx
-        self.trajectory = []
-        self.terrain = OvercookedGridworld.from_layout_name(args.layout_names[index]).terrain_mtx
-        # for i in range(len(self.terrain)):
-        #     self.terrain[i] = ''.join(self.terrain[i])
-        # self.terrain = str(self.terrain)
-        self.worker_subtask_counts = np.zeros((2, Subtasks.NUM_SUBTASKS))
-        self.subtask_selection = args.subtask_selection
-
-
-        self.init_subtask_values()
-
-    def init_subtask_values(self):
-        self.subtask_values = np.zeros(Subtasks.NUM_SUBTASKS)
-        # 'unknown' subtask is always set to 0 since it is more a relic of labelling than a useful subtask
-        # Independent subtasks
-        self.ind_subtask = ['get_onion_from_dispenser', 'put_onion_in_pot', 'get_plate_from_dish_rack', 'get_soup', 'serve_soup']
-        # Supportive subtasks
-        self.sup_subtask = ['put_onion_closer', 'put_plate_closer', 'put_soup_closer']
-        self.sup_obj_to_subtask = {'onion': 'put_onion_closer', 'dish': 'put_plate_closer', 'soup': 'put_soup_closer'}
-        # Complementary subtasks
-        self.com_subtask = ['get_onion_from_counter', 'get_plate_from_counter', 'get_soup_from_counter']
-        self.com_obj_to_subtask = {'onion': 'get_onion_from_counter', 'dish': 'get_plate_from_counter', 'soup': 'get_soup_from_counter'}
-        for i_s in self.ind_subtask:
-            # 1.a
-            self.subtask_values[Subtasks.SUBTASKS_TO_IDS[i_s]] = 1
-        for s_s in self.sup_subtask:
-            # 2.a
-            self.subtask_values[Subtasks.SUBTASKS_TO_IDS[s_s]] = 0
-        for c_s in self.com_subtask:
-            # 3.a
-            self.subtask_values[Subtasks.SUBTASKS_TO_IDS[c_s]] = 0
-
-        self.acceptable_wait_time = 10  # 2d
-        self.sup_base_inc = 0.05  # 2b
-        self.sup_success_inc = 1  # 2c
-        self.sup_waiting_dec = 0.1  # 2d
-        self.com_waiting_inc = 0.2  # 3d
-        self.successful_support_task_reward = 1
-        self.agent_objects = {}
-        self.teammate_objects = {}
-
-    def update_subtask_values(self, prev_state, curr_state):
-        prev_objects = prev_state.objects.values()
-        curr_objects = curr_state.objects.values()
-        # TODO objects are only tracked by name and position, so checking equality fails because picking something up changes the objects position
-        # 2.b
-        for s_s in self.sup_subtask:
-            self.subtask_values[Subtasks.SUBTASKS_TO_IDS[s_s]] += self.sup_base_inc
-
-        # Analyze objects that are on counters
-        for object in curr_objects:
-            x, y = object.position
-            if object.name == 'soup' and self.terrain[y][x] == 'P':
-                # Soups while in pots can change without agent intervention
-                continue
-            # Objects that have been put down this turn
-            if object not in prev_objects:
-                if is_held_obj(prev_state.players[self.p_idx], object):
-                    print(f'Agent placed {object}')
-                    self.agent_objects[object] = 0
-                elif is_held_obj(prev_state.players[self.t_idx], object):
-                    print(f'Teammate placed {object}')
-                    self.teammate_objects[object] = 0
-                # else:
-                #     raise ValueError(f'Object {object} has been put down, but did not belong to either player')
-            # Objects that have not moved since the previous time step
-            else:
-                if object in self.agent_objects:
-                    self.agent_objects[object] += 1
-                    if self.agent_objects[object] > self.acceptable_wait_time:
-                        # 2.d
-                        subtask_id = Subtasks.SUBTASKS_TO_IDS[self.sup_obj_to_subtask[object.name]]
-                        self.subtask_values[subtask_id] -= self.sup_waiting_dec
-                elif object in self.teammate_objects:
-                    # 3.b
-                    self.teammate_objects[object] += 1
-                    subtask_id = Subtasks.SUBTASKS_TO_IDS[self.com_obj_to_subtask[object.name]]
-                    self.subtask_values[subtask_id] += self.com_waiting_inc
-
-        for object in prev_objects:
-            x, y = object.position
-            if object.name == 'soup' and self.terrain[y][x] == 'P':
-                # Soups while in pots can change without agent intervention
-                continue
-            # Objects that have been picked up this turn
-            if object not in curr_objects:
-                if is_held_obj(curr_state.players[self.p_idx], object):
-                    print(f'Agent picked up {object}')
-                    if object in self.agent_objects:
-                        del self.agent_objects[object]
-                    else:
-                        del self.teammate_objects[object]
-
-                elif is_held_obj(curr_state.players[self.t_idx], object):
-                    print(f'Teammate picked up {object}')
-                    if object in self.agent_objects:
-                        # 2.c
-                        subtask_id = Subtasks.SUBTASKS_TO_IDS[self.sup_obj_to_subtask[object.name]]
-                        self.subtask_values[subtask_id] += self.sup_success_inc
-                        del self.agent_objects[object]
-                    else:
-                        del self.teammate_objects[object]
-                # else:
-                #     raise ValueError(f'Object {object} has been picked up, but does not belong to either player')
-
-                # Find out if there are any remaining objects of the same type left
-                last_object_of_this_type = True
-                for rem_objects in list(self.agent_objects) + list(self.teammate_objects):
-                    if object.name == rem_objects.name:
-                        last_object_of_this_type = False
-                        break
-                # 3.c
-                if last_object_of_this_type:
-                    subtask_id = Subtasks.SUBTASKS_TO_IDS[self.com_obj_to_subtask[object.name]]
-                    self.subtask_values[subtask_id] = 0
-
-        self.subtask_values = np.clip(self.subtask_values, 0, 10)
-
-    def get_subtask_values(self, curr_state):
-        assert self.subtask_values is not None
-        return self.subtask_values * self.doable_subtasks(curr_state, self.terrain, self.p_idx)
-
-    def select_next_subtask(self, curr_state):
-        subtask_values = self.get_subtask_values(curr_state)
-        subtask_id = np.argmax(subtask_values.squeeze(), dim=-1)
-        self.curr_subtask_id = subtask_id
-        print('new subtask', Subtasks.IDS_TO_SUBTASKS[subtask_id.item()])
-
-    def reset(self, state):
-        super().reset(state)
-        self.init_subtask_values()
-
-class DistBasedManager():
-    def __init__(self, agent, p_idx, args):
-        super(DistBasedManager, self).__init__(agent, p_idx, args)
-        self.name = 'dist_based_subtask_agent'
-
-    def distribution_matching(self, subtask_logits, egocentric=False):
-        """
-        Try to match some precalculated 'optimal' distribution of subtasks.
-        If egocentric look only at the individual player distribution, else look at the distribution across both players
-        """
-        assert self.optimal_distribution is not None
-        if egocentric:
-            curr_dist = self.worker_subtask_counts[self.p_idx]
-            best_dist = self.optimal_distribution[self.p_idx]
-        else:
-            curr_dist = self.worker_subtask_counts.sum(axis=0)
-            best_dist = self.optimal_distribution.sum(axis=0)
-        curr_dist = curr_dist / np.sum(curr_dist)
-        dist_diff = best_dist - curr_dist
-
-        pred_subtask_probs = F.softmax(subtask_logits).detach().numpy()
-        # TODO investigate weighting
-        # TODO should i do the above softmax?
-        # Loosely based on Bayesian inference where prior is the difference in distributions, and the evidence is
-        # predicted probability of what subtask should be done
-        adapted_probs = pred_subtask_probs * dist_diff
-        adapted_probs = adapted_probs / np.sum(adapted_probs)
-        return adapted_probs
-
-    def select_next_subtask(self, curr_state):
-        # TODO
-        pass
-
-    def reset(self, state, player_idx):
-        # TODO
-        pass
-
-if __name__ == '__main__':
-    args = get_arguments()
-    
-    mat = MultipleAgentsTrainer(args, num_agents=0)
-    mat.load_agents(path=Path('/projects/star7023/oai/agent_models/fcp/counter_circuit_o_1order/12_pop'), tag='test')
-    teammates = mat.get_agents()
-
-    # worker, teammates = MultiAgentSubtaskWorker.create_model_from_scratch(args, teammates=teammates)
-
-    worker = MultiAgentSubtaskWorker.load(
-            Path('/projects/star7023/oai/agent_models/multi_agent_subtask_worker/counter_circuit_o_1order/test/'), args)
-
-    rlmt = RLManagerTrainer(worker, teammates, args)
-    #rlmt.train_agents(total_timesteps=2e6, exp_name=args.exp_name + '_manager')
-    rlmt.load_agents(path=Path('/projects/star7023/oai/agent_models/rl_manager/counter_circuit_o_1order'), tag='test')
-    managers = rlmt.get_agents()
-    manager = managers[0]
-    hrl = HierarchicalRL(worker, manager, args)
-    hrl.save(Path('/projects/star7023/oai/agent_models/hier_rl/counter_circuit_o_1order/test/'))
-    # hrl.save('test_data/test')
-    # del hrl
-    # hrl = HierarchicalRL.load('test_data/test', args)
-    print('done')
-
 
