@@ -62,7 +62,7 @@ def combine_populations(args): #, pop_names, new_name):
 
 ### EVALUATION AGENTS ###
 def get_eval_teammates(args):
-    sp = get_selfplay_agent(args, training_steps=1e7, tag='testing')
+    sp = get_selfplay_agent(args, training_steps=1e7)
     bcs, human_proxies = get_bc_and_human_proxy(args)
     random_agent = DummyAgent('random')
     eval_tms = {}
@@ -80,6 +80,7 @@ def get_selfplay_agent(args, training_steps=1e7, tag=None):
         agents = RLAgentTrainer.load_agents(args, name=name, tag=tag)
     except FileNotFoundError as e:
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
+        exit(0)
         selfplay_trainer = RLAgentTrainer([], args, selfplay=True, name=name, seed=678, use_frame_stack=False, use_lstm=False, use_cnn=False)
         selfplay_trainer.train_agents(total_timesteps=training_steps)
         agents = selfplay_trainer.get_agents()
@@ -92,9 +93,10 @@ def get_bc_and_human_proxy(args, epochs=500):
     all_layouts = deepcopy(args.layout_names)
     for layout_name in all_layouts:
         try:
-            bc, human_proxy = BehavioralCloningTrainer.load_bc_and_human_proxy(args, name=f'bc_{layout_name}', tag='best')
+            bc, human_proxy = BehavioralCloningTrainer.load_bc_and_human_proxy(args, name=f'bc_{layout_name}')
         except FileNotFoundError as e:
             print(f'Could not find saved BC and human proxy, creating them from scratch...\nFull Error: {e}')
+            exit(0)
             bct = BehavioralCloningTrainer(args.dataset, args, name=f'bc_{layout_name}', layout_names=[layout_name])
             bct.train_agents(epochs=epochs)
             bc, human_proxy = bct.get_agents()
@@ -108,7 +110,7 @@ def get_bc_and_human_proxy(args, epochs=500):
 def get_behavioral_cloning_play_agent(args, training_steps=1e7):
     name = 'bcp'
     try:
-        bcp = RLAgentTrainer.load_agents(args, name=name, tag='best')
+        bcp = RLAgentTrainer.load_agents(args, name=name)
     except FileNotFoundError as e:
         print(f'Could not find saved BCP, creating them from scratch...\nFull Error: {e}')
         teammates, _ = get_bc_and_human_proxy(args)
@@ -162,13 +164,15 @@ def get_fcp_agent(args, training_steps=1e7):
     return fcp_trainer.get_agents()[0]
 
 def get_hrl_worker(args, training_steps=1e7):
-    name = 'subtask_worker'
+    name = 'subtask_worker_bcp'
     try:
-        worker = RLAgentTrainer.load_agents(args, name=name, tag='testing')[0]
+        worker = RLAgentTrainer.load_agents(args, name=name)[0]
     except FileNotFoundError as e:
         print(f'Could not find saved worker agent, creating them from scratch...\nFull Error: {e}')
         eval_tms = get_eval_teammates(args)
-        teammates = get_fcp_population(args, 1e7)
+        
+        teammates, _ = get_bc_and_human_proxy(args)
+        #teammates = get_fcp_population(args, 1e7)
         # Create subtask worker
         env_kwargs = {'stack_frames': False, 'full_init': False, 'args': args}
         env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs,
@@ -184,14 +188,17 @@ def get_hrl_worker(args, training_steps=1e7):
     return worker
 
 def get_hrl_agent(args, training_steps=1e7):
-    teammates = get_fcp_population(args, training_steps)
-    worker = get_hrl_worker(args)
+    name = 'HAHA_bcp'
+    training_steps_split = training_steps // 2
+    teammates, _ = get_bc_and_human_proxy(args)
+    #teammates = get_fcp_population(args, training_steps)
+    worker = get_hrl_worker(args, training_steps=training_steps_split)
     eval_tms = get_eval_teammates(args)
     # Create manager
-    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name='HAHA_nips_idx', inc_sp=False, use_policy_clone=False, seed=2602)
-    rlmt.train_agents(total_timesteps=training_steps)
+    rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name=name + '_trainer', inc_sp=False, use_policy_clone=False, seed=2602)
+    rlmt.train_agents(total_timesteps=training_steps_split)
     manager = rlmt.get_agents()[0]
-    hrl = HierarchicalRL(worker, manager, args, name='HAHA')
+    hrl = HierarchicalRL(worker, manager, args, name=name)
     hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))
     return hrl
 
@@ -210,18 +217,18 @@ def get_all_agents(args, training_steps=1e7, agents_to_train='all'):
 
 if __name__ == '__main__':
     args = get_arguments()
-    get_selfplay_agent(args, training_steps=1e8)
+    # get_selfplay_agent(args, training_steps=1e8)
     #print('GOT SP', flush=True)
     # get_bc_and_human_proxy(args, epochs=2)
     # print('GOT BC&HP', flush=True)
     # get_behavioral_cloning_play_agent(args, training_steps=1e8)
     # print('GOT BCP', flush=True)
     # get_fcp_population(args, training_steps=1e7)
-   #  print('GOT FCP', flush=True)
+    # print('GOT FCP', flush=True)
     # get_hrl_worker(args, training_steps=1e3)
     # print('GOT WORK', flush=True)
-    # get_hrl_agent(args, training_steps=1e3)
-    # print('GOT HAHA', flush=True)
+    get_hrl_agent(args, training_steps=1e8)
+    print('GOT HAHA', flush=True)
 
     # get_bc_and_human_proxy(args)
     #get_behavioral_cloning_play_agent(args, training_steps=1e8)

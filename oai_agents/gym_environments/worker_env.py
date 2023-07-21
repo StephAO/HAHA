@@ -158,9 +158,10 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
     def reset(self, evaluation_trial_num=-1, p_idx=None):
         if evaluation_trial_num < 0:
             self.goal_subtask = np.random.choice(Subtasks.SUBTASKS)
+            self.goal_subtask_id = Subtasks.SUBTASKS_TO_IDS[self.goal_subtask]
         else:
-            self.goal_subtask = evaluation_trial_num % (Subtasks.NUM_SUBTASKS - 1)
-        self.goal_subtask_id = Subtasks.SUBTASKS_TO_IDS[self.goal_subtask]
+            self.goal_subtask_id = evaluation_trial_num % (Subtasks.NUM_SUBTASKS - 1)
+            self.goal_subtask = Subtasks.IDS_TO_SUBTASKS[self.goal_subtask_id]
         self.goal_objects = Subtasks.IDS_TO_GOAL_MARKERS[self.goal_subtask_id]
 
         # For layouts where there are restrictions on what player can do each subtask, set the right player for the
@@ -240,7 +241,4 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         subtask_id = self.goal_subtask_id
         print(f'Mean reward: {mean_reward}')
         print(f'{subtask_id} - successes: {results[subtask_id][0]}, failures: {results[subtask_id][1]}')
-        if self.use_curriculum and np.sum(results[:, 0]) == num_trials and self.curr_lvl < Subtasks.NUM_SUBTASKS:
-            print(f'Going from level {self.curr_lvl} to {self.curr_lvl + 1}')
-            self.curr_lvl += 1
         return num_succ == tot_trials, np.sum(results[:, 1])# and num_succ > 10
