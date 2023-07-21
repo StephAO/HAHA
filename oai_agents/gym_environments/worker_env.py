@@ -52,13 +52,13 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         # Impossible to reach the feature from our curr spot,
         # Reward should scale by how close the best pickup spot is to the feature
         if curr_dist == float('inf'):
-            # Every spot further from the pot is -0.1 starting at 1. Max reward of 1
-            reward = max(1, 1 - (smallest_dist * 0.1))
+            # Every spot further from the pot is -1 starting at 5. Max reward of 5
+            reward = max(5, 1 - (smallest_dist))
         else:
             # Reward proportional to how much time is saved from using the pass compared to walking ourselves
             # Only get additional reward if there is a worst spot that exists
             smallest_dist = min(smallest_dist, curr_dist)
-            reward = (curr_dist - smallest_dist) * 0.1
+            reward = (curr_dist - smallest_dist)
         return max(0, reward) # No negative reward
 
     def get_pickup_proximity_reward(self, feature_locations):
@@ -83,7 +83,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         # then get bonus reward for picking it up from the better place
         largest_dist = max(largest_dist, curr_dist)
         # Reward proportional to how much time is saved from using the pass
-        reward = (largest_dist - curr_dist) * 0.1
+        reward = (largest_dist - curr_dist)
         return max(0, reward) # No negative reward
 
     def get_fuller_pot_reward(self, state, terrain):
@@ -103,7 +103,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 else:  # this is the other pot
                     other_pot_num_onions = len(obj.ingredients)
 
-        return max(0, (chosen_pot_num_onions - other_pot_num_onions) * 0.1)
+        return max(0, (chosen_pot_num_onions - other_pot_num_onions))
 
     def get_non_full_pot_locations(self, state):
         pot_states = self.mdp.get_pot_states(state)
@@ -160,7 +160,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             self.goal_subtask = np.random.choice(Subtasks.SUBTASKS)
             self.goal_subtask_id = Subtasks.SUBTASKS_TO_IDS[self.goal_subtask]
         else:
-            self.goal_subtask_id = evaluation_trial_num % (Subtasks.NUM_SUBTASKS - 1)
+            self.goal_subtask_id = evaluation_trial_num % (Subtasks.NUM_SUBTASKS - 1) # No need to test unknown subtask
             self.goal_subtask = Subtasks.IDS_TO_SUBTASKS[self.goal_subtask_id]
         self.goal_objects = Subtasks.IDS_TO_GOAL_MARKERS[self.goal_subtask_id]
 
@@ -200,8 +200,8 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
     def evaluate(self, agent):
         results = np.zeros((Subtasks.NUM_SUBTASKS, 2))
-        mean_reward = []
-        curr_trial, tot_trials = 0, 100 * Subtasks.NUM_SUBTASKS
+        mean_reward = {}
+        curr_trial, tot_trials = 0, 100 * (Subtasks.NUM_SUBTASKS - 1) # No need to test unknown subtask
         avg_steps = []
         while curr_trial < tot_trials:
             invalid_trial = False
@@ -231,14 +231,12 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 avg_steps.append(n_steps)
             else:
                 results[self.goal_subtask_id][1] += 1
-            mean_reward.append(cum_reward)
+            mean_reward[self.goal_subtask_id] = mean_reward.get(self.goal_subtask_id, []) + [cum_reward]
             curr_trial += 1
 
-        mean_reward = np.mean(mean_reward)
         num_succ = np.sum(results[:, 0])
 
         print(f'Subtask eval results on layout {self.layout_name} with teammate {self.teammate.name}.')
-        subtask_id = self.goal_subtask_id
-        print(f'Mean reward: {mean_reward}')
-        print(f'{subtask_id} - successes: {results[subtask_id][0]}, failures: {results[subtask_id][1]}')
+        for subtask_id in range(Subtasks.NUM_SUBTASKS):
+            print(f'{subtask_id}: mean reward of {np.mean(mean_reward[subtask_id])} -- successes: {results[subtask_id][0]}, failures: {results[subtask_id][1]}')
         return num_succ == tot_trials, np.sum(results[:, 1])# and num_succ > 10
