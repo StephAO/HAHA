@@ -110,6 +110,7 @@ class OvercookedGymEnv(Env):
                 'counter_pickup': all_counters,
                 'same_motion_goals': True
             }
+
             self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
             self.env = OvercookedEnv.from_mdp(self.mdp, **self.get_overcooked_from_mdp_kwargs(horizon=horizon))
         else:
