@@ -237,6 +237,6 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         num_succ = np.sum(results[:, 0])
 
         print(f'Subtask eval results on layout {self.layout_name} with teammate {self.teammate.name}.')
-        for subtask_id in range(Subtasks.NUM_SUBTASKS):
+        for subtask_id in range(Subtasks.NUM_SUBTASKS - 1):
             print(f'{subtask_id}: mean reward of {np.mean(mean_reward[subtask_id])} -- successes: {results[subtask_id][0]}, failures: {results[subtask_id][1]}')
         return num_succ == tot_trials, np.sum(results[:, 1])# and num_succ > 10

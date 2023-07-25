@@ -80,7 +80,6 @@ def get_selfplay_agent(args, training_steps=1e7, tag=None):
         agents = RLAgentTrainer.load_agents(args, name=name, tag=tag)
     except FileNotFoundError as e:
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
-        exit(0)
         selfplay_trainer = RLAgentTrainer([], args, selfplay=True, name=name, seed=678, use_frame_stack=False, use_lstm=False, use_cnn=False)
         selfplay_trainer.train_agents(total_timesteps=training_steps)
         agents = selfplay_trainer.get_agents()
@@ -217,7 +216,7 @@ def get_all_agents(args, training_steps=1e7, agents_to_train='all'):
 
 if __name__ == '__main__':
     args = get_arguments()
-    # get_selfplay_agent(args, training_steps=1e8)
+    #get_selfplay_agent(args, training_steps=1e8)
     #print('GOT SP', flush=True)
     # get_bc_and_human_proxy(args, epochs=2)
     # print('GOT BC&HP', flush=True)
