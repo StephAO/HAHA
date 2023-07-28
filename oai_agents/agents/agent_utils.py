@@ -12,11 +12,7 @@ import torch as th
 def load_agent(agent_path, args=None):
     args = args or get_arguments()
     agent_path = Path(agent_path)
-    try:
-        load_dict = th.load(agent_path / 'agent_file', map_location=args.device)
-        #load_dict = th.load(agent_path \ 'agent_file', map_location=args.device)
-    except FileNotFoundError as e:
-        raise ValueError(f'Could not find file:{e}')  # TODO print options
+    load_dict = th.load(agent_path / 'agent_file', map_location=args.device)
     agent = load_dict['agent_type'].load(agent_path, args)
     return agent
 

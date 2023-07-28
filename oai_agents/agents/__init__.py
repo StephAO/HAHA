@@ -23,8 +23,8 @@ def fix_save_pickle(agent_path, args=None):
     for k, v in load_dict.items():
         # print(k, v)
         # print('__main__' in str(v))
-        if '__main__.MultiAgentSubtaskWorker' in str(v):
-            v = oai_agents.agents.MultiAgentSubtaskWorker
+        if '__main__.SubtaskWorker' in str(v):
+            v = oai_agents.agents.SubtaskWorker
         elif '__main__.HierarchicalRL' in str(v):
             v = oai_agents.agents.HierarchicalRL
         elif '__main__' in str(v):

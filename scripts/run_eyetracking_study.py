@@ -139,8 +139,10 @@ if __name__ == '__main__':
     # LikertScaleGUI().run()
     args = get_arguments()
    # teammates = [load_agent(Path('agent_models/BCP'), args),  DummyAgent('random'), load_agent(Path('agent_models/SP'), args), load_agent(Path('agent_models/BCP'), args),  DummyAgent('random'), load_agent(Path('agent_models/SP'), args)]
+
     teammates = [load_agent(Path('agent_models/BCP'), args), DummyAgent('random'),
                  load_agent(Path('agent_models/SP'), args)]
+
     # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages', 'cramped_room', 'coordination_ring']
     # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages']
     # layouts = ['asymmetric_advantages']
@@ -148,4 +150,3 @@ if __name__ == '__main__':
 
 
     run_study(args, teammates, layouts)
-
