@@ -107,8 +107,7 @@ class HierarchicalRL(OAIAgent):
         if np.sum(obs['player_completed_subtasks']) == 1:
             # Completed previous subtask, set new subtask
             self.curr_subtask_id = self.manager.predict(obs, sample=sample)[0]
-        worker_obs = self.enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=self.p_idx,
-                                 goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+        worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
         obs.update(worker_obs)
         return self.worker.get_distribution(obs, sample=sample)
 
@@ -322,8 +321,8 @@ class HierarchicalRL(OAIAgent):
         #     print(f'SUBTASK: {Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)]}')
         # self.num_steps_since_new_subtask = 0
         self.num_steps_since_new_subtask += 1
-        worker_obs = self.enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=self.p_idx,
-                                 goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+        worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+
         obs.update(worker_obs)
         return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=False)
 

@@ -70,11 +70,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self, p_idx=None):
-        if self.is_eval_env:
-            ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
-        else:
-            ss_kwargs = {'random_pos': True, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
-        self.env.reset(start_state_kwargs=ss_kwargs)
+        self.env.reset()
         self.state = self.env.state
         self.prev_state = None
         self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]

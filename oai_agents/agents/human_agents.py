@@ -1,13 +1,15 @@
 from gym import spaces
+import numpy as np
 from overcooked_ai_py.mdp.overcooked_mdp import Direction, Action
 
 from oai_agents.agents.base_agent import OAIAgent
-
+from oai_agents.common.subtasks import Subtasks
 
 class HumanManagerHRL(OAIAgent):
     def __init__(self, worker, args):
         super(HumanManagerHRL, self).__init__('hierarchical_rl', args)
         self.worker = worker
+        self.policy = self.worker.policy
         self.curr_subtask_id = 11
         self.prev_pcs = None
 
@@ -22,17 +24,15 @@ class HumanManagerHRL(OAIAgent):
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool = False):
         print(obs['player_completed_subtasks'])
-        if np.sum(obs['player_completed_subtasks']) == 1:
+        if np.sum(obs['player_completed_subtasks']) == 1 or self.curr_subtask_id == 11:
             comp_st = np.argmax(obs["player_completed_subtasks"], axis=0)
             print(f'GOAL: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id]}, DONE: {Subtasks.IDS_TO_SUBTASKS[comp_st]}')
             doable_st = [Subtasks.IDS_TO_SUBTASKS[idx] for idx, doable in enumerate(obs['subtask_mask']) if doable == 1]
-            print('DOABLE SUBTASKS:', doable_st)
+            print('DOABLE SUBTASKS:', [(dst, Subtasks.SUBTASKS_TO_IDS[dst]) for dst in doable_st])
             next_st = input("Enter next subtask (0-10): ")
             self.curr_subtask_id = int(next_st)
-        obs['curr_subtask'] = self.curr_subtask_id
-        obs.pop('player_completed_subtasks')
-        obs.pop('teammate_completed_subtasks')
-        return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=True)
+        worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+        return self.worker.predict(worker_obs, state=state, episode_start=episode_start, deterministic=True)
 
 
 class HumanPlayer(OAIAgent):

@@ -36,7 +36,7 @@ from oai_agents.agents.agent_utils import DummyPolicy
 from oai_agents.agents.base_agent import OAIAgent
 from oai_agents.agents.il import BehaviouralCloningAgent
 from oai_agents.agents.rl import RLAgentTrainer
-from oai_agents.agents.hrl import MultiAgentSubtaskWorker, HierarchicalRL
+from oai_agents.agents.hrl import HierarchicalRL
 # from oai_agents.agents import Manager
 from oai_agents.common.arguments import get_arguments
 from oai_agents.common.subtasks import Subtasks, get_doable_subtasks
@@ -70,14 +70,18 @@ class OvercookedGUI:
         else:
             self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True,
                                         is_eval_env=True, horizon=horizon)
-        self.env.set_teammate(teammate)
-        self.teammate_name=teammate.name
+        self.agent = agent
         self.p_idx = p_idx
+        self.env.set_teammate(teammate)
         self.env.reset(p_idx=self.p_idx)
-        self.env.teammate.set_idx(self.env.t_idx, self.layout_name, False, True, False)
+        self.agent.set_idx(self.p_idx, args.layout, is_hrl=isinstance(self.agent, HierarchicalRL), tune_subtasks=False)
+        self.env.teammate.set_idx(self.env.t_idx, args.layout, is_hrl=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=False)
+        self.env.teammate.set_obs_closure_fn(self.env.get_obs)
+        self.agent.set_obs_closure_fn(self.env.get_obs)
+        self.teammate_name=teammate.name
+
 
         self.grid_shape = self.env.grid_shape
-        self.agent = agent
         self.trial_id = trial_id
         self.user_id = user_id
         self.fps = fps
@@ -88,7 +92,7 @@ class OvercookedGUI:
         self.human_action = None
         self.data_path = args.base_dir / args.data_path
         self.data_path.mkdir(parents=True, exist_ok=True)
-        self.tile_size = 100
+        self.tile_size = 50
 
         self.info_stream = stream
         self.outlet = outlet

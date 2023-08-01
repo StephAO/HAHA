@@ -167,9 +167,9 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
         if len(loose_objects) < n_counters and prev_subtask != 'get_onion_from_counter':
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_closer']] = 1
         # There must be an empty pot to put an onion into
-        # if not (layout_name == 'forced_coordination' and p_idx == 1):
-        if non_full_pot_exists(state, terrain, layout_name):
-            subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']] = 1
+        if not (layout_name == 'forced_coordination' and p_idx == 1):
+            if non_full_pot_exists(state, terrain, layout_name):
+                subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']] = 1
     # The player is holding a plate, so it can only accomplish tasks that involve putting the plate somewhere
     elif state.players[p_idx].held_object.name == 'dish':
         # There must be an empty counter to put something down

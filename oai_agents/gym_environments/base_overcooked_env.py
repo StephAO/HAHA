@@ -112,7 +112,7 @@ class OvercookedGymEnv(Env):
             }
 
             self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
-            self.env = OvercookedEnv.from_mdp(self.mdp, **self.get_overcooked_from_mdp_kwargs(horizon=horizon))
+            self.env = OvercookedEnv.from_mdp(self.mdp) #, **self.get_overcooked_from_mdp_kwargs(horizon=horizon))
         else:
             self.env = base_env
             self.layout_name = self.env.mdp.layout_name
@@ -122,9 +122,9 @@ class OvercookedGymEnv(Env):
         self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]
         self.reset()
 
-    def get_overcooked_from_mdp_kwargs(self, horizon=None):
-        horizon = horizon or self.args.horizon
-        return {'start_state_fn': self.mdp.get_fully_random_start_state_fn(self.mlam), 'horizon': horizon}
+    # def get_overcooked_from_mdp_kwargs(self, horizon=None):
+    #     horizon = horizon or self.args.horizon
+    #     return {'start_state_fn': self.mdp.get_fully_random_start_state_fn(self.mlam), 'horizon': horizon}
 
     def get_layout_name(self):
         return self.layout_name
@@ -230,11 +230,7 @@ class OvercookedGymEnv(Env):
         self.t_idx = 1 - self.p_idx
         self.stack_frames_need_reset = [True, True]
 
-        if self.is_eval_env:
-            ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
-        else:
-            ss_kwargs = {'random_pos': True, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
-        self.env.reset(start_state_kwargs=ss_kwargs)
+        self.env.reset()
         self.prev_state = None
         self.state = self.env.state
         # Reset subtask counts

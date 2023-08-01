@@ -69,6 +69,9 @@ class OAIAgent(nn.Module, ABC):
         if is_hrl:
             self.set_play_params(output_message, tune_subtasks)
 
+    def set_obs_closure_fn(self, obs_closure_fn):
+        self.obs_closure_fn = obs_closure_fn
+
     def set_encoding_params(self, mdp, horizon):
         self.mdp = mdp
         self.horizon = horizon
