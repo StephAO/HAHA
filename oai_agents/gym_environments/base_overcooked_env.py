@@ -112,7 +112,7 @@ class OvercookedGymEnv(Env):
             }
 
             self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
-            self.env = OvercookedEnv.from_mdp(self.mdp) #, **self.get_overcooked_from_mdp_kwargs(horizon=horizon))
+            self.env = OvercookedEnv.from_mdp(self.mdp, horizon=(horizon or self.args.horizon)) #, **self.get_overcooked_from_mdp_kwargs(horizon=horizon))
         else:
             self.env = base_env
             self.layout_name = self.env.mdp.layout_name

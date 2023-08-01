@@ -17,10 +17,13 @@ import math
 
 class OvercookedSubtaskGymEnv(OvercookedGymEnv):
     def __init__(self, **kwargs):
+        self.state = None
+        self.prev_state = None
+        self.prev_task = 'unknown'
+        self.curr_timestep = 0
         # Add enc channel one for goal layers
         super(OvercookedSubtaskGymEnv, self).__init__(**kwargs)
         self.previously_completed_subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
-        self.curr_timestep = 0
 
     def get_overcooked_from_mdp_kwargs(self, horizon=None):
         return {'start_state_fn': self.mdp.get_subtask_start_state_fn(self.mlam), 'horizon': 100}
@@ -125,17 +128,16 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
 
         self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
-        next_state, _, done, info = self.env.step(joint_action)
+        next_state, _, self.requires_hard_reset, info = self.env.step(joint_action)
         self.state = deepcopy(next_state)
         self.curr_timestep += 1
-        if self.curr_timestep > 100:
-            done = True
+        done = self.curr_timestep >= 50 or self.requires_hard_reset
 
         reward = -0.01  # existence penalty
         if joint_action[self.p_idx] == Action.INTERACT:
-            self.prev_task = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx)
+            self.prev_task = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx) or 'unknown'
             done = True
-            reward = 1 if subtask == self.goal_subtask_id else -1
+            reward = 1 if self.prev_task == self.goal_subtask_id else -1
             if reward == 1:
                 # Extra rewards to incentivize petter placements
                 if self.goal_subtask == 'put_onion_closer':
@@ -161,32 +163,41 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self, p_idx=None):
-        doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])
+        if p_idx is not None:
+            self.p_idx = p_idx
+        elif self.reset_p_idx is not None:
+            self.p_idx = self.reset_p_idx
+        else:
+            self.p_idx = np.random.randint(2)
+        self.t_idx = 1 - self.p_idx
+       
+        if self.state is not None:
+            doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])
+            # Requires full reset if over total time limit or only available subtask is unknown
+            self.requires_hard_reset = self.requires_hard_reset or self.curr_timestep >= self.args.horizon or len(np.nonzero(doable_subtasks)[0]) == 1
+        else:
+            self.requires_hard_reset = True
 
-        # Requires full reset if over total time limit or only available subtask is unknown
-        requires_hard_reset = self.curr_timestep > self.args.horizon or len(np.non_zero(doable_subtasks)[0]) == 1
-
-        if requires_hard_reset:
+        if self.requires_hard_reset:
             self.env.reset()
             self.state = self.env.state
+            self.prev_state = None
+            self.prev_task = 'unknown'
+
             doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
                                                   self.p_idx, USEABLE_COUNTERS[self.layout_name])
-            if p_idx is not None:
-                self.p_idx = p_idx
-            elif self.reset_p_idx is not None:
-                self.p_idx = self.reset_p_idx
-            else:
-                self.p_idx = np.random.randint(2)
+            self.requires_hard_reset = False
 
-        self.goal_subtask_id = np.random.choice(np.non_zero(doable_subtasks)[0])
+        self.curr_timestep = 0
+        self.goal_subtask_id = np.random.choice(np.nonzero(doable_subtasks)[0])
         self.goal_subtask = Subtasks.IDS_TO_SUBTASKS[self.goal_subtask_id]
-
+        self.goal_objects = Subtasks.IDS_TO_GOAL_MARKERS[self.goal_subtask_id]
         self.stack_frames_need_reset = [True, True]
         return self.get_obs(self.p_idx, on_reset=True)
 
     def evaluate(self, agent):
         results = np.zeros((Subtasks.NUM_SUBTASKS, 2))
-        mean_reward = {}
+        mean_reward = {i: [] for i in range(Subtasks.NUM_SUBTASKS)}
         curr_trial, tot_trials = 0, 50 * (Subtasks.NUM_SUBTASKS - 1) # No need to test unknown subtask
         avg_steps = []
         while curr_trial < tot_trials:
@@ -217,7 +228,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 avg_steps.append(n_steps)
             else:
                 results[self.goal_subtask_id][1] += 1
-            mean_reward[self.goal_subtask_id] = mean_reward.get(self.goal_subtask_id, []) + [cum_reward]
+            mean_reward[self.goal_subtask_id].append(cum_reward)
             curr_trial += 1
 
         num_succ = np.sum(results[:, 0])
