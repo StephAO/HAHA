@@ -40,12 +40,12 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         self.curr_subtask = action.cpu() if type(action) == th.tensor else action
         joint_action = [Action.STAY, Action.STAY]
         # while (not ready_for_next_subtask and not done):
-        obs = {k: v for k, v in self.get_obs(self.p_idx, for_worker=True).items() if k in self.worker.policy.observation_space.keys()}
-        joint_action[self.p_idx] = self.worker.predict(obs, deterministic=False)[0]
+        if self.curr_subtask != 11: # unknown subtask, just noop
+            obs = {k: v for k, v in self.get_obs(self.p_idx, for_worker=True).items() if k in self.worker.policy.observation_space.keys()}
+            joint_action[self.p_idx] = Action.INDEX_TO_ACTION[self.worker.predict(obs, deterministic=False)[0]]
         tm_obs = self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
             # if self.teammate.use_hrl_obs else self.get_low_level_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
-        joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=False)[0] # self.is_eval_env
-        joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
+        joint_action[self.t_idx] = Action.INDEX_TO_ACTION[self.teammate.predict(tm_obs, deterministic=False)[0]] # self.is_eval_env
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck

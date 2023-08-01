@@ -53,12 +53,12 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         # Reward should scale by how close the best pickup spot is to the feature
         if curr_dist == float('inf'):
             # Every spot further from the pot is -1 starting at 5. Max reward of 5
-            reward = max(5, 1 - (smallest_dist))
+            reward = 1 - (smallest_dist * 0.1)
         else:
             # Reward proportional to how much time is saved from using the pass compared to walking ourselves
             # Only get additional reward if there is a worst spot that exists
             smallest_dist = min(smallest_dist, curr_dist)
-            reward = (curr_dist - smallest_dist)
+            reward = (curr_dist - smallest_dist) * 0.1
         return max(0, reward) # No negative reward
 
     def get_pickup_proximity_reward(self, feature_locations):
@@ -83,7 +83,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         # then get bonus reward for picking it up from the better place
         largest_dist = max(largest_dist, curr_dist)
         # Reward proportional to how much time is saved from using the pass
-        reward = (largest_dist - curr_dist)
+        reward = (largest_dist - curr_dist) * 0.1
         return max(0, reward) # No negative reward
 
     def get_fuller_pot_reward(self, state, terrain):
@@ -103,7 +103,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 else:  # this is the other pot
                     other_pot_num_onions = len(obj.ingredients)
 
-        return max(0, (chosen_pot_num_onions - other_pot_num_onions))
+        return max(0, (chosen_pot_num_onions - other_pot_num_onions) * 0.1)
 
     def get_non_full_pot_locations(self, state):
         pot_states = self.mdp.get_pot_states(state)
@@ -225,7 +225,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 tot_trials -= 1
                 continue
 
-            thresh = 0.4 if (self.layout_name == 'forced_coordination' and self.p_idx == 0 and self.goal_subtask_id in [3, 6, 9]) else 0.8
+            thresh = 0.7 # if (self.layout_name == 'forced_coordination' and self.p_idx == 0 and self.goal_subtask_id in [3, 6, 9]) else 0.8
             if reward >= thresh:
                 results[self.goal_subtask_id][0] += 1
                 avg_steps.append(n_steps)
