@@ -124,8 +124,8 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
-        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
-            joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
+        # if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
+        #     joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
 
         self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
         next_state, _, self.requires_hard_reset, info = self.env.step(joint_action)
@@ -135,7 +135,9 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         reward = -0.01  # existence penalty
         if joint_action[self.p_idx] == Action.INTERACT:
-            self.prev_task = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx) or 'unknown'
+            self.prev_task = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx)
+            if self.prev_task is None:
+                self.prev_task = 'unknown'
             done = True
             reward = 1 if self.prev_task == self.goal_subtask_id else -1
             if reward == 1:
@@ -160,6 +162,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                     reward += self.get_pickup_proximity_reward(serving_locations)
                 elif self.goal_subtask == 'put_onion_in_pot':
                     reward += self.get_fuller_pot_reward(self.state, self.mdp.terrain_mtx)
+
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self, p_idx=None):
@@ -173,7 +176,12 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
        
         if self.state is not None:
             doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])
-            # Requires full reset if over total time limit or only available subtask is unknown
+            # If only doable subtask is unknown (always possible), the try other player
+            if len(np.nonzero(doable_subtasks)[0]) == 1:
+                self.p_idx, self.t_idx = self.t_idx, self.p_idx
+                doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
+                                                      self.p_idx, USEABLE_COUNTERS[self.layout_name])
+            # Requires full reset if over total time limit or only available subtask is unknown for both players
             self.requires_hard_reset = self.requires_hard_reset or self.curr_timestep >= self.args.horizon or len(np.nonzero(doable_subtasks)[0]) == 1
         else:
             self.requires_hard_reset = True
@@ -186,9 +194,16 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
             doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
                                                   self.p_idx, USEABLE_COUNTERS[self.layout_name])
+            # If only doable subtask is unknown (always possible), the try other player
+            if len(np.nonzero(doable_subtasks)[0]) == 1:
+                self.p_idx, self.t_idx = self.t_idx, self.p_idx
+                doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
+                                                      self.p_idx, USEABLE_COUNTERS[self.layout_name])
             self.requires_hard_reset = False
 
         self.curr_timestep = 0
+        # Disable unknown subtask as an option
+        doable_subtasks[-1] = 0
         self.goal_subtask_id = np.random.choice(np.nonzero(doable_subtasks)[0])
         self.goal_subtask = Subtasks.IDS_TO_SUBTASKS[self.goal_subtask_id]
         self.goal_objects = Subtasks.IDS_TO_GOAL_MARKERS[self.goal_subtask_id]

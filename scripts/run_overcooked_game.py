@@ -2,7 +2,7 @@ from pathlib import Path
 
 from oai_agents.agents.agent_utils import DummyAgent, load_agent
 from oai_agents.agents.hrl import HierarchicalRL
-from oai_agents.agents.human_agents import HumanManagerHRL
+from oai_agents.agents.human_agents import HumanManagerHRL, HumanPlayer
 from oai_agents.common.arguments import get_arguments
 from oai_agents.common.overcooked_gui import OvercookedGUI
 
@@ -23,6 +23,7 @@ if __name__ == "__main__":
     args = get_arguments(additional_args)
 
     worker = load_agent(Path('agent_models/subtask_worker_bcp/best/agents_dir/agent_0'), args)
+    # worker = HumanPlayer('human', args)
     agent = HumanManagerHRL(worker, args)
 
     t_idx = 1 - args.p_idx

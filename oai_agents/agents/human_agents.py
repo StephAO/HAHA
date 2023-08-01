@@ -3,6 +3,7 @@ import numpy as np
 from overcooked_ai_py.mdp.overcooked_mdp import Direction, Action
 
 from oai_agents.agents.base_agent import OAIAgent
+from oai_agents.agents.agent_utils import DummyPolicy
 from oai_agents.common.subtasks import Subtasks
 
 class HumanManagerHRL(OAIAgent):
