@@ -168,9 +168,10 @@ def get_hrl_worker(args, training_steps=1e7):
         worker = RLAgentTrainer.load_agents(args, name=name)[0]
     except FileNotFoundError as e:
         print(f'Could not find saved worker agent, creating them from scratch...\nFull Error: {e}')
-        eval_tms = get_eval_teammates(args)
+        # eval_tms = get_eval_teammates(args)
         
         teammates, _ = get_bc_and_human_proxy(args)
+        eval_tms = teammates
         #teammates = get_fcp_population(args, 1e7)
         # Create subtask worker
         env_kwargs = {'stack_frames': False, 'full_init': False, 'args': args}
@@ -192,7 +193,8 @@ def get_hrl_agent(args, training_steps=1e7):
     teammates, _ = get_bc_and_human_proxy(args)
     #teammates = get_fcp_population(args, training_steps)
     worker = get_hrl_worker(args, training_steps=training_steps_split)
-    eval_tms = get_eval_teammates(args)
+    # eval_tms = get_eval_teammates(args)
+    eval_tms = teammates
     # Create manager
     rlmt = RLManagerTrainer(worker, teammates, args, eval_tms=eval_tms, use_subtask_counts=False, name=name + '_trainer', inc_sp=False, use_policy_clone=False, seed=2602)
     rlmt.train_agents(total_timesteps=training_steps_split)
