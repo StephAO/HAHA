@@ -120,7 +120,12 @@ class OvercookedGymEnv(Env):
 
         self.terrain = self.mdp.terrain_mtx
         self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]
+        self.env.reset()
+        self.valid_counters = [self.env.mdp.find_free_counters_valid_for_player(self.env.state, self.mlam, i) for i in
+                               range(2)]
         self.reset()
+
+
 
     # def get_overcooked_from_mdp_kwargs(self, horizon=None):
     #     horizon = horizon or self.args.horizon
@@ -154,7 +159,7 @@ class OvercookedGymEnv(Env):
         pygame.display.flip()
 
     def action_masks(self, p_idx):
-        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name]).astype(bool)
 
     def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False, goal_objects=None):
         enc_fn = enc_fn or self.encoding_fn

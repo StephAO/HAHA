@@ -74,10 +74,8 @@ class OvercookedGUI:
         self.p_idx = p_idx
         self.env.set_teammate(teammate)
         self.env.reset(p_idx=self.p_idx)
-        self.agent.set_idx(self.p_idx, args.layout, is_hrl=isinstance(self.agent, HierarchicalRL), tune_subtasks=False)
-        self.env.teammate.set_idx(self.env.t_idx, args.layout, is_hrl=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=False)
-        self.env.teammate.set_obs_closure_fn(self.env.get_obs)
-        self.agent.set_obs_closure_fn(self.env.get_obs)
+        self.agent.set_idx(self.p_idx, self.env, is_hrl=isinstance(self.agent, HierarchicalRL), tune_subtasks=False)
+        self.env.teammate.set_idx(self.env.t_idx, self.env, is_hrl=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=False)
         self.teammate_name=teammate.name
 
 
@@ -248,7 +246,10 @@ class OvercookedGUI:
 
             done = self.step_env(action)
             self.human_action = None
-            pygame.time.wait(sleep_time)
+            if self.curr_tick < 200:
+                pygame.time.wait(sleep_time)
+            else:
+                pygame.time.wait(1000)
             self.on_render()
             self.curr_tick += 1
 

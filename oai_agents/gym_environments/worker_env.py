@@ -175,12 +175,12 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         self.t_idx = 1 - self.p_idx
        
         if self.state is not None:
-            doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])
+            doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])
             # If only doable subtask is unknown (always possible), the try other player
             if len(np.nonzero(doable_subtasks)[0]) == 1:
                 self.p_idx, self.t_idx = self.t_idx, self.p_idx
                 doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
-                                                      self.p_idx, USEABLE_COUNTERS[self.layout_name])
+                                                      self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])
             # Requires full reset if over total time limit or only available subtask is unknown for both players
             self.requires_hard_reset = self.requires_hard_reset or self.curr_timestep >= self.args.horizon or len(np.nonzero(doable_subtasks)[0]) == 1
         else:
@@ -193,12 +193,12 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             self.prev_task = 'unknown'
 
             doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
-                                                  self.p_idx, USEABLE_COUNTERS[self.layout_name])
+                                                  self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])
             # If only doable subtask is unknown (always possible), the try other player
             if len(np.nonzero(doable_subtasks)[0]) == 1:
                 self.p_idx, self.t_idx = self.t_idx, self.p_idx
                 doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
-                                                      self.p_idx, USEABLE_COUNTERS[self.layout_name])
+                                                      self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])
             self.requires_hard_reset = False
 
         self.curr_timestep = 0
@@ -223,7 +223,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 # If the subtask is no longer possible (e.g. other agent picked the only onion up from the counter)
                 # then stop the trial and don't count it
                 unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-                if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[
+                if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])[
                     self.goal_subtask_id]:
                     invalid_trial = True
                     break

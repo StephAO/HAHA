@@ -33,7 +33,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
 
     def action_masks(self, p_idx=None):
         p_idx = p_idx or self.p_idx
-        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name]).astype(bool)
 
     def step(self, action):
         # Action is the subtask for subtask agent to perform
