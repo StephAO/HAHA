@@ -190,7 +190,6 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, valid_
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_soup_closer']] = 1
 
     # Becomes a stay action for 1 turn
-    if np.sum(subtask_mask) == 0:
-        subtask_mask[Subtasks.SUBTASKS_TO_IDS['unknown']] = 1
+    subtask_mask[Subtasks.SUBTASKS_TO_IDS['unknown']] = 1
 
     return subtask_mask

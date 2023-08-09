@@ -275,12 +275,11 @@ class HierarchicalRL(OAIAgent):
         # self.num_steps_since_new_subtask = 0
         if not isinstance(self.curr_subtask_id, int):
             self.curr_subtask_id = int(self.curr_subtask_id.squeeze())
-            # print(Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id])
+        # print(Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id])
+        if self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
+            return Action.ACTION_TO_INDEX[Action.STAY], None
         self.num_steps_since_new_subtask += 1
         worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
-        import sys
-        np.set_printoptions(threshold=sys.maxsize)
-        # print(worker_obs['visual_obs'][-1])
         worker_obs = {k: np.expand_dims(v, 0) for k, v in worker_obs.items()}
         return self.worker.predict(worker_obs, state=state, episode_start=episode_start, deterministic=False)
 
