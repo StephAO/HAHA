@@ -129,7 +129,7 @@ class RLAgentTrainer(OAITrainer):
             # Evaluate
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.learning_agent.agent.ep_info_buffer])
             best_training_rew *= 0.98
-            if (epoch + 1) % 5 == 0 or (mean_training_rew > best_training_rew and curr_timesteps > 1e6) or \
+            if (epoch + 1) % 5 == 0 or (mean_training_rew > best_training_rew and curr_timesteps >= 1e6) or \
                 (self.fcp_ck_rate and curr_timesteps // self.fcp_ck_rate > (len(self.ck_list) - 1)):
                 if mean_training_rew >= best_training_rew:
                     best_training_rew = mean_training_rew

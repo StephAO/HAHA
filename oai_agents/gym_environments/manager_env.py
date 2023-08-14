@@ -44,7 +44,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             obs = {k: v for k, v in self.get_obs(self.p_idx, for_worker=True).items() if k in self.worker.policy.observation_space.keys()}
             joint_action[self.p_idx] = Action.INDEX_TO_ACTION[self.worker.predict(obs, deterministic=False)[0]]
         else:
-            self.prev_subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
+            self.prev_subtask[self.p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
         tm_obs = self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
             # if self.teammate.use_hrl_obs else self.get_low_level_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
         joint_action[self.t_idx] = Action.INDEX_TO_ACTION[self.teammate.predict(tm_obs, deterministic=False)[0]] # self.is_eval_env

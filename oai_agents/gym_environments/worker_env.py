@@ -177,12 +177,13 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         if self.state is not None:
             doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])
             # If only doable subtask is unknown (always possible), the try other player
-            if len(np.nonzero(doable_subtasks)[0]) == 1:
+            if len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
                 self.p_idx, self.t_idx = self.t_idx, self.p_idx
+                self.prev_task = 'unknown'
                 doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
                                                       self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])
             # Requires full reset if over total time limit or only available subtask is unknown for both players
-            self.requires_hard_reset = self.requires_hard_reset or self.curr_timestep >= self.args.horizon or len(np.nonzero(doable_subtasks)[0]) == 1
+            self.requires_hard_reset = self.requires_hard_reset or self.curr_timestep >= self.args.horizon or len(np.nonzero(doable_subtasks[:-1])[0]) == 0
         else:
             self.requires_hard_reset = True
 
@@ -195,7 +196,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
                                                   self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])
             # If only doable subtask is unknown (always possible), the try other player
-            if len(np.nonzero(doable_subtasks)[0]) == 1:
+            if len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
                 self.p_idx, self.t_idx = self.t_idx, self.p_idx
                 doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
                                                       self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])
