@@ -247,7 +247,7 @@ class OvercookedGUI:
 
             done = self.step_env(action)
             self.human_action = None
-            if self.curr_tick < 200:
+            if True or self.curr_tick < 200:
                 pygame.time.wait(sleep_time)
             else:
                 pygame.time.wait(1000)

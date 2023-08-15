@@ -29,7 +29,7 @@ if __name__ == "__main__":
     # agent = HumanManagerHRL(worker, args)
 
 
-    agent =  load_agent(Path('agent_models/HAHA_bcp_test'), args)
+    agent =  load_agent(Path('agent_models/HAHA_bcp'), args)
     # tm = load_agent(Path('agent_models/old_SP'), args)
 
     t_idx = 1 - args.p_idx

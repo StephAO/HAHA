@@ -20,7 +20,7 @@ from typing import Tuple, List
 
 class RLManagerTrainer(RLAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
-    def __init__(self, worker, teammates, args, eval_tms=None, use_frame_stack=False, use_subtask_counts=False,
+    def __init__(self, worker, teammates, args, use_frame_stack=False, use_subtask_counts=False,
                  inc_sp=False, use_policy_clone=False, name=None, seed=None):
         name = name or 'hrl_manager'
         name += ('_sp' if inc_sp else '') + ('_pc' if use_policy_clone else '')
@@ -33,7 +33,7 @@ class RLManagerTrainer(RLAgentTrainer):
         eval_envs = [OvercookedManagerGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         self.worker = worker
-        super(RLManagerTrainer, self).__init__(teammates, args, eval_tms=eval_tms, name=name, env=env,
+        super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env,
                                                eval_envs=eval_envs, use_subtask_counts=use_subtask_counts,
                                                use_hrl=True, use_policy_clone=use_policy_clone,
                                                seed=seed)
@@ -277,7 +277,7 @@ class HierarchicalRL(OAIAgent):
             self.curr_subtask_id = int(self.curr_subtask_id.squeeze())
         # print(Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id])
         if self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
-            return Action.ACTION_TO_INDEX[Action.STAY], None
+            return np.array([Action.ACTION_TO_INDEX[Action.STAY]]), None
         self.num_steps_since_new_subtask += 1
         worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
         worker_obs = {k: np.expand_dims(v, 0) for k, v in worker_obs.items()}

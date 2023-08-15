@@ -117,7 +117,7 @@ class OAIAgent(nn.Module, ABC):
             obs['player_completed_subtasks'] = player_completed_tasks
             obs['teammate_completed_subtasks'] = tm_completed_tasks
         if 'subtask_mask' in self.policy.observation_space.keys():
-            obs['subtask_mask'] = get_doable_subtasks(state, self.prev_subtask, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name]).astype(bool)
+            obs['subtask_mask'] = get_doable_subtasks(state, self.prev_subtask, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5)).astype(bool)
 
         self.prev_state = deepcopy(state)
         obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
@@ -186,7 +186,7 @@ class SB3Wrapper(OAIAgent):
         obs, vectorized_env = self.policy.obs_to_tensor(obs)
         with th.no_grad():
             if 'subtask_mask' in obs and np.prod(obs['subtask_mask'].shape) == np.prod(self.agent.action_space.n):
-                dist = self.policy.get_distribution(obs, obs['subtask_mask'])
+                dist = self.policy.get_distribution(obs, action_masks=obs['subtask_mask'])
             else:
                 dist = self.policy.get_distribution(obs)
 
@@ -203,7 +203,7 @@ class SB3Wrapper(OAIAgent):
         obs, vectorized_env = self.policy.obs_to_tensor(obs)
         with th.no_grad():
             if 'subtask_mask' in obs and np.prod(obs['subtask_mask'].shape) == np.prod(self.policy.action_space.n):
-                dist = self.policy.get_distribution(obs, obs['subtask_mask'])
+                dist = self.policy.get_distribution(obs, action_masks=obs['subtask_mask'])
             else:
                 dist = self.policy.get_distribution(obs)
         return dist
@@ -291,7 +291,7 @@ class PolicyClone(OAIAgent):
         obs, vectorized_env = self.policy.obs_to_tensor(obs)
         with th.no_grad():
             if 'subtask_mask' in obs and np.prod(obs['subtask_mask'].shape) == np.prod(self.policy.action_space.n):
-                dist = self.policy.get_distribution(obs, obs['subtask_mask'])
+                dist = self.policy.get_distribution(obs, action_masks=obs['subtask_mask'])
             else:
                 dist = self.policy.get_distribution(obs)
 
@@ -308,7 +308,7 @@ class PolicyClone(OAIAgent):
         obs, vectorized_env = self.policy.obs_to_tensor(obs)
         with th.no_grad():
             if 'subtask_mask' in obs and np.prod(obs['subtask_mask'].shape) == np.prod(self.policy.action_space.n):
-                dist = self.policy.get_distribution(obs, obs['subtask_mask'])
+                dist = self.policy.get_distribution(obs, action_masks=obs['subtask_mask'])
             else:
                 dist = self.policy.get_distribution(obs)
         return dist

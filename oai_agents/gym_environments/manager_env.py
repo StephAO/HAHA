@@ -33,7 +33,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
 
     def action_masks(self, p_idx=None):
         p_idx = p_idx or self.p_idx
-        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name]).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5)).astype(bool)
 
     def step(self, action):
         # Action is the subtask for subtask agent to perform
@@ -51,8 +51,10 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
-        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
-            joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
+        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(self.prev_actions):
+            joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
+                            np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
+            joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
 
         self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
         next_state, reward, done, info = self.env.step(joint_action)

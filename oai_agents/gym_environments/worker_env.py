@@ -16,20 +16,22 @@ import math
 
 
 class OvercookedSubtaskGymEnv(OvercookedGymEnv):
-    def __init__(self, **kwargs):
+    def __init__(self, manager=None, **kwargs):
         self.state = None
         self.prev_state = None
-        self.prev_task = 'unknown'
         self.curr_timestep = 0
+        self.manager = manager
         # Add enc channel one for goal layers
         super(OvercookedSubtaskGymEnv, self).__init__(**kwargs)
-        self.previously_completed_subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
+
+    def set_manager(self, manager):
+        self.manager = manager
 
     def get_overcooked_from_mdp_kwargs(self, horizon=None):
         return {'start_state_fn': self.mdp.get_subtask_start_state_fn(self.mlam), 'horizon': 100}
 
-    def get_obs(self, p_idx, **kwargs):
-        go = self.goal_objects if p_idx == self.p_idx else None
+    def get_obs(self, p_idx, for_manager=False, **kwargs):
+        go = self.goal_objects if (p_idx == self.p_idx and not for_manager) else None
         obs = super().get_obs(p_idx, goal_objects=go,**kwargs)
         return obs
 
@@ -124,8 +126,10 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
-        # if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
-        #     joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
+        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(self.prev_actions):
+            joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
+                            np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
+            joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
 
         self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
         next_state, _, self.requires_hard_reset, info = self.env.step(joint_action)
@@ -135,11 +139,9 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         reward = -0.01  # existence penalty
         if joint_action[self.p_idx] == Action.INTERACT:
-            self.prev_task = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx)
-            if self.prev_task is None:
-                self.prev_task = 'unknown'
+            completed_task = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx)
             done = True
-            reward = 1 if self.prev_task == self.goal_subtask_id else -1
+            reward = 1 if completed_task == self.goal_subtask_id else -1
             if reward == 1:
                 # Extra rewards to incentivize petter placements
                 if self.goal_subtask == 'put_onion_closer':
@@ -173,39 +175,45 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         else:
             self.p_idx = np.random.randint(2)
         self.t_idx = 1 - self.p_idx
-       
-        if self.state is not None:
-            doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])
-            # If only doable subtask is unknown (always possible), the try other player
+
+        if self.state is None or self.requires_hard_reset or self.curr_timestep:
+            self.requires_hard_reset = True
+        else:
+            doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
+            # If no non-unknown subtasks is doable, then try other player
             if len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
                 self.p_idx, self.t_idx = self.t_idx, self.p_idx
-                self.prev_task = 'unknown'
-                doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
-                                                      self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])
+                doable_subtasks = get_doable_subtasks(self.state,'unknown', self.layout_name, self.terrain,
+                                                      self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
             # Requires full reset if over total time limit or only available subtask is unknown for both players
-            self.requires_hard_reset = self.requires_hard_reset or self.curr_timestep >= self.args.horizon or len(np.nonzero(doable_subtasks[:-1])[0]) == 0
-        else:
-            self.requires_hard_reset = True
+            self.requires_hard_reset = len(np.nonzero(doable_subtasks[:-1])[0]) == 0
 
         if self.requires_hard_reset:
             self.env.reset()
             self.state = self.env.state
             self.prev_state = None
-            self.prev_task = 'unknown'
 
-            doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
-                                                  self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])
-            # If only doable subtask is unknown (always possible), the try other player
+            doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
+                                                  self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
+            # If no non-unknown subtasks is doable, then try other player -- mainly required for forced coordination
             if len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
                 self.p_idx, self.t_idx = self.t_idx, self.p_idx
-                doable_subtasks = get_doable_subtasks(self.state, self.prev_task, self.layout_name, self.terrain,
-                                                      self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])
+                doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
+                                                      self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
             self.requires_hard_reset = False
 
         self.curr_timestep = 0
         # Disable unknown subtask as an option
         doable_subtasks[-1] = 0
-        self.goal_subtask_id = np.random.choice(np.nonzero(doable_subtasks)[0])
+        if self.manager is not None:
+            man_obs = self.get_obs(self.p_idx, for_manager=True)
+            man_obs['subtask_mask'] = doable_subtasks
+            man_obs['player_completed_subtasks'] = np.zeros(Subtasks.NUM_SUBTASKS)
+            man_obs['teammate_completed_subtasks'] = np.zeros(Subtasks.NUM_SUBTASKS)
+            self.goal_subtask_id = int(self.manager.predict(man_obs, deterministic=False)[0].squeeze())
+        else:
+            self.goal_subtask_id = np.random.choice(np.nonzero(doable_subtasks)[0])
+
         self.goal_subtask = Subtasks.IDS_TO_SUBTASKS[self.goal_subtask_id]
         self.goal_objects = Subtasks.IDS_TO_GOAL_MARKERS[self.goal_subtask_id]
         self.stack_frames_need_reset = [True, True]
@@ -224,7 +232,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 # If the subtask is no longer possible (e.g. other agent picked the only onion up from the counter)
                 # then stop the trial and don't count it
                 unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-                if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS[self.layout_name])[
+                if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))[
                     self.goal_subtask_id]:
                     invalid_trial = True
                     break
