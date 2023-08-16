@@ -70,14 +70,17 @@ class OvercookedGUI:
         else:
             self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True,
                                         is_eval_env=True, horizon=horizon)
-        self.env.set_teammate(teammate)
-        self.teammate_name=teammate.name
+        self.agent = agent
         self.p_idx = p_idx
+        self.env.set_teammate(teammate)
         self.env.reset(p_idx=self.p_idx)
-        self.env.teammate.set_idx(self.env.t_idx, self.layout_name, False, True, False)
+        if self.agent != 'human':
+            self.agent.set_idx(self.p_idx, self.env, is_hrl=isinstance(self.agent, HierarchicalRL), tune_subtasks=False)
+        self.env.teammate.set_idx(self.env.t_idx, self.env, is_hrl=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=False)
+        self.teammate_name=teammate.name
+
 
         self.grid_shape = self.env.grid_shape
-        self.agent = agent
         self.trial_id = trial_id
         self.user_id = user_id
         self.fps = fps
@@ -88,7 +91,7 @@ class OvercookedGUI:
         self.human_action = None
         self.data_path = args.base_dir / args.data_path
         self.data_path.mkdir(parents=True, exist_ok=True)
-        self.tile_size = 100
+        self.tile_size = 50
 
         self.info_stream = stream
         self.outlet = outlet
@@ -244,7 +247,10 @@ class OvercookedGUI:
 
             done = self.step_env(action)
             self.human_action = None
-            pygame.time.wait(sleep_time)
+            if True or self.curr_tick < 200:
+                pygame.time.wait(sleep_time)
+            else:
+                pygame.time.wait(1000)
             self.on_render()
             self.curr_tick += 1
 

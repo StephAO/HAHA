@@ -1,5 +1,4 @@
 from oai_agents.common.arguments import get_arguments
-
 from overcooked_ai_py.mdp.overcooked_mdp import Action
 
 from gym import spaces
@@ -28,10 +27,10 @@ class DummyPolicy:
     def __init__(self, obs_space):
         self.observation_space = obs_space
 
-class DummyAgent:
+class DummyAgent():
     def __init__(self, action=Action.STAY):
-        self.action = action if 'random' in action else Action.ACTION_TO_INDEX[action]
         self.name = f'{action}_agent'
+        self.action = action if 'random' in action else Action.ACTION_TO_INDEX[action]
         self.policy = DummyPolicy(spaces.Dict({'visual_obs': spaces.Box(0,1,(1,))}))
         self.encoding_fn = lambda *args, **kwargs: {}
         self.use_hrl_obs = False
@@ -46,4 +45,7 @@ class DummyAgent:
         return action, None
 
     def set_idx(self, *args, **kwargs):
+        pass
+
+    def set_obs_closure_fn(self, obs_closure_fn):
         pass
