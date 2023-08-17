@@ -9,8 +9,9 @@ if os.name == 'nt':
     pathlib.PosixPath = pathlib.WindowsPath
 from tkinter import *
 import tkinter as tk
+from tkinter import messagebox
 from tkinter import simpledialog
-from oai_agents.agents.agent_utils import load_agent, DummyAgent
+from oai_agents.agents.agent_utils import load_agent, DummyAgent, TutorialAgent
 from oai_agents.common.arguments import get_arguments
 from oai_agents.common.overcooked_gui import OvercookedGUI
 from itertools import product
@@ -23,6 +24,12 @@ ROOT = tk.Tk()
 ROOT.title("Survey")
 ROOT.resizable(False, False)  # This code helps to disable windows from resizing
 ROOT.eval('tk::PlaceWindow . center')
+
+def on_closing():
+    if messagebox.askokcancel("Quit", "Do you want to quit?"):
+        ROOT.destroy()
+
+ROOT.protocol("WM_DELETE_WINDOW", on_closing)
 
 info_stream = StreamInfo(name="GameData", type="GameData", channel_count=1,
                          channel_format='string', source_id='game')
@@ -37,6 +44,14 @@ def get_user_id_popup():
 def run_study(args, teammates, layouts):
     trial_id, user_id = get_user_id_popup()
     agt_envt = list(product(teammates, layouts))
+
+    # Show instructions
+    show_instructions()
+    # Run tutorial
+    game = OvercookedGUI(args, layout_name='tutorial_0', agent='human', teammate=TutorialAgent(), horizon=1200,
+                         p_idx=0, trial_id=trial_id, user_id=user_id, stream=info_stream, outlet=outlet,
+                         start_message='Press Enter to Start Tutorial')
+    game.on_execute()
 
     # Set up likert answer file
     if not os.path.exists('data/eye_tracking_data/all_likert_answers.csv'):
@@ -54,7 +69,8 @@ def run_study(args, teammates, layouts):
             args.horizon = 20
             trial_id += 1
             game = OvercookedGUI(args, layout_name=layout, agent='human', teammate=teammate, horizon=STEPS_PER_TRIAL,
-                                 p_idx=0, trial_id=trial_id, user_id=user_id, stream=info_stream, outlet=outlet)
+                                 p_idx=0, trial_id=trial_id, user_id=user_id, stream=info_stream, outlet=outlet,
+                                 start_message=f'Press Enter to Start Trial {trial_id}')
             game.on_execute()
             answers = LikertScaleGUI().run()
 
@@ -67,6 +83,34 @@ def run_study(args, teammates, layouts):
         print(e)
     trial_id += 1
 
+
+
+def show_instructions():
+    from tkinterweb import HtmlFrame
+    import os
+
+    frame = HtmlFrame(ROOT)
+    frame.load_file(f'{os.getcwd()}/scripts/eye_tracking_survey_instructions/instructions.html', decode=None, force=False)
+    # frame.set_fontscale(2)
+
+    def close_instructions(*args):
+        ROOT.quit()
+        ROOT.withdraw()
+        frame.destroy()
+
+    frame.html.config(width=1500, height=800)
+    frame.pack(fill="both", expand=True)
+    frame.pack_propagate(0)
+    frame.update()
+    x_coordinate = ROOT.winfo_screenwidth() // 2 - ROOT.winfo_width() // 2
+    y_coordinate = ROOT.winfo_screenheight() // 2 - ROOT.winfo_height() // 2
+    ROOT.geometry(f'+{x_coordinate}+{y_coordinate}')
+
+    frame.on_form_submit(close_instructions)
+    ROOT.deiconify()
+    ROOT.mainloop()
+
+    
 
 class LikertScaleGUI():
     NON_ANSWERED_VALUE = -4
@@ -107,7 +151,7 @@ class LikertScaleGUI():
                 tk.Label(rowframe, text=label, font=('TkFixedFont', 15)).grid(row=1, column=j, padx=padx)
                 tk.Radiobutton(rowframe, variable=self.radio_button_values[-1], value=j - 3).grid(row=2, column=j, padx=padx, pady=(0, 10))
 
-        tk.Button(self.mainframe, text="Submit and Continue to Next Trial\nTrial Will Begin Immediately", font=('TkFixedFont', 15), command=self.get_answers_and_destroy)\
+        tk.Button(self.mainframe, text="Submit", font=('TkFixedFont', 15), command=self.get_answers_and_destroy)\
                  .grid(row=len(LikertScaleGUI.questions), column=0, pady=(10, 10))
 
         self.mainframe.update()
@@ -145,5 +189,6 @@ if __name__ == '__main__':
     # layouts = ['asymmetric_advantages']
     layouts = ['coordination_ring', 'counter_circuit_o_1order', 'asymmetric_advantages', 'coordination_ring', 'counter_circuit_o_1order', 'asymmetric_advantages']
 
+    # show_instructions()
 
     run_study(args, teammates, layouts)
