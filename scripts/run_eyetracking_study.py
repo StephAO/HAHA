@@ -91,7 +91,15 @@ def show_instructions():
     import os
 
     frame = HtmlFrame(ROOT)
-    frame.load_file(f'{os.getcwd()}/scripts/eye_tracking_survey_instructions/instructions.html', decode=None, force=False)
+    # Get the current working directory
+    current_dir = os.getcwd()
+    # Replace backslashes with forward slashes
+
+    current_dir = current_dir.replace("\\", "/")
+    html_file_path = f'{current_dir}/scripts/eye_tracking_survey_instructions/instructions.html'
+    print("HTML File Path:", html_file_path)
+    frame.load_file(html_file_path, decode=None, force=False)
+
     # frame.set_fontscale(2)
 
     def close_instructions(*args):
