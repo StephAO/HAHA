@@ -43,7 +43,6 @@ def calculate_completed_subtask(layout, prev_state, curr_state, p_idx):
     prev_obj = prev_state.players[p_idx].held_object.name if prev_state.players[p_idx].held_object else None
     curr_obj = curr_state.players[p_idx].held_object.name if curr_state.players[p_idx].held_object else None
     tile_in_front = facing(layout, prev_state.players[p_idx])
-    #print('CCS',prev_obj, curr_obj, tile_in_front)
     # Object held didn't change -- This interaction didn't actually transition to a new subtask
     if prev_obj == curr_obj:
         subtask = None
@@ -129,7 +128,7 @@ def non_full_pot_exists(state, terrain, layout_name):
     tot_pots = 1 if layout_name == 'cramped_room' else 2
     return n_full_soups < tot_pots
 
-def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_counters):
+def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, valid_counters, n_counters):
     '''
     Returns a mask subtasks that could be accomplished for a given state and player idx
     :param state: curr state
@@ -155,11 +154,11 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
         # The following subtasks are only possible on some configurations for some players (this filters useless tasks)
         # These are only possible if the respective objects exist on a counter somewhere
         for obj in loose_objects:
-            if obj.name == 'onion' and prev_subtask != 'put_onion_closer':
+            if obj.name == 'onion' and prev_subtask != 'put_onion_closer' and obj.position in valid_counters[p_idx]:
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']] = 1
-            elif obj.name == 'dish' and prev_subtask != 'put_plate_closer':
+            elif obj.name == 'dish' and prev_subtask != 'put_plate_closer' and obj.position in valid_counters[p_idx]:
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']] = 1
-            elif obj.name == 'soup' and prev_subtask != 'put_soup_closer':
+            elif obj.name == 'soup' and prev_subtask != 'put_soup_closer' and obj.position in valid_counters[p_idx]:
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_soup_from_counter']] = 1
     # The player is holding an onion, so it can only accomplish tasks that involve putting the onion somewhere
     elif state.players[p_idx].held_object.name == 'onion':
@@ -167,8 +166,8 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
         if len(loose_objects) < n_counters and prev_subtask != 'get_onion_from_counter':
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_closer']] = 1
         # There must be an empty pot to put an onion into
-        # if not (layout_name == 'forced_coordination' and p_idx == 1):
-        if non_full_pot_exists(state, terrain, layout_name):
+        if not (layout_name == 'forced_coordination' and p_idx == 1):
+            if non_full_pot_exists(state, terrain, layout_name):
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']] = 1
     # The player is holding a plate, so it can only accomplish tasks that involve putting the plate somewhere
     elif state.players[p_idx].held_object.name == 'dish':
@@ -191,7 +190,7 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, n_coun
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_soup_closer']] = 1
 
     # Becomes a stay action for 1 turn
+    # if np.sum(subtask_mask[:-1]) == 0:
     subtask_mask[Subtasks.SUBTASKS_TO_IDS['unknown']] = 1
 
     return subtask_mask
-

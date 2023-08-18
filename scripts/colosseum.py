@@ -10,13 +10,14 @@ from scripts.train_agents import get_bc_and_human_proxy
 
 def eval_agents_with_various_teammates(agents_to_evaluate, teammates):
     eval_envs_kwargs = {'is_eval_env': True, 'args': args, 'horizon': 400, 'ret_completed_subtasks': True}
-    args.layout_names = ['counter_circuit_o_1order']#asymmetric_advantages', 'counter_circuit_o_1order', 'forced_coordination']
+    args.layout_names = ['counter_circuit_o_1order', 'asymmetric_advantages', 'cramped_room', 'coordination_ring', 'forced_coordination']
+    # args.layout_names = [ln + '_mod' for ln in args.layout_names]
     score_matrices = {ln: np.zeros((len(agents_to_evaluate), len(teammates))) for ln in args.layout_names}
 
     tot_rounds = len(args.layout_names) * len(agents_to_evaluate) * len(teammates)
     with tqdm(total=tot_rounds) as pbar:
         for i, p1 in enumerate(agents_to_evaluate):
-            eval_envs_kwargs['ret_completed_subtasks'] = ('hrl' in p1.name)
+            eval_envs_kwargs['ret_completed_subtasks'] = ('haha' in p1.name)
             eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(len(args.layout_names))]
             for eval_env in eval_envs:
                 for j, p2 in enumerate(teammates):
@@ -25,8 +26,8 @@ def eval_agents_with_various_teammates(agents_to_evaluate, teammates):
                     p2 = p2[eval_env.layout_name][0] if type(p2) == dict else p2
                     print(f'Now evaluating {p1.name} with teammates {p2.name}')
                     for p_idx in [0, 1]:
-                        p1.set_idx(p_idx, eval_env.layout_name, is_hrl=('hrl' in p1.name), tune_subtasks="tuned" in p1.name)
-                        p2.set_idx(1-p_idx, eval_env.layout_name, is_hrl=('hrl' in p2.name), tune_subtasks="tuned" in p2.name)
+                        p1.set_idx(p_idx, eval_env, is_hrl=('haha' in p1.name), tune_subtasks="tuned" in p1.name)
+                        p2.set_idx(1-p_idx, eval_env, is_hrl=('haha' in p2.name), tune_subtasks="tuned" in p2.name)
                         eval_env.set_teammate(p2)
                         eval_env.set_reset_p_idx(p_idx)
                         mean_reward, std_reward = evaluate_policy(p1, eval_env, n_eval_episodes=10,
@@ -60,8 +61,8 @@ def load_agents_population(filepaths, args):
 
 if __name__ == "__main__":
     args = get_arguments()
-    base_dir = args.base_dir / 'agent_models_NIPS'
-    main_agents_fns = ["HAHA+tuned"]#, "HAHA"]#, "HAHA+tuned", "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
+    base_dir = args.base_dir / 'agent_models'
+    main_agents_fns = ["HAHA_bcp"]#, "BCP"]#, "HAHA"]#, "HAHA+tuned", "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
     main_agents_fns = [base_dir / fn for fn in main_agents_fns]
 
     main_agents = load_agents_population(main_agents_fns, args)
@@ -73,7 +74,7 @@ if __name__ == "__main__":
 
     # tm_fns = ["ck_0", "ck_4", "ck_8", "ck_12", "ck_16", "best"]
     # tm_fns = [base_dir / '2l_hd128_s1997' / fn / 'agents_dir' / 'agent_0' for fn in tm_fns]
-    tms = [*load_agents_population([base_dir / "SP", base_dir / "FCP", base_dir / "BCP"], args), human_proxy, DummyAgent('random')] # [*load_agents_population(tm_fns, args)]
+    tms = [*load_agents_population([base_dir / "old_SP"], args), human_proxy, DummyAgent('random')] # [*load_agents_population(tm_fns, args)]
 
     score_matrices = eval_agents_with_various_teammates(main_agents, tms)
     for layout in args.layout_names:

@@ -15,7 +15,7 @@ VEC_ENV_CLS = DummyVecEnv #
 
 class RLAgentTrainer(OAITrainer):
     ''' Train an RL agent to play with a provided agent '''
-    def __init__(self, teammates, args, selfplay=False, eval_tms=None, name=None, env=None, eval_envs=None,
+    def __init__(self, teammates, args, selfplay=False, name=None, env=None, eval_envs=None,
                  use_cnn=False, use_lstm=False, use_frame_stack=False, taper_layers=False, use_subtask_counts=False,
                  use_policy_clone=False, num_layers=2, hidden_dim=256, use_subtask_eval=False, use_hrl=False,
                  fcp_ck_rate=None, seed=None):
@@ -34,6 +34,7 @@ class RLAgentTrainer(OAITrainer):
         self.seed = seed
         self.fcp_ck_rate = fcp_ck_rate
         self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
+        self.run_id = None
         if env is None:
             env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts,
                           'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
@@ -71,9 +72,8 @@ class RLAgentTrainer(OAITrainer):
                                     gamma=0.99, gae_lambda=0.95)
             agent_name = f'{name}'
         else:
-            ne, bs = (4, 500) if selfplay else (4, 500)
             sb3_agent = PPO("MultiInputPolicy", self.env, policy_kwargs=policy_kwargs, verbose=1, n_steps=500,
-                            n_epochs=ne, learning_rate=0.0003, batch_size=bs, ent_coef=0.001, vf_coef=0.3,
+                            n_epochs=4, learning_rate=0.0003, batch_size=500, ent_coef=0.001, vf_coef=0.3,
                             gamma=0.99, gae_lambda=0.95)
             agent_name = f'{name}'
         self.learning_agent = self.wrap_agent(sb3_agent, agent_name)
@@ -82,7 +82,9 @@ class RLAgentTrainer(OAITrainer):
         self.teammates = teammates if teammates else []
         if selfplay:
             self.teammates += self.agents
-        self.eval_teammates = eval_tms if eval_tms is not None else self.teammates
+        self.eval_teammates = self.teammates
+        self.epoch, self.total_game_steps = 0, 0
+        self.best_score, self.fewest_failures, self.best_training_rew = -1, float('inf'), float('-inf')
 
     def _get_constructor_parameters(self):
         return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, use_frame_stack=self.use_frame_stack,
@@ -95,44 +97,48 @@ class RLAgentTrainer(OAITrainer):
             agent = SB3Wrapper(sb3_agent, name, self.args)
         return agent
 
-    def train_agents(self, total_timesteps=2e6, exp_name=None):
+    def train_agents(self, train_timesteps=2e6, exp_name=None):
         exp_name = exp_name or self.args.exp_name
         run = wandb.init(project="overcooked_ai", entity=self.args.wandb_ent, dir=str(self.args.base_dir / 'wandb'),
-                         reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
+                         reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode, id=self.run_id,
+                         resume="allow")
+        if self.run_id is None:
+            self.run_id = run.id
 
         if self.fcp_ck_rate is not None:
             self.ck_list = []
             path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
             self.ck_list.append(({k: 0 for k in self.args.layout_names}, path, tag))
         best_path, best_tag = None, None
-        best_score, fewest_failures, best_training_rew = -1, float('inf'), float('-inf')
 
-        epoch, curr_timesteps = 0, 0
-        while curr_timesteps < total_timesteps:
+        curr_timesteps = 0
+        prev_timesteps = self.learning_agent.num_timesteps
+        while curr_timesteps < train_timesteps:
+            print(curr_timesteps, self.learning_agent.num_timesteps)
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=self.epoch_timesteps)
+            curr_timesteps += (self.learning_agent.num_timesteps - prev_timesteps)
+            prev_timesteps = curr_timesteps
+
             if self.use_policy_clone:
-                self.update_pc(epoch)
+                self.update_pc(self.epoch)
             if self.using_hrl:
-                curr_timesteps = self.learning_agent.num_timesteps #np.sum(self.env.env_method('get_base_env_timesteps'))
                 failure_dicts = self.env.env_method('get_worker_failures')
                 tot_failure_dict = {ln: {k: 0 for k in failure_dicts[0][1].keys()} for ln in self.args.layout_names}
                 for ln, fd in failure_dicts:
                     for k in tot_failure_dict[ln]:
                         tot_failure_dict[ln][k] += fd[k]
                 for ln in self.args.layout_names:
-                    wandb.log({f'num_worker_failures_{ln}': sum(tot_failure_dict[ln].values()), 'timestep': curr_timesteps})
+                    wandb.log({f'num_worker_failures_{ln}': sum(tot_failure_dict[ln].values()), 'timestep': self.learning_agent.num_timesteps})
                     print(f'Number of worker failures on {ln}: {tot_failure_dict[ln]}')
-            else:
-                curr_timesteps = self.learning_agent.num_timesteps
 
             # Evaluate
             mean_training_rew = np.mean([ep_info["r"] for ep_info in self.learning_agent.agent.ep_info_buffer])
-            best_training_rew *= 0.98
-            if (epoch + 1) % 5 == 0 or (mean_training_rew > best_training_rew and curr_timesteps > 5e6) or \
-                (self.fcp_ck_rate and curr_timesteps // self.fcp_ck_rate > (len(self.ck_list) - 1)):
-                if mean_training_rew >= best_training_rew:
-                    best_training_rew = mean_training_rew
+            self.best_training_rew *= 0.98
+            if (self.epoch + 1) % 5 == 0 or (mean_training_rew > self.best_training_rew and self.learning_agent.num_timesteps >= 1e6) or \
+                (self.fcp_ck_rate and self.learning_agent.num_timesteps // self.fcp_ck_rate > (len(self.ck_list) - 1)):
+                if mean_training_rew >= self.best_training_rew:
+                    self.best_training_rew = mean_training_rew
 
                 if self.use_subtask_eval:
                     env_success = []
@@ -146,26 +152,26 @@ class RLAgentTrainer(OAITrainer):
                             tot_failures += num_failures
                             env_success.append(fully_successful)
                     wandb.log({f'num_tm_layout_successes': np.sum(env_success), 'total_failures': tot_failures,
-                               'timestep': curr_timesteps})
-                    if tot_failures <= fewest_failures:
+                               'timestep': self.learning_agent.num_timesteps})
+                    if tot_failures <= self.fewest_failures:
                         best_path, best_tag = self.save_agents(tag='best')
-                        fewest_failures = tot_failures
-                        print(f'New fewest failures of {fewest_failures} reached, model saved to {best_path}/{best_tag}')
+                        self.fewest_failures = tot_failures
+                        print(f'New fewest failures of {self.fewest_failures} reached, model saved to {best_path}/{best_tag}')
                     if all(env_success):
                         break
                 else:
-                    mean_reward, rew_per_layout = self.evaluate(self.learning_agent, timestep=curr_timesteps)
+                    mean_reward, rew_per_layout = self.evaluate(self.learning_agent, timestep=self.learning_agent.num_timesteps)
                     # FCP pop checkpointing
                     if self.fcp_ck_rate:
-                        if curr_timesteps // self.fcp_ck_rate > (len(self.ck_list) - 1):
+                        if self.learning_agent.num_timesteps // self.fcp_ck_rate > (len(self.ck_list) - 1):
                             path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
                             self.ck_list.append((rew_per_layout, path, tag))
                     # Save best model
-                    if mean_reward >= best_score:
+                    if mean_reward >= self.best_score:
                         best_path, best_tag = self.save_agents(tag='best')
                         print(f'New best score of {mean_reward} reached, model saved to {best_path}/{best_tag}')
-                        best_score = mean_reward
-            epoch += 1
+                        self.best_score = mean_reward
+            self.epoch += 1
         self.save_agents()
         self.agents = RLAgentTrainer.load_agents(self.args, self.name, best_path, best_tag)
         run.finish()
@@ -175,12 +181,12 @@ class RLAgentTrainer(OAITrainer):
             raise ValueError('Must have at least 3 checkpoints saved. Increase fcp_ck_rate or training length')
         agents = []
         # Best agent for this layout
-        best_score = -1
+        self.best_score = -1
         best_path, best_tag = None, None
         for scores, path, tag in self.ck_list:
             score = scores[layout_name]
-            if score > best_score:
-                best_score = score
+            if score > self.best_score:
+                self.best_score = score
                 best_path, best_tag = path, tag
         best = RLAgentTrainer.load_agents(self.args, path=best_path, tag=best_tag)
         agents.extend(best)
@@ -195,7 +201,7 @@ class RLAgentTrainer(OAITrainer):
         mid_path, mid_tag = None, None
         for i, (scores, path, tag) in enumerate(self.ck_list):
             score = scores[layout_name]
-            if abs((best_score / 2) - score) < closest_to_mid_score:
+            if abs((self.best_score / 2) - score) < closest_to_mid_score:
                 closest_to_mid_score = score
                 mid_path, mid_tag = path, tag
         mid = RLAgentTrainer.load_agents(self.args, path=mid_path, tag=mid_tag)
