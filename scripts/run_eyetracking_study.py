@@ -24,7 +24,7 @@ ROOT.title("Survey")
 ROOT.resizable(False, False)  # This code helps to disable windows from resizing
 ROOT.eval('tk::PlaceWindow . center')
 
-info_stream = StreamInfo(name="GameData", type="GameData", channel_count=1,
+info_stream = StreamInfo(name="GameData", type="Markers", channel_count=1,
                          channel_format='string', source_id='game')
 outlet = StreamOutlet(info_stream)
 
