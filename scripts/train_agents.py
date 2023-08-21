@@ -201,17 +201,19 @@ def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_i
                                     use_subtask_eval=True)
     # Create manager and manager env
     manager_trainer = RLManagerTrainer(worker_trainer.learning_agent, teammates[1], args, use_subtask_counts=False,
-                                       name=name + '_trainer', inc_sp=False, use_policy_clone=False, seed=2602)
-
-    worker_env.env_method('set_manager', manager_trainer.learning_agent)
+                                       name=name + '_manager', inc_sp=False, use_policy_clone=False, seed=2602)
 
     # Iteratively train worker and manager
     training_steps_per_agent_per_iter = training_steps // (num_iterations * 2)
     for i in range(num_iterations):
+        if i == 1:
+            worker_env.env_method('set_manager', manager_trainer.learning_agent)
+            for we in worker_eval_envs:
+                we.set_manager(manager_trainer.learning_agent)
         print(f'training worker for {training_steps_per_agent_per_iter}, iter{i}')
         worker_trainer.train_agents(training_steps_per_agent_per_iter)
         print(f'training manager for {training_steps_per_agent_per_iter}, iter{i}')
-        manager_trainer.train_agents((training_steps_per_agent_per_iter))
+        manager_trainer.train_agents(training_steps_per_agent_per_iter)
 
     hrl = HierarchicalRL(worker_trainer.learning_agent, manager_trainer.learning_agent, args, name=name)
     hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))
