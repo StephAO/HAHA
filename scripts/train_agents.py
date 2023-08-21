@@ -87,13 +87,13 @@ def get_selfplay_agent(args, training_steps=1e7, tag=None):
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
         selfplay_trainer = RLAgentTrainer([], args, selfplay=True, name=name, seed=678, use_frame_stack=False,
                                           use_lstm=False, use_cnn=False)
-        selfplay_trainer.train_agents(total_timesteps=training_steps)
+        selfplay_trainer.train_agents(train_timesteps=training_steps)
         agents = selfplay_trainer.get_agents()
     return agents
 
 
 # BC and Human Proxy
-def get_bc_and_human_proxy(args, epochs=500):
+def get_bc_and_human_proxy(args, epochs=300):
     bcs, human_proxies = {}, {}
     # This is required because loading agents will overwrite args.layout_names
     all_layouts = deepcopy(args.layout_names)
@@ -102,7 +102,6 @@ def get_bc_and_human_proxy(args, epochs=500):
             bc, human_proxy = BehavioralCloningTrainer.load_bc_and_human_proxy(args, name=f'bc_{layout_name}')
         except FileNotFoundError as e:
             print(f'Could not find saved BC and human proxy, creating them from scratch...\nFull Error: {e}')
-            exit(0)
             bct = BehavioralCloningTrainer(args.dataset, args, name=f'bc_{layout_name}', layout_names=[layout_name])
             bct.train_agents(epochs=epochs)
             bc, human_proxy = bct.get_agents()
@@ -122,7 +121,7 @@ def get_behavioral_cloning_play_agent(args, training_steps=1e7):
         print(f'Could not find saved BCP, creating them from scratch...\nFull Error: {e}')
         teammates, _ = get_bc_and_human_proxy(args)
         self_play_trainer = RLAgentTrainer(teammates, args, name=name)
-        self_play_trainer.train_agents(total_timesteps=training_steps)
+        self_play_trainer.train_agents(train_timesteps=training_steps)
         bcp = self_play_trainer.get_agents()
     return bcp
 
@@ -153,7 +152,7 @@ def get_fcp_population(args, training_steps=2e7):
                 print(f'Starting training for: {name}')
                 rlat = RLAgentTrainer([], args, selfplay=True, name=name, hidden_dim=h_dim, use_frame_stack=use_fs,
                                       fcp_ck_rate=ck_rate, seed=seed, num_layers=num_layers)
-                rlat.train_agents(total_timesteps=training_steps)
+                rlat.train_agents(train_timesteps=training_steps)
 
                 for layout_name in args.layout_names:
                     agents = rlat.get_fcp_agents(layout_name)
@@ -170,11 +169,11 @@ def get_fcp_agent(args, training_steps=1e7):
     teammates = get_fcp_population(args, training_steps)
     fcp_trainer = RLAgentTrainer(teammates, args, name='fcp', use_subtask_counts=False, use_policy_clone=False,
                                  seed=2602)
-    fcp_trainer.train_agents(total_timesteps=training_steps)
+    fcp_trainer.train_agents(train_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 
 
-def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_iterations=10):
+def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_iterations=1):
     """
     teammates args is a tuple of length 2, where each value can be either bcp of fcp. The first value indicates the
     teammates to use for the worker, the second the teammates to use for the manager
@@ -208,6 +207,11 @@ def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_i
     # Iteratively train worker and manager
     training_steps_per_agent_per_iter = training_steps // (num_iterations * 2)
     for i in range(num_iterations):
+        # import cProfile
+        # from timeit import timeit
+        # print(timeit(lambda: worker_trainer.train_agents(training_steps_per_agent_per_iter), number=1))
+        # cProfile.runctx('worker_trainer.train_agents(training_steps_per_agent_per_iter)', None, locals(), sort='cumtime')
+
         print(f'training worker for {training_steps_per_agent_per_iter}, iter{i}')
         worker_trainer.train_agents(training_steps_per_agent_per_iter)
         print(f'training manager for {training_steps_per_agent_per_iter}, iter{i}')

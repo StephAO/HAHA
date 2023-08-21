@@ -202,7 +202,7 @@ class BehavioralCloningTrainer(OAITrainer):
                 self.eval_teammates = [self.agents[i]]
                 if best_loss < train_loss or epoch % 10 == 0:
                     best_loss = train_loss
-                    mean_sp_reward, _ = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=10, timestep=epoch, deterministic=False)
+                    mean_sp_reward, _ = self.evaluate(self.agents[i], num_eps_per_layout_per_tm=5, timestep=epoch, deterministic=False)
                     wandb.log({f'train_loss_{i}': train_loss, 'timestep': epoch})
                     if mean_sp_reward > best_rew[i]:
                         print(f'Saving new best BC model for agent {i} on epoch {epoch} with reward {mean_sp_reward}')

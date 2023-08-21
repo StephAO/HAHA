@@ -23,10 +23,10 @@ def OAI_feats_closure():
             }
             mlams[mdp.layout_name] = MediumLevelActionManager.from_pickle_or_compute(mdp, COUNTERS_PARAMS, force_compute=False)
         mlam = mlams[mdp.layout_name]
-        agent_obs = mdp.featurize_state(state, mlam, num_pots=num_pots)
-        if p_idx is not None:
-            agent_obs = agent_obs[p_idx]
-        else:
+        agent_obs = mdp.featurize_state(state, mlam, num_pots=num_pots, p_idx=p_idx)
+        if p_idx is None:
+        #     agent_obs = agent_obs[p_idx]
+        # else:
             agent_obs = np.stack(agent_obs, axis=0)
         return {'agent_obs': agent_obs}
     return OAI_get_feats
@@ -39,7 +39,7 @@ def OAI_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shap
     """
     Uses Overcooked-ai's RL lossless encoding by stacking 27 binary masks (27xNxM). Only returns visual_obs.
     """
-    visual_obs = mdp.lossless_state_encoding(state, horizon=horizon, goal_objects=goal_objects)
+    visual_obs = mdp.lossless_state_encoding(state, horizon=horizon, goal_objects=goal_objects, p_idx=p_idx)
     visual_obs = np.stack(visual_obs, axis=0)
     # Reorder to channels first
     visual_obs = np.transpose(visual_obs, (0, 3, 1, 2))
@@ -48,8 +48,8 @@ def OAI_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shap
     assert all([visual_obs.shape[i] <= grid_shape[i] for i in range(len(visual_obs.shape))])
     padding_amount = [(0, grid_shape[i] - visual_obs.shape[i]) for i in range(len(grid_shape))]
     visual_obs = np.pad(visual_obs, padding_amount)
-    if p_idx is not None:
-        visual_obs = visual_obs[p_idx]
+    # if p_idx is not None:
+    #     visual_obs = visual_obs[p_idx]
     return {'visual_obs': visual_obs}
 
 
@@ -63,10 +63,15 @@ def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState
         raise ValueError(f'Ego grid shape must be 2D and both dimensions must be odd! {grid_shape} is invalid.')
 
     # Get np.array representing current state
-    visual_obs = mdp.lossless_state_encoding(state, horizon=horizon, goal_objects=goal_objects)  # This returns 2xNxMxF (F is # features)
-    visual_obs = np.stack(visual_obs, axis=0)
-    visual_obs = np.transpose(visual_obs, (0, 3, 1, 2))  # Reorder to features first --> 2xFxNxM
-    num_players, num_features = visual_obs.shape[0], visual_obs.shape[1]
+    # This returns 2xNxMxF (F is # features) if p_idx is None else NxMxF
+    visual_obs = mdp.lossless_state_encoding(state, horizon=horizon, goal_objects=goal_objects, p_idx=p_idx)
+    if p_idx is None:
+        visual_obs = np.stack(visual_obs, axis=0)
+        visual_obs = np.transpose(visual_obs, (0, 3, 1, 2))  # Reorder to features first --> 2xFxNxM
+        num_players, num_features = visual_obs.shape[0], visual_obs.shape[1]
+    else:
+        visual_obs = np.transpose(visual_obs, (2, 0, 1))
+        num_features = visual_obs.shape[0]
 
     # Remove orientation features since they are now irrelevant.
     # There are num_players * num_directions features.
@@ -77,11 +82,11 @@ def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState
     #num_features = num_features - num_layers_to_skip
 
     # Now we mask out the egocentric view
-    assert len(state.players) == num_players
     if p_idx is not None:
-        ego_visual_obs = get_egocentric_grid(visual_obs[p_idx], grid_shape, state.players[p_idx])
+        ego_visual_obs = get_egocentric_grid(visual_obs, grid_shape, state.players[p_idx])
         assert ego_visual_obs.shape == (num_features, *grid_shape)
     else:
+        assert len(state.players) == num_players
         ego_visual_obs = np.stack([get_egocentric_grid(visual_obs[idx], grid_shape, player)
                                    for idx, player in enumerate(state.players)])
         assert ego_visual_obs.shape == (num_players, num_features, *grid_shape)

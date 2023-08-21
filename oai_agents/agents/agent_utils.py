@@ -17,7 +17,7 @@ def load_agent(agent_path, args=None):
 
 def is_held_obj(player, object):
     '''Returns True if the object that the "player" picked up / put down is the same as the "object"'''
-    x, y = np.array(player.position) + np.array(player.orientation)
+    x, y = player.position[0] + player.orientation[0], player.position[1] + player.orientation[1]
     return player.held_object is not None and \
            ((object.name == player.held_object.name) or
             (object.name == 'soup' and player.held_object.name == 'onion'))\

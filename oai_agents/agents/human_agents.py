@@ -15,25 +15,21 @@ class HumanManagerHRL(OAIAgent):
         self.prev_pcs = None
 
     def get_distribution(self, obs, sample=True):
-        if obs['player_completed_subtasks'] is not None:
-            # Completed previous subtask, set new subtask
-            print(f'GOAL: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id]}, DONE: {obs["player_completed_subtasks"]}')
-            next_st = input("Enter next subtask (0-10): ")
-            self.curr_subtask_id = int(next_st)
+        # Completed previous subtask, set new subtask
+        next_st = input("Enter next subtask (0-10): ")
+        self.curr_subtask_id = int(next_st)
         obs['curr_subtask'] = self.curr_subtask_id
         return self.worker.get_distribution(obs, sample=sample)
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool = False):
-        print(obs['player_completed_subtasks'])
-        if np.sum(obs['player_completed_subtasks']) == 1 or self.curr_subtask_id == 11:
-            comp_st = np.argmax(obs["player_completed_subtasks"], axis=0)
-            print(f'GOAL: {Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id]}, DONE: {Subtasks.IDS_TO_SUBTASKS[comp_st]}')
+        if Action.INDEX_TO_ACTION[int(self.action_id.squeeze())] == Action.INTERACT or self.curr_subtask_id == 11:
             doable_st = [Subtasks.IDS_TO_SUBTASKS[idx] for idx, doable in enumerate(obs['subtask_mask']) if doable == 1]
             print('DOABLE SUBTASKS:', [(dst, Subtasks.SUBTASKS_TO_IDS[dst]) for dst in doable_st])
             next_st = input("Enter next subtask (0-10): ")
             self.curr_subtask_id = int(next_st)
         worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
-        return self.worker.predict(worker_obs, state=state, episode_start=episode_start, deterministic=True)
+        self.action_id, _ = self.worker.predict(worker_obs, state=state, episode_start=episode_start, deterministic=True)
+        return self.action_id, None
 
 
 class HumanPlayer(OAIAgent):

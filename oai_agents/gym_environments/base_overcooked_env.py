@@ -15,6 +15,7 @@ from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env.stacked_observations import StackedObservations
+import torch as th
 
 # DEPRECATED NOTE: For counter circuit, trained workers with 8, but trained manager with 4. Only 4 spots are useful add
 # more during subtask worker training for robustness
@@ -64,8 +65,6 @@ class OvercookedGymEnv(Env):
             self.obs_dict['visual_obs'] = self.stackedobs[0].stack_observation_space(self.obs_dict['visual_obs'])
 
         if ret_completed_subtasks:
-            self.obs_dict['player_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=int)
-            self.obs_dict['teammate_completed_subtasks'] = spaces.Box(-1, 100, (Subtasks.NUM_SUBTASKS,), dtype=int)
             self.obs_dict['subtask_mask'] = spaces.MultiBinary(Subtasks.NUM_SUBTASKS)
         # self.obs_dict['layout_idx'] = spaces.MultiBinary(5)
         # self.obs_dict['p_idx'] = spaces.MultiBinary(2)
@@ -124,8 +123,8 @@ class OvercookedGymEnv(Env):
         self.terrain = self.mdp.terrain_mtx
         self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]
         self.env.reset()
-        self.valid_counters = [self.env.mdp.find_free_counters_valid_for_player(self.env.state, self.mlam, i) for i in
-                               range(2)]
+        self.valid_counters = []#self.env.mdp.find_free_counters_valid_for_player(self.env.state, self.mlam, i) for i in
+                               # range(2)]
         self.reset()
 
     # def get_overcooked_from_mdp_kwargs(self, horizon=None):
@@ -177,25 +176,13 @@ class OvercookedGymEnv(Env):
                 obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
             obs['visual_obs'] = obs['visual_obs'].squeeze()
         if (self.return_completed_subtasks or
-                (self.teammate is not None and p_idx == self.t_idx and
-                 'player_completed_subtasks' in self.teammate.policy.observation_space.keys())):
-            # If this isn't the first step of the game, see if a subtask has been completed
-            if self.prev_state is not None:
-                comp_st = calculate_completed_subtask(self.terrain, self.prev_state, self.state, p_idx)
-                # Keep track of subtasks that have been completed
-                if comp_st is not None:
-                    self.completed_tasks[p_idx] = np.eye(Subtasks.NUM_SUBTASKS)[comp_st]
-                    self.prev_subtask[p_idx] = comp_st
-                else:
-                    self.completed_tasks[p_idx] = np.zeros(Subtasks.NUM_SUBTASKS)
-                    self.prev_subtask[p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
-            obs['player_completed_subtasks'] = self.completed_tasks[p_idx]
-            obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
+                (self.teammate is not None and p_idx == self.t_idx and 'subtask_mask' in self.teammate.policy.observation_space.keys())):
             obs['subtask_mask'] = self.action_masks(p_idx)
+
         if p_idx == self.t_idx and self.teammate is not None:
             obs = {k: v for k, v in obs.items() if k in self.teammate.policy.observation_space.keys()}
-        else:
-            obs = {k: v for k, v in obs.items() if k in self.observation_space.keys()}
+        # else:
+        #     obs = {k: v for k, v in obs.items() if k in self.observation_space.keys()}
         return obs
 
     def step(self, action):
@@ -205,25 +192,23 @@ class OvercookedGymEnv(Env):
         joint_action = [None, None]
         joint_action[self.p_idx] = action
         tm_obs = self.get_obs(p_idx=self.t_idx, enc_fn=self.teammate.encoding_fn)
-        joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=False)[0]
+        with th.no_grad():
+            joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=False)[0]
         joint_action = [Action.INDEX_TO_ACTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
         self.joint_action = joint_action
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
-        # if self.prev_state:
-        #     print(tuple(joint_action), self.prev_actions)
-        #     print(self.state.time_independent_equal(self.prev_state), tuple(joint_action) == tuple(self.prev_actions))
-        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(
-                self.prev_actions):
-            joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
-                            np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
-            joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
+        if self.is_eval_env:
+            if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(
+                    self.prev_actions):
+                joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
+                                np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
+                joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
 
-        self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
+            self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
 
-        next_state, reward, done, info = self.env.step(joint_action)
-        self.state = self.env.state
+        self.state, reward, done, info = self.env.step(joint_action)
         if self.shape_rewards and not self.is_eval_env:
             ratio = min(self.step_count * self.args.n_envs / 1e7, 1)
             sparse_r = sum(info['sparse_r_by_agent'])

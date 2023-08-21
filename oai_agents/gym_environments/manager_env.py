@@ -43,7 +43,8 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         # while (not ready_for_next_subtask and not done):
         if self.curr_subtask != 11: # unknown subtask, just noop
             obs = {k: v for k, v in self.get_obs(self.p_idx, for_worker=True).items() if k in self.worker.policy.observation_space.keys()}
-            joint_action[self.p_idx] = Action.INDEX_TO_ACTION[self.worker.predict(obs, deterministic=False)[0]]
+            with th.no_grad():
+                joint_action[self.p_idx] = Action.INDEX_TO_ACTION[self.worker.predict(obs, deterministic=False)[0]]
         else:
             # Keep no-op action
             self.prev_subtask[self.p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
@@ -51,23 +52,29 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
 
         tm_obs = self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
             # if self.teammate.use_hrl_obs else self.get_low_level_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
-        joint_action[self.t_idx] = Action.INDEX_TO_ACTION[self.teammate.predict(tm_obs, deterministic=False)[0]] # self.is_eval_env
+        with th.no_grad():
+            joint_action[self.t_idx] = Action.INDEX_TO_ACTION[self.teammate.predict(tm_obs, deterministic=False)[0]] # self.is_eval_env
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
-        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(self.prev_actions):
-            joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
-                            np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
-            joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
+        if self.is_eval_env:
+            if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(self.prev_actions):
+                joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
+                                np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
+                joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
 
-        self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
-        next_state, r, done, info = self.env.step(joint_action)
+            self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
+
+        tile_in_front = facing(self.mdp.terrain_mtx, self.env.state.players[self.p_idx])
+        prev_obj = self.state.players[self.p_idx].held_object.name if self.state.players[self.p_idx].held_object else None
+
+        self.state, r, done, info = self.env.step(joint_action)
         reward += r
-        self.state = deepcopy(next_state)
         self.step_count += 1
 
         if joint_action[self.p_idx] == Action.INTERACT:
-            completed_subtask = calculate_completed_subtask(self.terrain, self.prev_state, self.state, self.p_idx)
+            curr_obj = self.state.players[self.p_idx].held_object.name if self.state.players[self.p_idx].held_object else None
+            completed_subtask = calculate_completed_subtask(prev_obj, curr_obj, tile_in_front)
             if completed_subtask != self.curr_subtask:
                 self.worker_failures[self.curr_subtask] += 1
                 self.failures_in_a_row += 1

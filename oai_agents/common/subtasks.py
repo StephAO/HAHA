@@ -26,12 +26,12 @@ class Subtasks:
 
 def facing(layout, player):
     '''Returns terrain type that the agent is facing'''
-    x, y = np.array(player.position) + np.array(player.orientation)
+    x, y = player.position[0] + player.orientation[0], player.position[1] + player.orientation[1]
     if type(layout) == str:
         layout = [[t for t in row.strip("[]'")] for row in layout.split("', '")]
     return layout[y][x]
 
-def calculate_completed_subtask(layout, prev_state, curr_state, p_idx):
+def calculate_completed_subtask(prev_obj, curr_obj, tile_in_front):
     '''
     Find out which subtask has been completed between prev_state and curr_state for player with index p_idx
     :param layout: layout of the env
@@ -40,9 +40,6 @@ def calculate_completed_subtask(layout, prev_state, curr_state, p_idx):
     :param p_idx: player index
     :return: Completed subtask ID, or None if no subtask was completed
     '''
-    prev_obj = prev_state.players[p_idx].held_object.name if prev_state.players[p_idx].held_object else None
-    curr_obj = curr_state.players[p_idx].held_object.name if curr_state.players[p_idx].held_object else None
-    tile_in_front = facing(layout, prev_state.players[p_idx])
     # Object held didn't change -- This interaction didn't actually transition to a new subtask
     if prev_obj == curr_obj:
         subtask = None

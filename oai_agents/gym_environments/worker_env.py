@@ -1,5 +1,5 @@
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv, USEABLE_COUNTERS
-from oai_agents.common.subtasks import Subtasks, get_doable_subtasks, calculate_completed_subtask
+from oai_agents.common.subtasks import Subtasks, get_doable_subtasks, calculate_completed_subtask, facing
 
 from overcooked_ai_py.planning.planners import MediumLevelActionManager
 from overcooked_ai_py.mdp.overcooked_mdp import OvercookedGridworld
@@ -9,6 +9,7 @@ from copy import deepcopy
 from gym import spaces
 import numpy as np
 from overcooked_ai_py.mdp.overcooked_mdp import Action, Direction
+import torch as th
 import wandb
 
 
@@ -27,8 +28,8 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
     def set_manager(self, manager):
         self.manager = manager
 
-    def get_overcooked_from_mdp_kwargs(self, horizon=None):
-        return {'start_state_fn': self.mdp.get_subtask_start_state_fn(self.mlam), 'horizon': 100}
+    # def get_overcooked_from_mdp_kwargs(self, horizon=None):
+    #     return {'start_state_fn': self.mdp.get_subtask_start_state_fn(self.mlam), 'horizon': 100}
 
     def get_obs(self, p_idx, for_manager=False, **kwargs):
         go = self.goal_objects if (p_idx == self.p_idx and not for_manager) else None
@@ -39,10 +40,10 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         # Calculate bonus reward for putting an object down on the pass.
         # Reward should be proportional to how much time is saved by using the pass
         smallest_dist = float('inf')
-        object_location = np.array(self.state.players[self.p_idx].position) + np.array(
-            self.state.players[self.p_idx].orientation)
-        for direction in [np.array([0, 1]), np.array([0, -1]), np.array([1, 0]), np.array([-1, 0])]:
-            adj_tile = tuple(np.array(object_location) + direction)
+        object_location = (self.state.players[self.p_idx].position[0] + self.state.players[self.p_idx].orientation[0],
+                           self.state.players[self.p_idx].position[1] + self.state.players[self.p_idx].orientation[1])
+        for direction in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            adj_tile = (object_location[0] + direction[0], object_location[1] + direction[1])
             # Can't pick up from a terrain location that is not walkable
             if adj_tile not in self.mdp.get_valid_player_positions():
                 continue
@@ -73,9 +74,10 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         # Reward should be proportional to how much time is saved by using the pass
         largest_dist = 0
         agent_dir = self.state.players[self.p_idx].orientation
-        object_location = np.array(self.state.players[self.p_idx].position) + np.array(agent_dir)
-        for direction in [np.array([0, 1]), np.array([0, -1]), np.array([1, 0]), np.array([-1, 0])]:
-            adj_tile = tuple(np.array(object_location) + direction)
+        object_location = (self.state.players[self.p_idx].position[0] + agent_dir[0],
+                           self.state.players[self.p_idx].position[1] + agent_dir[1])
+        for direction in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            adj_tile = (object_location[0] + direction[0], object_location[1] + direction[1])
             # Can't pick up from a terrain location that is not walkable
             if adj_tile not in self.mdp.get_valid_player_positions():
                 continue
@@ -99,7 +101,8 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         in the fuller pot to complete soups faster)
         Assumes 2 pots
         """
-        chosen_pot_loc = np.array(state.players[self.p_idx].position) + np.array(state.players[self.p_idx].orientation)
+        chosen_pot_loc = (state.players[self.p_idx].position[0] + state.players[self.p_idx].orientation[0],
+                          state.players[self.p_idx].position[1] + state.players[self.p_idx].orientation[1])
         chosen_pot_num_onions, other_pot_num_onions = 0, 0
         for obj in state.objects.values():
             x, y = obj.position
@@ -121,25 +124,33 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             raise ValueError('set_teammate must be set called before starting game.')
         joint_action = [None, None]
         joint_action[self.p_idx] = action
-        joint_action[self.t_idx] = self.teammate.predict(self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn))[0]
-        joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
+        with th.no_grad():
+            joint_action[self.t_idx] = self.teammate.predict(self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn))[0]
+            joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
-        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(self.prev_actions):
-            joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
-                            np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
-            joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
+        if self.is_eval_env:
+            if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(self.prev_actions):
+                joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
+                                np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
+                joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
 
-        self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
-        next_state, _, self.requires_hard_reset, info = self.env.step(joint_action)
-        self.state = deepcopy(next_state)
+            self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
+
+        tile_in_front = facing(self.mdp.terrain_mtx, self.env.state.players[self.p_idx])
+        prev_obj = self.state.players[self.p_idx].held_object.name if self.state.players[self.p_idx].held_object else None
+
+        self.state, _, self.requires_hard_reset, info = self.env.step(joint_action)
+        # self.state = deepcopy(next_state)
         self.curr_timestep += 1
         done = self.curr_timestep >= 50 or self.requires_hard_reset
 
         reward = -0.01  # existence penalty
         if joint_action[self.p_idx] == Action.INTERACT:
-            completed_task = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx)
+            curr_obj = self.state.players[self.p_idx].held_object.name if self.state.players[self.p_idx].held_object else None
+
+            completed_task = calculate_completed_subtask(prev_obj, curr_obj, tile_in_front)
             done = True
             reward = 1 if completed_task == self.goal_subtask_id else -1
             if reward == 1:
@@ -208,8 +219,6 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         if self.manager is not None:
             man_obs = self.get_obs(self.p_idx, for_manager=True)
             man_obs['subtask_mask'] = doable_subtasks
-            man_obs['player_completed_subtasks'] = np.zeros(Subtasks.NUM_SUBTASKS)
-            man_obs['teammate_completed_subtasks'] = np.zeros(Subtasks.NUM_SUBTASKS)
             self.goal_subtask_id = int(self.manager.predict(man_obs, deterministic=False)[0].squeeze())
         else:
             self.goal_subtask_id = np.random.choice(np.nonzero(doable_subtasks)[0])

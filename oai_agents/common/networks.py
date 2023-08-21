@@ -45,13 +45,13 @@ class MLP(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim=256, num_layers=2, act=nn.ReLU):
         super(MLP, self).__init__()
         if num_layers > 1:
-            layers = [spectral_norm(nn.Linear(input_dim, hidden_dim)), act()]
+            layers = [nn.Linear(input_dim, hidden_dim), act()]# spectral_norm()
         else:
             layers = [nn.Linear(input_dim, output_dim), act()]
         for _ in range(num_layers - 2):
-            layers += [spectral_norm(nn.Linear(hidden_dim, hidden_dim)), act()]
+            layers += [nn.Linear(hidden_dim, hidden_dim), act()]# spectral_norm()
         if num_layers > 1:
-            layers += [spectral_norm(nn.Linear(hidden_dim, output_dim)), act()]
+            layers += [nn.Linear(hidden_dim, output_dim), act()] # spectral_norm()
         self.mlp = nn.Sequential(*layers)
 
     def forward(self, obs):
@@ -68,8 +68,6 @@ class OAISinglePlayerFeatureExtractor(BaseFeaturesExtractor):
         super(OAISinglePlayerFeatureExtractor, self).__init__(observation_space, hidden_dim)
         self.use_visual_obs = 'visual_obs' in observation_space.keys()
         self.use_vector_obs = 'agent_obs' in observation_space.keys()
-        self.use_pl_comp_st = 'player_completed_subtasks' in observation_space.keys()
-        self.use_tm_comp_st = 'teammate_completed_subtasks' in observation_space.keys()
         input_dim = 0
         if self.use_visual_obs:
             self.vis_encoder = GridEncoder(observation_space['visual_obs'].shape)
@@ -77,10 +75,6 @@ class OAISinglePlayerFeatureExtractor(BaseFeaturesExtractor):
             input_dim += get_output_shape(self.vis_encoder, test_shape)[0]
         if self.use_vector_obs:
             input_dim += np.prod(observation_space['agent_obs'].shape)
-        #if self.use_pl_comp_st:
-        #    input_dim += np.prod(observation_space['player_completed_subtasks'].shape)
-        if self.use_tm_comp_st:
-            input_dim += np.prod(observation_space['teammate_completed_subtasks'].shape)
 
         # Define MLP for vector/feature based observations
         self.vector_encoder = MLP(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=hidden_dim, num_layers=1)
@@ -94,9 +88,5 @@ class OAISinglePlayerFeatureExtractor(BaseFeaturesExtractor):
             latent_state.append(self.vis_encoder.forward(observations['visual_obs']))
         if self.use_vector_obs:
             latent_state.append(th.flatten(observations['agent_obs'], start_dim=1))
-        #if self.use_pl_comp_st:
-        #    latent_state.append(th.flatten(observations['player_completed_subtasks'], start_dim=1))
-        if self.use_tm_comp_st:
-            latent_state.append(th.flatten(observations['teammate_completed_subtasks'], start_dim=1))
 
         return self.vector_encoder.forward(th.cat(latent_state, dim=-1))
