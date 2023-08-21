@@ -48,7 +48,8 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         else:
             # Keep no-op action
             self.prev_subtask[self.p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
-            reward -= 0.01
+            if not self.is_eval_env: 
+                reward -= 0.1
 
         tm_obs = self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
             # if self.teammate.use_hrl_obs else self.get_low_level_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)

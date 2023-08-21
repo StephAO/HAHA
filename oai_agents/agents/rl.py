@@ -110,15 +110,15 @@ class RLAgentTrainer(OAITrainer):
             path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
             self.ck_list.append(({k: 0 for k in self.args.layout_names}, path, tag))
         best_path, best_tag = None, None
+        self.fewest_failures = float('inf')
 
         curr_timesteps = 0
         prev_timesteps = self.learning_agent.num_timesteps
         while curr_timesteps < train_timesteps:
-            print(curr_timesteps, self.learning_agent.num_timesteps)
             self.set_new_teammates()
             self.learning_agent.learn(total_timesteps=self.epoch_timesteps)
             curr_timesteps += (self.learning_agent.num_timesteps - prev_timesteps)
-            prev_timesteps = curr_timesteps
+            prev_timesteps = self.learning_agent.num_timesteps
 
             if self.use_policy_clone:
                 self.update_pc(self.epoch)

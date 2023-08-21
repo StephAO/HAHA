@@ -27,6 +27,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
     def set_manager(self, manager):
         self.manager = manager
+        print(f'Manager set to: {self.manager}')
 
     # def get_overcooked_from_mdp_kwargs(self, horizon=None):
     #     return {'start_state_fn': self.mdp.get_subtask_start_state_fn(self.mlam), 'horizon': 100}
@@ -119,6 +120,14 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         pot_states = self.mdp.get_pot_states(state)
         return pot_states['empty'] + pot_states['1_items'] + pot_states['2_items']
 
+    def base_step(self):
+        joint_action = [None, None]
+        joint_action[self.p_idx] = Action.STAY
+        with th.no_grad():
+            joint_action[self.t_idx] = self.teammate.predict(self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn))[0]
+            joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
+        self.state, _, self.requires_hard_reset, info = self.env.step(joint_action)
+
     def step(self, action):
         if self.teammate is None:
             raise ValueError('set_teammate must be set called before starting game.')
@@ -144,7 +153,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         self.state, _, self.requires_hard_reset, info = self.env.step(joint_action)
         # self.state = deepcopy(next_state)
         self.curr_timestep += 1
-        done = self.curr_timestep >= 50 or self.requires_hard_reset
+        done = self.curr_timestep >= 50 or self.requires_hard_reset or self.goal_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']
 
         reward = -0.01  # existence penalty
         if joint_action[self.p_idx] == Action.INTERACT:
@@ -179,38 +188,42 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self, p_idx=None):
-        if p_idx is not None:
-            self.p_idx = p_idx
-        elif self.reset_p_idx is not None:
-            self.p_idx = self.reset_p_idx
-        else:
-            self.p_idx = np.random.randint(2)
-        self.t_idx = 1 - self.p_idx
-
-        if self.state is None or self.requires_hard_reset or self.curr_timestep:
+        if self.state is None or self.requires_hard_reset or self.curr_timestep >= self.args.horizon:
             self.requires_hard_reset = True
         else:
             doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
-            # If no non-unknown subtasks is doable, then try other player
-            if len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
-                self.p_idx, self.t_idx = self.t_idx, self.p_idx
-                doable_subtasks = get_doable_subtasks(self.state,'unknown', self.layout_name, self.terrain,
-                                                      self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
-            # Requires full reset if over total time limit or only available subtask is unknown for both players
-            self.requires_hard_reset = len(np.nonzero(doable_subtasks[:-1])[0]) == 0
+            while len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
+                for _ in range(3):
+                    self.base_step()
+                doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
+                                                      self.p_idx, self.valid_counters,
+                                                      USEABLE_COUNTERS.get(self.layout_name, 5))
 
         if self.requires_hard_reset:
+            if p_idx is not None:
+                self.p_idx = p_idx
+            elif self.reset_p_idx is not None:
+                self.p_idx = self.reset_p_idx
+            else:
+                self.p_idx = np.random.randint(2)
+            self.t_idx = 1 - self.p_idx
+             
             self.env.reset()
             self.state = self.env.state
             self.prev_state = None
 
             doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
                                                   self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
-            # If no non-unknown subtasks is doable, then try other player -- mainly required for forced coordination
-            if len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
-                self.p_idx, self.t_idx = self.t_idx, self.p_idx
+            # If no non-unknown subtasks is doable, then do 3 env steps and retry
+            while len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
+                for _ in range(3):
+                    self.base_step()
                 doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
-                                                      self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
+                                                      self.p_idx, self.valid_counters,
+                                                      USEABLE_COUNTERS.get(self.layout_name, 5))
+            #    self.p_idx, self.t_idx = self.t_idx, self.p_idx
+            #    doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
+            #                                          self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
             self.requires_hard_reset = False
 
         self.curr_timestep = 0
@@ -250,6 +263,10 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 obs, reward, done, info = self.step(action)
                 cum_reward += reward
                 n_steps += 1
+
+            if self.goal_subtask_id == unk_id:
+                # unk subtasks are always 1 long and shouldn't count toward anything
+                continue
 
             if invalid_trial:
                 tot_trials -= 1
