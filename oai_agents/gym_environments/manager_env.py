@@ -1,5 +1,5 @@
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv, USEABLE_COUNTERS
-from oai_agents.common.subtasks import Subtasks, get_doable_subtasks, calculate_completed_subtask
+from oai_agents.common.subtasks import Subtasks, get_doable_subtasks, calculate_completed_subtask, facing
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action, Direction
 
@@ -49,7 +49,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
             # Keep no-op action
             self.prev_subtask[self.p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
             if not self.is_eval_env: 
-                reward -= 0.1
+                reward -= 0.01
 
         tm_obs = self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
             # if self.teammate.use_hrl_obs else self.get_low_level_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)

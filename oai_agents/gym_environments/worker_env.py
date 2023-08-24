@@ -22,8 +22,11 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         self.prev_state = None
         self.curr_timestep = 0
         self.manager = manager
+        self.goal_subtask_id = Subtasks.SUBTASKS_TO_IDS['unknown']
+        self.goal_objects = None
         # Add enc channel one for goal layers
         super(OvercookedSubtaskGymEnv, self).__init__(**kwargs)
+        self.requires_hard_reset = True
 
     def set_manager(self, manager):
         self.manager = manager
@@ -108,7 +111,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         for obj in state.objects.values():
             x, y = obj.position
             if obj.name == 'soup' and terrain[y][x] == 'P':
-                if (obj.position == chosen_pot_loc).all():  # this is the pot the worker put the onion in
+                if chosen_pot_loc[0] == x and chosen_pot_loc[1] == y:  # this is the pot the worker put the onion in
                     # -1 since one onion was just added to this pot, and we want the number before it was added
                     chosen_pot_num_onions = len(obj.ingredients) - 1
                 else:  # this is the other pot
@@ -125,7 +128,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         joint_action[self.p_idx] = Action.STAY
         with th.no_grad():
             joint_action[self.t_idx] = self.teammate.predict(self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn))[0]
-            joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
+        joint_action[self.t_idx] = Action.INDEX_TO_ACTION[joint_action[self.t_idx]]
         self.state, _, self.requires_hard_reset, info = self.env.step(joint_action)
 
     def step(self, action):
@@ -155,13 +158,21 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         self.curr_timestep += 1
         done = self.curr_timestep >= 50 or self.requires_hard_reset or self.goal_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']
 
+        if self.curr_timestep % 10 == 0:
+            unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
+            if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))[self.goal_subtask_id]:
+                done = True
+            
+
         reward = -0.01  # existence penalty
         if joint_action[self.p_idx] == Action.INTERACT:
             curr_obj = self.state.players[self.p_idx].held_object.name if self.state.players[self.p_idx].held_object else None
 
             completed_task = calculate_completed_subtask(prev_obj, curr_obj, tile_in_front)
             done = True
+                        
             reward = 1 if completed_task == self.goal_subtask_id else -1
+
             if reward == 1:
                 # Extra rewards to incentivize petter placements
                 if self.goal_subtask == 'put_onion_closer':
@@ -188,16 +199,24 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self, p_idx=None):
+        #if self.teammate is None:
+        #    self.p_idx, self.t_idx = 0, 1
+        #    self.env.reset()
+        #    self.state = self.env.state
+        #    return self.get_obs(self.p_idx, on_reset=True)
+
         if self.state is None or self.requires_hard_reset or self.curr_timestep >= self.args.horizon:
             self.requires_hard_reset = True
         else:
-            doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
-            while len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
-                for _ in range(3):
-                    self.base_step()
-                doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
-                                                      self.p_idx, self.valid_counters,
-                                                      USEABLE_COUNTERS.get(self.layout_name, 5))
+            doable_subtasks = get_doable_subtasks(self.state, self.goal_subtask_id, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
+            #while len(np.nonzero(doable_subtasks[:-1])[0]) == 0 and not self.requires_hard_reset:
+            #    for _ in range(3):
+            #        self.base_step()
+            #        if self.requires_hard_reset:
+            #            break
+            #    doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
+            #                                          self.p_idx, self.valid_counters,
+            #                                          USEABLE_COUNTERS.get(self.layout_name, 5))
 
         if self.requires_hard_reset:
             if p_idx is not None:
@@ -212,15 +231,21 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             self.state = self.env.state
             self.prev_state = None
 
-            doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
+            doable_subtasks = get_doable_subtasks(self.state, self.goal_subtask_id, self.layout_name, self.terrain,
                                                   self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
             # If no non-unknown subtasks is doable, then do 3 env steps and retry
-            while len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
-                for _ in range(3):
-                    self.base_step()
-                doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
-                                                      self.p_idx, self.valid_counters,
-                                                      USEABLE_COUNTERS.get(self.layout_name, 5))
+            #while len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
+            #    for _ in range(3):
+            #        self.base_step()
+            #        if self.requires_hard_reset:
+            #            self.env.reset()
+            #            self.state = self.env.state
+            #            self.prev_state = None
+            #            break
+                        
+            #    doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
+            #                                          self.p_idx, self.valid_counters,
+            #                                          USEABLE_COUNTERS.get(self.layout_name, 5))
             #    self.p_idx, self.t_idx = self.t_idx, self.p_idx
             #    doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
             #                                          self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
@@ -228,12 +253,14 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         self.curr_timestep = 0
         # Disable unknown subtask as an option
-        doable_subtasks[-1] = 0
         if self.manager is not None:
+            #doable_subtasks[-1] = 0
             man_obs = self.get_obs(self.p_idx, for_manager=True)
             man_obs['subtask_mask'] = doable_subtasks
             self.goal_subtask_id = int(self.manager.predict(man_obs, deterministic=False)[0].squeeze())
         else:
+            if np.sum(doable_subtasks[:-1]) >= 1:
+                doable_subtasks[-1] = 0
             self.goal_subtask_id = np.random.choice(np.nonzero(doable_subtasks)[0])
 
         self.goal_subtask = Subtasks.IDS_TO_SUBTASKS[self.goal_subtask_id]

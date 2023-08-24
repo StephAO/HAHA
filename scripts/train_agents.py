@@ -173,7 +173,7 @@ def get_fcp_agent(args, training_steps=1e7):
     return fcp_trainer.get_agents()[0]
 
 
-def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_iterations=1):
+def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_iterations=10):
     """
     teammates args is a tuple of length 2, where each value can be either bcp of fcp. The first value indicates the
     teammates to use for the worker, the second the teammates to use for the manager
@@ -196,6 +196,7 @@ def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_i
     env_kwargs['full_init'] = True
     worker_eval_envs = [OvercookedSubtaskGymEnv(**{'env_index': n, 'is_eval_env': True, **env_kwargs})
                         for n in range(len(args.layout_names))]
+
     worker_trainer = RLAgentTrainer(teammates[0], args, name=name + '_worker', env=worker_env, eval_envs=worker_eval_envs,
                                     use_subtask_eval=True)
     # Create manager and manager env

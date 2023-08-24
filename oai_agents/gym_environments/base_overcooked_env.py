@@ -123,8 +123,8 @@ class OvercookedGymEnv(Env):
         self.terrain = self.mdp.terrain_mtx
         self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]
         self.env.reset()
-        self.valid_counters = []#self.env.mdp.find_free_counters_valid_for_player(self.env.state, self.mlam, i) for i in
-                               # range(2)]
+        self.valid_counters = [self.env.mdp.find_free_counters_valid_for_player(self.env.state, self.mlam, i) for i in
+                               range(2)]
         self.reset()
 
     # def get_overcooked_from_mdp_kwargs(self, horizon=None):

@@ -59,7 +59,7 @@ class RLAgentTrainer(OAITrainer):
                 features_extractor_kwargs=dict(hidden_dim=hidden_dim)
             )
 
-        self.epoch_timesteps = 1e4
+        self.epoch_timesteps = 1e6
         if use_lstm:
             policy_kwargs['n_lstm_layers'] = 2
             policy_kwargs['lstm_hidden_size'] = hidden_dim
