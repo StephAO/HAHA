@@ -39,7 +39,7 @@ from oai_agents.agents.rl import RLAgentTrainer
 from oai_agents.agents.hrl import HierarchicalRL
 # from oai_agents.agents import Manager
 from oai_agents.common.arguments import get_arguments
-from oai_agents.common.subtasks import Subtasks, get_doable_subtasks
+from oai_agents.common.subtasks import Subtasks, get_doable_subtasks, facing, calculate_completed_subtask
 from oai_agents.gym_environments.base_overcooked_env import OvercookedGymEnv
 from oai_agents.agents.agent_utils import load_agent, DummyAgent
 from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
@@ -173,7 +173,17 @@ class OvercookedGUI:
     def step_env(self, agent_action):
         prev_state = self.env.state
 
+        tile_in_front = facing(self.env.env.mdp.terrain_mtx, self.env.state.players[self.p_idx])
+        prev_obj = self.env.state.players[self.p_idx].held_object.name if self.env.state.players[
+            self.p_idx].held_object else None
+
         obs, reward, done, info = self.env.step(agent_action)
+
+        curr_obj = self.env.state.players[self.p_idx].held_object.name if self.env.state.players[
+            self.p_idx].held_object else None
+
+        completed_task = calculate_completed_subtask(prev_obj, curr_obj, tile_in_front)
+        print('----', completed_task)
 
         collision = self.env.mdp.prev_step_was_collision
         if collision:
