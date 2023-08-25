@@ -31,7 +31,8 @@ class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self, grid_shape=None, ret_completed_subtasks=False, stack_frames=False, is_eval_env=False,
-                 shape_rewards=False, enc_fn=None, full_init=True, args=None, num_enc_channels=27, **kwargs):
+                 shape_rewards=False, enc_fn=None, full_init=True, args=None, num_enc_channels=27,
+                 unstick=True, **kwargs):
         self.is_eval_env = is_eval_env
         self.args = args
         self.device = args.device
@@ -78,6 +79,7 @@ class OvercookedGymEnv(Env):
         self.action_space = spaces.Discrete(len(Action.ALL_ACTIONS))
 
         self.shape_rewards = shape_rewards
+        self.unstick = unstick
         self.visualization_enabled = False
         self.step_count = 0
         self.reset_p_idx = None
@@ -214,8 +216,8 @@ class OvercookedGymEnv(Env):
         # if self.prev_state:
         #     print(tuple(joint_action), self.prev_actions)
         #     print(self.state.time_independent_equal(self.prev_state), tuple(joint_action) == tuple(self.prev_actions))
-        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(
-                self.prev_actions):
+        if (self.unstick and self.prev_state and self.state.time_independent_equal(self.prev_state) and
+                tuple(joint_action) == tuple(self.prev_actions)):
             joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
                             np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
             joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
