@@ -20,7 +20,7 @@ from typing import Tuple, List
 
 class RLManagerTrainer(RLAgentTrainer):
     ''' Train an RL agent to play with a provided agent '''
-    def __init__(self, worker, teammates, args, eval_tms=None, use_frame_stack=False, use_subtask_counts=False,
+    def __init__(self, worker, teammates, args, use_frame_stack=False, use_subtask_counts=False,
                  inc_sp=False, use_policy_clone=False, name=None, seed=None):
         name = name or 'hrl_manager'
         name += ('_sp' if inc_sp else '') + ('_pc' if use_policy_clone else '')
@@ -33,7 +33,7 @@ class RLManagerTrainer(RLAgentTrainer):
         eval_envs = [OvercookedManagerGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(n_layouts)]
 
         self.worker = worker
-        super(RLManagerTrainer, self).__init__(teammates, args, eval_tms=eval_tms, name=name, env=env,
+        super(RLManagerTrainer, self).__init__(teammates, args, name=name, env=env,
                                                eval_envs=eval_envs, use_subtask_counts=use_subtask_counts,
                                                use_hrl=True, use_policy_clone=use_policy_clone,
                                                seed=seed)
@@ -107,8 +107,7 @@ class HierarchicalRL(OAIAgent):
         if np.sum(obs['player_completed_subtasks']) == 1:
             # Completed previous subtask, set new subtask
             self.curr_subtask_id = self.manager.predict(obs, sample=sample)[0]
-        worker_obs = self.enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=self.p_idx,
-                                 goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+        worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
         obs.update(worker_obs)
         return self.worker.get_distribution(obs, sample=sample)
 
@@ -194,49 +193,12 @@ class HierarchicalRL(OAIAgent):
                                          Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]
                     subtask_weighting = [200, 0.1]
                     new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
-                    # subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]#, Subtasks.SUBTASKS_TO_IDS['unknown']]
-                    # subtask_weighting = [1e-4 for _ in subtasks_to_weigh]
-                    # new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
-            # else:
-            #     new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
-            # else:
-            #     new_probs = probs
 
 
-                # subtasks_to_weigh = ['put_onion_closer']
-                # subtask_weighting = [25 for _ in subtasks_to_weigh]
-                # new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-                # Down weight complementary tasks
-            #     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
-            #     subtask_weighting = [0.04 for _ in subtasks_to_weigh]
-            #     new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
-            #     print(new_probs)
-            # else:
-            #     # Down weight supporting tasks
-            #     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.SUPP_STS]
-            #     subtask_weighting = [0.01 for _ in subtasks_to_weigh]
-            #     new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-            #
-            #     # Up weight complementary tasks
-            #     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS[s] for s in Subtasks.COMP_STS]
-            #     subtask_weighting = [100 for _ in subtasks_to_weigh]
-            #     new_probs = self.adjust_distributions(new_probs, subtasks_to_weigh, subtask_weighting)
         elif self.layout_name == 'forced_coordination':
             # NOTE: THIS ASSUMES BEING P2
             # Since tasks are very limited, we use a different change instead of support and coordinated.
             if self.p_idx == 1:
-            #     if (self.subtask_step + 2) % 8 == 0:
-            #         subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
-            #     elif (self.subtask_step + 1) % 8 == 0:
-            #         subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
-            #     else:
-            #         if self.subtask_step % 2 == 0:
-            #             subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']
-            #         else:
-            #             subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_onion_closer']
-
-
-
                 if (self.subtask_step + 2) % 16 == 0 or (self.subtask_step + 4) % 16 == 0:
                     subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
                 elif (self.subtask_step + 1) % 16 == 0 or (self.subtask_step + 3) % 16 == 0:
@@ -260,12 +222,7 @@ class HierarchicalRL(OAIAgent):
                     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
                     subtask_weighting = [1e12 for _ in subtasks_to_weigh]
                     new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-                # elif self.other_player_has_plate(obs):
-                #     print('plate')
-                #     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'], Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
-                #     subtask_weighting = [1e12, 1e-12, 1e-12]
-                #     new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-                #     print(new_probs[Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']])
+
                 elif (not self.a_soup_is_almost_done(obs, time_left_thresh=2) or self.other_player_has_plate(obs))\
                         and self.waiting_steps < 5:
                     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['unknown'],
@@ -291,12 +248,7 @@ class HierarchicalRL(OAIAgent):
                 else:
                     new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
                     self.waiting_steps = 0
-            # if self.p_idx == 1:
-            #     # NOTE: THIS ASSUMES BEING P2
-            #     # Up weight all plate related tasks
-            #     subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]
-            #     subtask_weighting = [1000 for _ in subtasks_to_weigh]
-            #     new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+
         else:
             new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
         while not np.isclose(np.sum(new_probs), 1, rtol=1e-3, atol=1e-3):
@@ -321,11 +273,15 @@ class HierarchicalRL(OAIAgent):
         # if Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'unknown':
         #     print(f'SUBTASK: {Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)]}')
         # self.num_steps_since_new_subtask = 0
+        if not isinstance(self.curr_subtask_id, int):
+            self.curr_subtask_id = int(self.curr_subtask_id.squeeze())
+        # print(Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id])
+        if self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
+            return np.array([Action.ACTION_TO_INDEX[Action.STAY]]), None
         self.num_steps_since_new_subtask += 1
-        worker_obs = self.enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=self.p_idx,
-                                 goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
-        obs.update(worker_obs)
-        return self.worker.predict(obs, state=state, episode_start=episode_start, deterministic=False)
+        worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+        worker_obs = {k: np.expand_dims(v, 0) for k, v in worker_obs.items()}
+        return self.worker.predict(worker_obs, state=state, episode_start=episode_start, deterministic=False)
 
     def get_agent_output(self):
         return Subtasks.IDS_TO_HR_SUBTASKS[int(self.curr_subtask_id)] if self.output_message else ' '

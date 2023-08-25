@@ -33,27 +33,36 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
 
     def action_masks(self, p_idx=None):
         p_idx = p_idx or self.p_idx
-        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5)).astype(bool)
 
     def step(self, action):
+        reward = 0
         # Action is the subtask for subtask agent to perform
         self.curr_subtask = action.cpu() if type(action) == th.tensor else action
         joint_action = [Action.STAY, Action.STAY]
         # while (not ready_for_next_subtask and not done):
-        obs = {k: v for k, v in self.get_obs(self.p_idx, for_worker=True).items() if k in self.worker.policy.observation_space.keys()}
-        joint_action[self.p_idx] = self.worker.predict(obs, deterministic=False)[0]
+        if self.curr_subtask != 11: # unknown subtask, just noop
+            obs = {k: v for k, v in self.get_obs(self.p_idx, for_worker=True).items() if k in self.worker.policy.observation_space.keys()}
+            joint_action[self.p_idx] = Action.INDEX_TO_ACTION[self.worker.predict(obs, deterministic=False)[0]]
+        else:
+            # Keep no-op action
+            self.prev_subtask[self.p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
+            reward -= 0.01
+
         tm_obs = self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
             # if self.teammate.use_hrl_obs else self.get_low_level_obs(self.t_idx, enc_fn=self.teammate.encoding_fn)
-        joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=False)[0] # self.is_eval_env
-        joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
+        joint_action[self.t_idx] = Action.INDEX_TO_ACTION[self.teammate.predict(tm_obs, deterministic=False)[0]] # self.is_eval_env
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
-        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
-            joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
+        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(self.prev_actions):
+            joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
+                            np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
+            joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
 
         self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
-        next_state, reward, done, info = self.env.step(joint_action)
+        next_state, r, done, info = self.env.step(joint_action)
+        reward += r
         self.state = deepcopy(next_state)
         self.step_count += 1
 
@@ -70,11 +79,7 @@ class OvercookedManagerGymEnv(OvercookedGymEnv):
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
     def reset(self, p_idx=None):
-        if self.is_eval_env:
-            ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
-        else:
-            ss_kwargs = {'random_pos': True, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
-        self.env.reset(start_state_kwargs=ss_kwargs)
+        self.env.reset()
         self.state = self.env.state
         self.prev_state = None
         self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]

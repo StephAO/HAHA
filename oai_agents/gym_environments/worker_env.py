@@ -16,15 +16,22 @@ import math
 
 
 class OvercookedSubtaskGymEnv(OvercookedGymEnv):
-    def __init__(self, **kwargs):
+    def __init__(self, manager=None, **kwargs):
+        self.state = None
+        self.prev_state = None
+        self.curr_timestep = 0
+        self.manager = manager
         # Add enc channel one for goal layers
         super(OvercookedSubtaskGymEnv, self).__init__(**kwargs)
+
+    def set_manager(self, manager):
+        self.manager = manager
 
     def get_overcooked_from_mdp_kwargs(self, horizon=None):
         return {'start_state_fn': self.mdp.get_subtask_start_state_fn(self.mlam), 'horizon': 100}
 
-    def get_obs(self, p_idx, **kwargs):
-        go = self.goal_objects if p_idx == self.p_idx else None
+    def get_obs(self, p_idx, for_manager=False, **kwargs):
+        go = self.goal_objects if (p_idx == self.p_idx and not for_manager) else None
         obs = super().get_obs(p_idx, goal_objects=go,**kwargs)
         return obs
 
@@ -52,8 +59,8 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         # Impossible to reach the feature from our curr spot,
         # Reward should scale by how close the best pickup spot is to the feature
         if curr_dist == float('inf'):
-            # Every spot further from the pot is -0.1 starting at 1. Max reward of 1
-            reward = max(1, 1 - (smallest_dist * 0.1))
+            # Every spot further from the pot is -1 starting at 5. Max reward of 5
+            reward = 1 - (smallest_dist * 0.1)
         else:
             # Reward proportional to how much time is saved from using the pass compared to walking ourselves
             # Only get additional reward if there is a worst spot that exists
@@ -119,18 +126,22 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
-        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
-            joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
+        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(self.prev_actions):
+            joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
+                            np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
+            joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
 
         self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
-        next_state, _, done, info = self.env.step(joint_action)
+        next_state, _, self.requires_hard_reset, info = self.env.step(joint_action)
         self.state = deepcopy(next_state)
+        self.curr_timestep += 1
+        done = self.curr_timestep >= 50 or self.requires_hard_reset
 
         reward = -0.01  # existence penalty
         if joint_action[self.p_idx] == Action.INTERACT:
-            subtask = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx)
+            completed_task = calculate_completed_subtask(self.mdp.terrain_mtx, self.prev_state, self.state, self.p_idx)
             done = True
-            reward = 1 if subtask == self.goal_subtask_id else -1
+            reward = 1 if completed_task == self.goal_subtask_id else -1
             if reward == 1:
                 # Extra rewards to incentivize petter placements
                 if self.goal_subtask == 'put_onion_closer':
@@ -153,64 +164,75 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                     reward += self.get_pickup_proximity_reward(serving_locations)
                 elif self.goal_subtask == 'put_onion_in_pot':
                     reward += self.get_fuller_pot_reward(self.state, self.mdp.terrain_mtx)
+
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
-    def reset(self, evaluation_trial_num=-1, p_idx=None):
-        if evaluation_trial_num < 0:
-            self.goal_subtask = np.random.choice(Subtasks.SUBTASKS)
+    def reset(self, p_idx=None):
+        if p_idx is not None:
+            self.p_idx = p_idx
+        elif self.reset_p_idx is not None:
+            self.p_idx = self.reset_p_idx
         else:
-            self.goal_subtask = evaluation_trial_num % (Subtasks.NUM_SUBTASKS - 1)
-        self.goal_subtask_id = Subtasks.SUBTASKS_TO_IDS[self.goal_subtask]
-        self.goal_objects = Subtasks.IDS_TO_GOAL_MARKERS[self.goal_subtask_id]
-
-        # For layouts where there are restrictions on what player can do each subtask, set the right player for the
-        # goal subtask. If certain subtasks are useless for certain layouts, raise errors if trying to learn on them
-        if self.goal_subtask == 'unknown': # Just so unknown doesn't break other stuff.
             self.p_idx = np.random.randint(2)
-        elif self.layout_name == 'forced_coordination':
-            if self.goal_subtask in ['get_onion_from_dispenser', 'get_plate_from_dish_rack']:
-                self.p_idx = 1
-            elif self.goal_subtask in ['put_onion_in_pot', 'get_soup', 'serve_soup']:
-                self.p_idx = 0
-            else:
-                self.p_idx = p_idx or np.random.randint(2)
-        elif self.layout_name == 'asymmetric_advantages':
-            self.p_idx = p_idx or np.random.randint(2)
-        else:
-            self.p_idx = p_idx or np.random.randint(2)
-
         self.t_idx = 1 - self.p_idx
-        self.stack_frames_need_reset = [True, True]
 
-        if evaluation_trial_num >= 0:
-            counters = evaluation_trial_num % max(USEABLE_COUNTERS[self.layout_name] - 1, 1)
-            ss_kwargs = {'p_idx': self.p_idx, 'random_pos': True, 'random_dir': True,
-                         'curr_subtask': self.goal_subtask, 'num_random_objects': counters}
+        if self.state is None or self.requires_hard_reset or self.curr_timestep:
+            self.requires_hard_reset = True
         else:
-            ss_kwargs = {'p_idx': self.p_idx, 'random_pos': True, 'random_dir': True,
-                         'curr_subtask': self.goal_subtask, 'max_random_objs': USEABLE_COUNTERS[self.layout_name] - 1}
-        self.env.reset(start_state_kwargs=ss_kwargs)
-        self.state = self.env.state
-        self.prev_state = None
-        if self.goal_subtask != 'unknown':
-            unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-            assert get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[self.goal_subtask_id]
+            doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
+            # If no non-unknown subtasks is doable, then try other player
+            if len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
+                self.p_idx, self.t_idx = self.t_idx, self.p_idx
+                doable_subtasks = get_doable_subtasks(self.state,'unknown', self.layout_name, self.terrain,
+                                                      self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
+            # Requires full reset if over total time limit or only available subtask is unknown for both players
+            self.requires_hard_reset = len(np.nonzero(doable_subtasks[:-1])[0]) == 0
+
+        if self.requires_hard_reset:
+            self.env.reset()
+            self.state = self.env.state
+            self.prev_state = None
+
+            doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
+                                                  self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
+            # If no non-unknown subtasks is doable, then try other player -- mainly required for forced coordination
+            if len(np.nonzero(doable_subtasks[:-1])[0]) == 0:
+                self.p_idx, self.t_idx = self.t_idx, self.p_idx
+                doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
+                                                      self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))
+            self.requires_hard_reset = False
+
+        self.curr_timestep = 0
+        # Disable unknown subtask as an option
+        doable_subtasks[-1] = 0
+        if self.manager is not None:
+            man_obs = self.get_obs(self.p_idx, for_manager=True)
+            man_obs['subtask_mask'] = doable_subtasks
+            man_obs['player_completed_subtasks'] = np.zeros(Subtasks.NUM_SUBTASKS)
+            man_obs['teammate_completed_subtasks'] = np.zeros(Subtasks.NUM_SUBTASKS)
+            self.goal_subtask_id = int(self.manager.predict(man_obs, deterministic=False)[0].squeeze())
+        else:
+            self.goal_subtask_id = np.random.choice(np.nonzero(doable_subtasks)[0])
+
+        self.goal_subtask = Subtasks.IDS_TO_SUBTASKS[self.goal_subtask_id]
+        self.goal_objects = Subtasks.IDS_TO_GOAL_MARKERS[self.goal_subtask_id]
+        self.stack_frames_need_reset = [True, True]
         return self.get_obs(self.p_idx, on_reset=True)
 
     def evaluate(self, agent):
         results = np.zeros((Subtasks.NUM_SUBTASKS, 2))
-        mean_reward = []
-        curr_trial, tot_trials = 0, 100 * Subtasks.NUM_SUBTASKS
+        mean_reward = {i: [] for i in range(Subtasks.NUM_SUBTASKS)}
+        curr_trial, tot_trials = 0, 50 * (Subtasks.NUM_SUBTASKS - 1) # No need to test unknown subtask
         avg_steps = []
         while curr_trial < tot_trials:
             invalid_trial = False
             cum_reward, reward, done, n_steps = 0, 0, False, 0
-            obs = self.reset(evaluation_trial_num=curr_trial)
+            obs = self.reset(p_idx=(curr_trial % 2))
             while not done:
                 # If the subtask is no longer possible (e.g. other agent picked the only onion up from the counter)
                 # then stop the trial and don't count it
                 unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-                if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, USEABLE_COUNTERS[self.layout_name])[
+                if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))[
                     self.goal_subtask_id]:
                     invalid_trial = True
                     break
@@ -224,23 +246,18 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 tot_trials -= 1
                 continue
 
-            thresh = 0.4 if (self.layout_name == 'forced_coordination' and self.p_idx == 0 and self.goal_subtask_id in [3, 6, 9]) else 0.8
+            thresh = 0.7
             if reward >= thresh:
                 results[self.goal_subtask_id][0] += 1
                 avg_steps.append(n_steps)
             else:
                 results[self.goal_subtask_id][1] += 1
-            mean_reward.append(cum_reward)
+            mean_reward[self.goal_subtask_id].append(cum_reward)
             curr_trial += 1
 
-        mean_reward = np.mean(mean_reward)
         num_succ = np.sum(results[:, 0])
 
         print(f'Subtask eval results on layout {self.layout_name} with teammate {self.teammate.name}.')
-        subtask_id = self.goal_subtask_id
-        print(f'Mean reward: {mean_reward}')
-        print(f'{subtask_id} - successes: {results[subtask_id][0]}, failures: {results[subtask_id][1]}')
-        if self.use_curriculum and np.sum(results[:, 0]) == num_trials and self.curr_lvl < Subtasks.NUM_SUBTASKS:
-            print(f'Going from level {self.curr_lvl} to {self.curr_lvl + 1}')
-            self.curr_lvl += 1
+        for subtask_id in range(Subtasks.NUM_SUBTASKS - 1):
+            print(f'{subtask_id}: mean reward of {np.mean(mean_reward[subtask_id])} -- successes: {results[subtask_id][0]}, failures: {results[subtask_id][1]}')
         return num_succ == tot_trials, np.sum(results[:, 1])# and num_succ > 10

@@ -190,7 +190,7 @@ class BehavioralCloningTrainer(OAITrainer):
         if self.datasets is None:
             self.setup_datasets()
         exp_name = exp_name or self.args.exp_name
-        run = wandb.init(project="overcooked_ai_test", entity=self.args.wandb_ent,
+        run = wandb.init(project="overcooked_ai", entity=self.args.wandb_ent,
                          dir=str(self.args.base_dir / 'wandb'),
                          reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode)
 

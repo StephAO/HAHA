@@ -19,8 +19,11 @@ from stable_baselines3.common.vec_env.stacked_observations import StackedObserva
 # DEPRECATED NOTE: For counter circuit, trained workers with 8, but trained manager with 4. Only 4 spots are useful add
 # more during subtask worker training for robustness
 # Max number of counters the agents should use
-USEABLE_COUNTERS = {'counter_circuit_o_1order': 8, 'forced_coordination': 5, 'asymmetric_advantages': 4, 'cramped_room': 5, 'coordination_ring': 5} # FOR WORKER TRAINING
-# USEABLE_COUNTERS = {'counter_circuit_o_1order': 6, 'forced_coordination': 3, 'asymmetric_advantages': 2, 'cramped_room': 4, 'coordination_ring': 4} # FOR MANAGER TRAINING
+USEABLE_COUNTERS = {'counter_circuit_o_1order': 8, 'forced_coordination': 5, 'asymmetric_advantages': 4,
+                    'cramped_room': 5, 'coordination_ring': 5}  # FOR WORKER TRAINING
+
+
+# USEABLE_COUNTERS = {'counter_circuit_o_1order': 4, 'forced_coordination': 3, 'asymmetric_advantages': 2, 'cramped_room': 3, 'coordination_ring': 3} # FOR MANAGER TRAINING
 # USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 4, 'asymmetric_advantages': 4, 'cramped_room': 3, 'coordination_ring': 3}  # FOR EVALUATION AND SP TRAINING
 
 
@@ -34,7 +37,7 @@ class OvercookedGymEnv(Env):
         self.device = args.device
         # Observation encoding setup
         enc_fn = enc_fn or args.encoding_fn
-        self.encoding_fn =  ENCODING_SCHEMES[enc_fn]
+        self.encoding_fn = ENCODING_SCHEMES[enc_fn]
         if enc_fn == 'OAI_egocentric':
             # Override grid shape to make it egocentric
             assert grid_shape is None, 'Grid shape cannot be used when egocentric encodings are used!'
@@ -48,7 +51,7 @@ class OvercookedGymEnv(Env):
 
         # Set Sp Observation Space
         # Currently 20 is the default value for recipe time (which I believe is the largest value used in encoding)
-        self.num_enc_channels = num_enc_channels # Default channels of OAI_Lossless encoding
+        self.num_enc_channels = num_enc_channels  # Default channels of OAI_Lossless encoding
         self.obs_dict = {}
         if enc_fn == 'OAI_feats':
             self.obs_dict['agent_obs'] = spaces.Box(0, 400, (96,), dtype=int)
@@ -84,7 +87,6 @@ class OvercookedGymEnv(Env):
         if full_init:
             self.set_env_layout(**kwargs)
 
-
     def set_env_layout(self, env_index=None, layout_name=None, base_env=None, horizon=None):
         '''
         Required to play nicely with sb3 make_vec_env. make_vec_env doesn't allow different arguments for each env,
@@ -112,7 +114,8 @@ class OvercookedGymEnv(Env):
             }
 
             self.mlam = MediumLevelActionManager.from_pickle_or_compute(self.mdp, COUNTERS_PARAMS, force_compute=False)
-            self.env = OvercookedEnv.from_mdp(self.mdp, **self.get_overcooked_from_mdp_kwargs(horizon=horizon))
+            self.env = OvercookedEnv.from_mdp(self.mdp, horizon=(
+                        horizon or self.args.horizon))  # , **self.get_overcooked_from_mdp_kwargs(horizon=horizon))
         else:
             self.env = base_env
             self.layout_name = self.env.mdp.layout_name
@@ -120,11 +123,14 @@ class OvercookedGymEnv(Env):
 
         self.terrain = self.mdp.terrain_mtx
         self.prev_subtask = [Subtasks.SUBTASKS_TO_IDS['unknown'], Subtasks.SUBTASKS_TO_IDS['unknown']]
+        self.env.reset()
+        self.valid_counters = [self.env.mdp.find_free_counters_valid_for_player(self.env.state, self.mlam, i) for i in
+                               range(2)]
         self.reset()
 
-    def get_overcooked_from_mdp_kwargs(self, horizon=None):
-        horizon = horizon or self.args.horizon
-        return {'start_state_fn': self.mdp.get_fully_random_start_state_fn(self.mlam), 'horizon': horizon}
+    # def get_overcooked_from_mdp_kwargs(self, horizon=None):
+    #     horizon = horizon or self.args.horizon
+    #     return {'start_state_fn': self.mdp.get_fully_random_start_state_fn(self.mlam), 'horizon': horizon}
 
     def get_layout_name(self):
         return self.layout_name
@@ -154,21 +160,25 @@ class OvercookedGymEnv(Env):
         pygame.display.flip()
 
     def action_masks(self, p_idx):
-        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx, USEABLE_COUNTERS[self.layout_name]).astype(bool)
+        return get_doable_subtasks(self.state, self.prev_subtask[p_idx], self.layout_name, self.terrain, p_idx,
+                                   self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5)).astype(bool)
 
     def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False, goal_objects=None):
         enc_fn = enc_fn or self.encoding_fn
-        obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx, goal_objects=goal_objects)
+        obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx,
+                     goal_objects=goal_objects)
 
         if self.stack_frames(p_idx):
             obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
-            if self.stack_frames_need_reset[p_idx]: # On reset
+            if self.stack_frames_need_reset[p_idx]:  # On reset
                 obs['visual_obs'] = self.stackedobs[p_idx].reset(obs['visual_obs'])
                 self.stack_frames_need_reset[p_idx] = False
             else:
                 obs['visual_obs'], _ = self.stackedobs[p_idx].update(obs['visual_obs'], np.array([done]), [{}])
             obs['visual_obs'] = obs['visual_obs'].squeeze()
-        if self.return_completed_subtasks or (self.teammate is not None and p_idx == self.t_idx and 'player_completed_subtasks' in self.teammate.policy.observation_space.keys()):
+        if (self.return_completed_subtasks or
+                (self.teammate is not None and p_idx == self.t_idx and
+                 'player_completed_subtasks' in self.teammate.policy.observation_space.keys())):
             # If this isn't the first step of the game, see if a subtask has been completed
             if self.prev_state is not None:
                 comp_st = calculate_completed_subtask(self.terrain, self.prev_state, self.state, p_idx)
@@ -178,8 +188,8 @@ class OvercookedGymEnv(Env):
                     self.prev_subtask[p_idx] = comp_st
                 else:
                     self.completed_tasks[p_idx] = np.zeros(Subtasks.NUM_SUBTASKS)
-                    # self.prev_subtask[p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
-            obs['player_completed_subtasks'] =  self.completed_tasks[p_idx]
+                    self.prev_subtask[p_idx] = Subtasks.SUBTASKS_TO_IDS['unknown']
+            obs['player_completed_subtasks'] = self.completed_tasks[p_idx]
             obs['teammate_completed_subtasks'] = self.completed_tasks[1 - p_idx]
             obs['subtask_mask'] = self.action_masks(p_idx)
         if p_idx == self.t_idx and self.teammate is not None:
@@ -201,8 +211,14 @@ class OvercookedGymEnv(Env):
 
         # If the state didn't change from the previous timestep and the agent is choosing the same action
         # then play a random action instead. Prevents agents from getting stuck
-        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == self.prev_actions:
-            joint_action = [np.random.choice(Direction.ALL_DIRECTIONS), np.random.choice(Direction.ALL_DIRECTIONS)]
+        # if self.prev_state:
+        #     print(tuple(joint_action), self.prev_actions)
+        #     print(self.state.time_independent_equal(self.prev_state), tuple(joint_action) == tuple(self.prev_actions))
+        if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(
+                self.prev_actions):
+            joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
+                            np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
+            joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
 
         self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
 
@@ -230,11 +246,7 @@ class OvercookedGymEnv(Env):
         self.t_idx = 1 - self.p_idx
         self.stack_frames_need_reset = [True, True]
 
-        if self.is_eval_env:
-            ss_kwargs = {'random_pos': False, 'random_dir': False, 'max_random_objs': 0}
-        else:
-            ss_kwargs = {'random_pos': True, 'random_dir': True, 'max_random_objs': USEABLE_COUNTERS[self.layout_name]}
-        self.env.reset(start_state_kwargs=ss_kwargs)
+        self.env.reset()
         self.prev_state = None
         self.state = self.env.state
         # Reset subtask counts
@@ -258,16 +270,17 @@ register(
     entry_point='OvercookedGymEnv'
 )
 
-
 if __name__ == '__main__':
     from oai_agents.common.arguments import get_arguments
+
     args = get_arguments()
-    env = OvercookedGymEnv(p1=DummyAgent(), args=args) #make('overcooked_ai.agents:OvercookedGymEnv-v0', layout='asymmetric_advantages', encoding_fn=encode_state, args=args)
+    env = OvercookedGymEnv(p1=DummyAgent(),
+                           args=args)  # make('overcooked_ai.agents:OvercookedGymEnv-v0', layout='asymmetric_advantages', encoding_fn=encode_state, args=args)
     print(check_env(env))
     env.setup_visualization()
     env.reset()
     env.render()
     done = False
     while not done:
-        obs, reward, done, info = env.step( Action.ACTION_TO_INDEX[np.random.choice(Action.ALL_ACTIONS)] )
+        obs, reward, done, info = env.step(Action.ACTION_TO_INDEX[np.random.choice(Action.ALL_ACTIONS)])
         env.render()
