@@ -59,9 +59,13 @@
     <div class="container" style="padding-top: 30px margin-left: 100px margin-right: 100px">
       <h2 class="header-text">Instructions</h2>
       <p class="normal-text">
-        Hello! In this task, you will be playing a
-        cooking game. You will play one of two chefs
-        in a restaurant that serves onion soups.
+          Hello! In this task, you will be co-playing a
+          cooking game with an AI agent. 
+          
+          Your goal will be to serve as many onion soups 
+          as possible before the end of each trial.
+
+          You will be awarded 20 points for each soup served.
       </p>
 
       <br>
@@ -70,12 +74,13 @@
 
       <h3 class="header-text">Layouts</h3>
       <p class="normal-text">
-        This is what one level of the game looks like:
+        Each trial will have a different environment, but will look similar to this:
       </p>
       <img class="center" src="images/training0.png" style="width:600px">
       <p class="normal-text">
         <br>
-        There are a various objects in the game you can interact with. An annotated version of the above image is below:
+        You will interact with objects in the environment to make onion soup recipes. 
+        A labeled version of the environment is shown below:
       </p>
       <img class="center" src="images/training0-annotated.png" style="width:800px">
 
@@ -83,10 +88,10 @@
       <hr>
       <br>
 
-      <h3 class="header-text">Movement and interactions</h3>
+      <h3 class="header-text">Movement and Interactions</h3>
       <img class="center" src="images/space-arrows.png" style="width:250px">
       <p class="normal-text">
-        You can move up, down, left, and right using
+        You can move (up, down, left, and right) using
         the <b>arrow keys</b>, and interact with objects
         using the <b>spacebar</b>.
       </p>
@@ -105,7 +110,7 @@
 
       <br>
       <p class="normal-text">
-        Note that as you and your partner are moving around the kitchen
+        Note that as you and your AI partner are moving around the kitchen
         you <u><b>cannot occupy the same location</b></u>.
       </p>
       <br>
@@ -115,12 +120,13 @@
       <h3 class="header-text">Cooking</h3>
       <img class="center" src="images/soup.png" style="width:250px">
       <p class="normal-text">
-        Once 3 onions are in the pot, the soup will automatically start cooking.
+        You will need to gather onions and put them in a pot. The soup will automatically
+        start cooking once 3 onions are in the pot. 
       </p>
       <p class="normal-text">
         When a soup begins cooking, you'll notice a red number appear over the pot to
         denote the cook time. This number counts upward until the soup is done. Soups
-        take 20 timesteps to cook.
+        take 20 timesteps, or 4 seconds, to cook.
       </p>
       <p class="normal-text">
         Each soup is worth 20 points.
@@ -130,10 +136,12 @@
       <hr>
       <br>
 
-      <h3 class="header-text">Goal</h3>
+      <h3 class="header-text">Prior to Starting Each Trial</h3>
       <p class="normal-text">
-        The team will be awarded 20 points for each soup served.
-        Your goal in this task is to serve as many soups as you can before each level ends.
+        Before beginning a new trial remember:
+          (1) Verify your eyes are aligned up the eye tracking bar at the bottom of the computer screen,
+          (2) Try to maintain a consisten distance from the computer screen, and
+          (3) During the task  you can take a break by delaying the start to the next trial.
       </p>
       <div align="center" style="margin: auto">
         <form align="center" style="text-align: center margin: auto width:600px">
