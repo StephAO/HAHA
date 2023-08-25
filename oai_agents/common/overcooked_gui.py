@@ -88,7 +88,7 @@ class OvercookedGUI:
         self.human_action = None
         self.data_path = args.base_dir / args.data_path
         self.data_path.mkdir(parents=True, exist_ok=True)
-        self.tile_size = 100
+        self.tile_size = 180
 
         self.info_stream = stream
         self.outlet = outlet
