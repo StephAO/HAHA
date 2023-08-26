@@ -84,7 +84,7 @@ class RLAgentTrainer(OAITrainer):
             self.teammates += self.agents
         self.eval_teammates = self.teammates
         self.epoch, self.total_game_steps = 0, 0
-        self.best_score, self.fewest_failures, self.best_training_rew = -1, float('inf'), float('-inf')
+        self.best_score, self.best_succ_rate, self.best_training_rew = -1, 0, float('-inf')
 
     def _get_constructor_parameters(self):
         return dict(args=self.args, name=self.name, use_lstm=self.use_lstm, use_frame_stack=self.use_frame_stack,
@@ -110,7 +110,7 @@ class RLAgentTrainer(OAITrainer):
             path, tag = self.save_agents(tag=f'ck_{len(self.ck_list)}')
             self.ck_list.append(({k: 0 for k in self.args.layout_names}, path, tag))
         best_path, best_tag = None, None
-        self.fewest_failures = float('inf')
+        self.best_succ_rate, self.best_training_rew = 0, float('-inf')
 
         curr_timesteps = 0
         prev_timesteps = self.learning_agent.num_timesteps
@@ -143,20 +143,21 @@ class RLAgentTrainer(OAITrainer):
                 if self.use_subtask_eval:
                     env_success = []
                     use_layout_specific_tms = type(self.eval_teammates) == dict
-                    tot_failures = 0
+                    avg_succ_rate = []
                     for env in self.eval_envs:
                         tms = self.eval_teammates[env.get_layout_name()] if use_layout_specific_tms else self.eval_teammates
                         for tm in tms:
                             env.set_teammate(tm)
-                            fully_successful, num_failures = env.evaluate(self.learning_agent)
-                            tot_failures += num_failures
-                            env_success.append(fully_successful)
-                    wandb.log({f'num_tm_layout_successes': np.sum(env_success), 'total_failures': tot_failures,
+                            asr = env.evaluate(self.learning_agent)
+                            avg_succ_rate.append(asr)
+                            env_success.append(asr == 1)
+                    avg_succ_rate = np.mean(avg_succ_rate)
+                    wandb.log({f'num_tm_layout_successes': np.sum(env_success), 'avg_succ_rate': avg_succ_rate,
                                'timestep': self.learning_agent.num_timesteps})
-                    if tot_failures <= self.fewest_failures:
+                    if avg_succ_rate >= self.best_succ_rate:
                         best_path, best_tag = self.save_agents(tag='best')
-                        self.fewest_failures = tot_failures
-                        print(f'New fewest failures of {self.fewest_failures} reached, model saved to {best_path}/{best_tag}')
+                        self.best_succ_rate = avg_succ_rate
+                        print(f'New best success rate of {self.best_succ_rate} reached, model saved to {best_path}/{best_tag}')
                     if all(env_success):
                         break
                 else:
