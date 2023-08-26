@@ -124,20 +124,38 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         pot_states = self.mdp.get_pot_states(state)
         return pot_states['empty'] + pot_states['1_items'] + pot_states['2_items']
 
-    def base_step(self):
+    def base_step(self, action):
         joint_action = [None, None]
-        joint_action[self.p_idx] = Action.STAY
+        joint_action[self.p_idx] = action
         with th.no_grad():
             joint_action[self.t_idx] = self.teammate.predict(self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn))[0]
         joint_action[self.t_idx] = Action.INDEX_TO_ACTION[joint_action[self.t_idx]]
-        self.state, _, self.requires_hard_reset, info = self.env.step(joint_action)
+
+        # If the state didn't change from the previous timestep and the agent is choosing the same action
+        # then play a random action instead. Prevents agents from getting stuck
+        if self.is_eval_env:
+            if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(self.prev_actions):
+                joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
+                                np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
+                joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
+
+            self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
+
+        self.state, reward, self.requires_hard_reset, info = self.env.step(joint_action)
 
     def get_new_subtask(self):
         doable_subtasks = get_doable_subtasks(self.state, self.goal_subtask_id, self.layout_name, self.terrain,
                                               self.p_idx, self.valid_counters,
                                               USEABLE_COUNTERS.get(self.layout_name, 5))
+        while np.sum(doable_subtasks[:-1]) < 1:
+            self.base_step(Action.STAY)
+            if self.requires_hard_reset:
+                self.base_reset()
+            doable_subtasks = get_doable_subtasks(self.state, 'unknown', self.layout_name, self.terrain,
+                                                  self.p_idx, self.valid_counters,
+                                                  USEABLE_COUNTERS.get(self.layout_name, 5))
+        doable_subtasks[-1] = 0
         if self.manager is not None:
-            #doable_subtasks[-1] = 0
             man_obs = self.get_obs(self.p_idx, for_manager=True)
             man_obs['subtask_mask'] = doable_subtasks
             self.goal_subtask_id = int(self.manager.predict(man_obs, deterministic=False)[0].squeeze())
@@ -150,43 +168,26 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             self.subtask_counts[self.goal_subtask_id] += 1
         self.goal_subtask = Subtasks.IDS_TO_SUBTASKS[self.goal_subtask_id]
         self.goal_objects = Subtasks.IDS_TO_GOAL_MARKERS[self.goal_subtask_id]
-        self.curr_timestep = 0
 
     def step(self, action):
-        if self.teammate is None:
-            raise ValueError('set_teammate must be set called before starting game.')
-        joint_action = [None, None]
-        joint_action[self.p_idx] = action
-        with th.no_grad():
-            joint_action[self.t_idx] = self.teammate.predict(self.get_obs(self.t_idx, enc_fn=self.teammate.encoding_fn))[0]
-            joint_action = [Action.INDEX_TO_ACTION[a] for a in joint_action]
-
-        # If the state didn't change from the previous timestep and the agent is choosing the same action
-        # then play a random action instead. Prevents agents from getting stuck
-        if self.is_eval_env:
-            if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(self.prev_actions):
-                joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
-                                np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
-                joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
-
-            self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
-
         tile_in_front = facing(self.mdp.terrain_mtx, self.env.state.players[self.p_idx])
         prev_obj = self.state.players[self.p_idx].held_object.name if self.state.players[self.p_idx].held_object else None
 
-        self.state, env_reward, done, info = self.env.step(joint_action)
-        self.curr_timestep += 1
-        need_new_subtask = self.goal_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']
+        #self.state, env_reward, self.requires_hard_reset, info = self.env.step(joint_action)
 
+        self.base_step(Subtasks.IDS_TO_SUBTASKS[action])
+
+        done = self.goal_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown'] or self.requires_hard_reset
+        self.curr_timestep += 1
+
+        reward = -0.01
         if joint_action[self.p_idx] == Action.INTERACT:
             curr_obj = self.state.players[self.p_idx].held_object.name if self.state.players[self.p_idx].held_object else None
 
             completed_task = calculate_completed_subtask(prev_obj, curr_obj, tile_in_front)
-            need_new_subtask = True
-                        
-            reward = 2 if completed_task == self.goal_subtask_id else -2
 
-            if reward == 2:
+            reward = 1 if completed_task == self.goal_subtask_id else -1
+            if reward == 1:
                 # Extra rewards to incentivize petter placements
                 if self.goal_subtask == 'put_onion_closer':
                     pot_locations = self.get_non_full_pot_locations(self.state)
@@ -209,28 +210,18 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 elif self.goal_subtask == 'put_onion_in_pot':
                     reward += self.get_fuller_pot_reward(self.state, self.mdp.terrain_mtx)
 
-            if self.is_eval_env:
-                info['task_completion'] = (self.goal_subtask_id, reward)
         elif self.curr_timestep >= 40:
-            reward = -2
-            need_new_subtask = True
-            if self.is_eval_env:
-                info['task_completion'] = (self.goal_subtask_id, reward)
+            reward = -1
+            done = True
+
         elif self.curr_timestep % 10 == 0:
             unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
             if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))[self.goal_subtask_id]:
-                need_new_subtask = True
-            reward = 0
-        else:
-            reward = 0
-        reward += env_reward
-
-        if need_new_subtask:
-            self.get_new_subtask()
+                done = True
 
         return self.get_obs(self.p_idx, done=done), reward, done, info
 
-    def reset(self, p_idx=None):
+    def base_reset(self, p_idx=None):
         if p_idx is not None:
             self.p_idx = p_idx
         elif self.reset_p_idx is not None:
@@ -242,18 +233,20 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         self.env.reset()
         self.state = self.env.state
         self.prev_state = None
-
-        self.get_new_subtask()
-
         self.curr_timestep = 0
         self.stack_frames_need_reset = [True, True]
-        return self.get_obs(self.p_idx, on_reset=True)
+
+    def reset(self, p_idx=None):
+        if self.requires_hard_reset:
+            self.base_reset(p_idx=p_idx)
+        self.get_new_subtask()
+        return self.get_obs(self.p_idx)
 
     def evaluate(self, agent):
         results = np.zeros((Subtasks.NUM_SUBTASKS, 2))
         mean_reward = {i: [] for i in range(Subtasks.NUM_SUBTASKS)}
-        curr_trial, tot_trials = 0, 10#* (Subtasks.NUM_SUBTASKS - 1) # No need to test unknown subtask
-        avg_steps = []
+        curr_trial, tot_trials = 0, 5 * (Subtasks.NUM_SUBTASKS - 1) # No need to test unknown subtask
+        # avg_steps = []
         while curr_trial < tot_trials:
             invalid_trial = False
             cum_reward, reward, done, n_steps = 0, 0, False, 0
@@ -262,32 +255,25 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
                 # If the subtask is no longer possible (e.g. other agent picked the only onion up from the counter)
                 # then stop the trial and don't count it
                 unk_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-                #if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))[
-                #    self.goal_subtask_id]:
-                #    invalid_trial = True
-                #    break
+                if not get_doable_subtasks(self.state, unk_id, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5))[
+                   self.goal_subtask_id]:
+                   invalid_trial = True
+                   break
 
                 action = agent.predict(obs, deterministic=False)[0]
                 obs, reward, done, info = self.step(action)
                 cum_reward += reward
                 n_steps += 1
 
-                if 'task_completion' in info:
-                    task_id, rew = info['task_completion']
-                    if rew >= 0:
-                        results[task_id][0] += 1
-                    else:
-                        results[task_id][1] += 1
-                    mean_reward[task_id].append(rew)
-            #if self.goal_subtask_id == unk_id:
-                # unk subtasks are always 1 long and shouldn't count toward anything
-            #    continue
+            if invalid_trial:
+               tot_trials -= 1
+               continue
 
-            #if invalid_trial:
-            #    tot_trials -= 1
-            #    continue
-
-            #thresh = 0.7
+            if reward > 0:
+                results[self.goal_subtask_id][0] += 1
+            else:
+                results[self.goal_subtask_id][1] += 1
+            mean_reward[self.goal_subtask_id].append(reward)
 
             curr_trial += 1
 
