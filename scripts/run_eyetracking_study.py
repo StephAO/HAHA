@@ -18,17 +18,19 @@ from itertools import product
 
 from pylsl import StreamInfo, StreamOutlet
 
+
 STEPS_PER_TRIAL = 100
 
 ROOT = tk.Tk()
 ROOT.title("Survey")
 ROOT.resizable(False, False)  # This code helps to disable windows from resizing
 ROOT.eval('tk::PlaceWindow . center')
-
+# ROOT.overrideredirect(True)
 
 def on_closing():
     if messagebox.askokcancel("Quit", "Do you want to quit?"):
         ROOT.destroy()
+        exit(0)
 
 ROOT.protocol("WM_DELETE_WINDOW", on_closing)
 
@@ -37,7 +39,6 @@ info_stream = StreamInfo(name="GameData", type="Markers", channel_count=1,
 outlet = StreamOutlet(info_stream)
 
 def get_user_id_popup():
-    # root = tk.Tk()
     ROOT.withdraw()
     user_id = simpledialog.askstring("User ID", "Enter User ID:")
     return 0, user_id
@@ -67,7 +68,6 @@ def run_study(args, teammates, layouts):
         print("\n\n\nRefresh LSL streams\nSelect GameData stream\nStart LSL recording")
         np.random.shuffle(agt_envt)
         for teammate, layout in agt_envt:
-            args.horizon = 20
             trial_id += 1
             game = OvercookedGUI(args, layout_name=layout, agent='human', teammate=teammate, horizon=STEPS_PER_TRIAL,
                                  p_idx=0, trial_id=trial_id, user_id=user_id, stream=info_stream, outlet=outlet,
@@ -100,8 +100,6 @@ def show_instructions():
     print("HTML File Path:", html_file_path)
     frame.load_file(html_file_path, decode=None, force=False)
 
-    # frame.set_fontscale(2)
-
     def close_instructions(*args):
         ROOT.quit()
         ROOT.withdraw()
@@ -110,10 +108,12 @@ def show_instructions():
     frame.html.config(width=1500, height=800)
     frame.pack(fill="both", expand=True)
     frame.pack_propagate(0)
-    frame.update()
-    x_coordinate = ROOT.winfo_screenwidth() // 2 - ROOT.winfo_width() // 2
-    y_coordinate = ROOT.winfo_screenheight() // 2 - ROOT.winfo_height() // 2
+
+    x_coordinate = ROOT.winfo_screenwidth() // 2 - 1500 // 2
+    y_coordinate = ROOT.winfo_screenheight() // 2 - 800 // 2
     ROOT.geometry(f'+{x_coordinate}+{y_coordinate}')
+    frame.update()
+
 
     frame.on_form_submit(close_instructions)
     ROOT.deiconify()
@@ -163,11 +163,12 @@ class LikertScaleGUI():
         tk.Button(self.mainframe, text="Submit", font=('TkFixedFont', 15), command=self.get_answers_and_destroy)\
                  .grid(row=len(LikertScaleGUI.questions), column=0, pady=(10, 10))
 
+
         self.mainframe.update()
-        x_coordinate = ROOT.winfo_screenwidth() // 2 - ROOT.winfo_width() // 2
-        y_coordinate = ROOT.winfo_screenheight() // 2 - ROOT.winfo_height() // 2
+        x_coordinate = 1920 // 2 - self.mainframe.winfo_width() // 2
+        y_coordinate = 1080 // 2 - self.mainframe.winfo_height() // 2
         ROOT.geometry(f'+{x_coordinate}+{y_coordinate}')
-        self.mainframe.update()
+        # self.mainframe.update()
 
     def get_answers_and_destroy(self):
         potential_answers = [a.get() for a in self.radio_button_values]
