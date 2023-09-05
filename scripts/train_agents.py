@@ -131,19 +131,18 @@ def get_fcp_population(args, training_steps=2e7):
     try:
         fcp_pop = {}
         for layout_name in args.layout_names:
-            fcp_pop[layout_name] = RLAgentTrainer.load_agents(args, name=f'fcp_pop_{layout_name}', tag='ent0.001')
+            fcp_pop[layout_name] = RLAgentTrainer.load_agents(args, name=f'fcp_pop_{layout_name}', tag='haha')
             print(f'Loaded fcp_pop with {len(fcp_pop)} agents.')
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
         fcp_pop = {layout_name: [] for layout_name in args.layout_names}
         agents = []
         num_layers = 2
-        for use_fs in [False, True]:
-            for seed, h_dim in [(105, 32), (105, 256), (2907, 32),
-                                (2907, 256)]:  # [8,16], [32, 64], [128, 256], [512, 1024]
-                ck_rate = training_steps // 20
+        for use_fs in [True]:#[False, True]:
+            for seed, h_dim in [(2907, 64), (2907, 256)]:  #(105, 64), (105, 256),# [8,16], [32, 64], [128, 256], [512, 1024]
+                ck_rate = training_steps // 10
                 # name = f'cnn_{num_layers}l_' if use_cnn else f'eval_{num_layers}l_'
-                name = 'sp_ent0.001_'
+                name = 'fcp_sp'
                 # name += 'pc_' if use_policy_clone else ''
                 # name += 'tpl_' if taper_layers else ''
                 name += f'fs_' if use_fs else ''
@@ -161,7 +160,7 @@ def get_fcp_population(args, training_steps=2e7):
         for layout_name in args.layout_names:
             pop = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
             pop.agents = fcp_pop[layout_name]
-            pop.save_agents(tag='ent_0.001')
+            pop.save_agents(tag='haha')
     return fcp_pop
 
 
@@ -173,51 +172,59 @@ def get_fcp_agent(args, training_steps=1e7):
     return fcp_trainer.get_agents()[0]
 
 
+def get_hrl_worker(args, teammate_type='bcp', training_steps=1e7):
+    name = f'worker_{teammate_type}3'
+    try:
+        worker = RLAgentTrainer.load_agents(args, name=name, tag='best')[0]
+    except FileNotFoundError as e:
+        print(f'Could not find saved worker agent, creating them from scratch...\nFull Error: {e}')
+        # eval_tms = get_eval_teammates(args)
+
+        if teammate_type == 'bcp':
+            teammates, _ = get_bc_and_human_proxy(args)
+        elif teammate_type == 'fcp':
+            teammates = get_fcp_population(args, training_steps)
+
+        #teammates = get_fcp_population(args, 1e7)
+        # Create subtask worker
+        env_kwargs = {'stack_frames': False, 'full_init': False, 'args': args}
+        env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs,
+                           vec_env_cls=VEC_ENV_CLS)
+        env_kwargs['full_init'] = True
+        eval_envs = [OvercookedSubtaskGymEnv(**{'env_index': n, 'is_eval_env': True, **env_kwargs})
+                     for n in range(len(args.layout_names))]
+        worker_trainer = RLAgentTrainer(teammates, args, name=name, env=env, eval_envs=eval_envs,
+                                        use_subtask_eval=True)
+        worker_trainer.train_agents(train_timesteps=training_steps)
+        worker = worker_trainer.get_agents()[0]
+
+    return worker
+
+
 def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_iterations=10):
     """
     teammates args is a tuple of length 2, where each value can be either bcp of fcp. The first value indicates the
     teammates to use for the worker, the second the teammates to use for the manager
     """
     name = f'HAHA_{teammate_types}'
+    # Get worker
+    worker = get_hrl_worker(args, teammate_types[0], training_steps=training_steps)
     # Get teammates
-    if 'bcp' in teammate_types:
-        bcp_teammates, _ = get_bc_and_human_proxy(args)
-    if 'fcp' in teammate_types:
-        fcp_teammates = get_fcp_population(args, training_steps)
+    if teammate_types[1] == 'bcp':
+        teammates, _ = get_bc_and_human_proxy(args)
+    elif teammate_types[1] == 'fcp':
+        teammates = get_fcp_population(args, training_steps)
 
-    teammates = []
-    for i in range(len(teammate_types)):
-        teammates.append(bcp_teammates if teammate_types[i] == 'bcp' else fcp_teammates)
-
-    # Create worker env and worker
-    env_kwargs = {'stack_frames': False, 'full_init': False, 'args': args}
-    worker_env = make_vec_env(OvercookedSubtaskGymEnv, n_envs=args.n_envs, env_kwargs=env_kwargs,
-                              vec_env_cls=VEC_ENV_CLS)
-    env_kwargs['full_init'] = True
-    worker_eval_envs = [OvercookedSubtaskGymEnv(**{'env_index': n, 'is_eval_env': True, **env_kwargs})
-                        for n in range(len(args.layout_names))]
-
-    worker_trainer = RLAgentTrainer(teammates[0], args, name=name + '_worker', env=worker_env, eval_envs=worker_eval_envs,
-                                    use_subtask_eval=True)
     # Create manager and manager env
-    manager_trainer = RLManagerTrainer(worker_trainer.learning_agent, teammates[1], args, use_subtask_counts=False,
-                                       name=name + '_manager', inc_sp=False, use_policy_clone=False, seed=2602)
+    manager_trainer = RLManagerTrainer(worker, teammates, args, use_subtask_counts=False,
+                                       name=f'manager_{teammate_types[1]}', inc_sp=False, use_policy_clone=False, seed=2602)
 
     # Iteratively train worker and manager
-    training_steps_per_agent_per_iter = training_steps // (num_iterations * 2)
-    for i in range(num_iterations):
-        # import cProfile
-        # from timeit import timeit
-        # print(timeit(lambda: worker_trainer.train_agents(training_steps_per_agent_per_iter), number=1))
-        # cProfile.runctx('worker_trainer.train_agents(training_steps_per_agent_per_iter)', None, locals(), sort='cumtime')
-        if i == 1:
-            worker_env.env_method('set_manager', manager_trainer.learning_agent)
-            for we in worker_eval_envs:
-                we.set_manager(manager_trainer.learning_agent)
-        print(f'training worker for {training_steps_per_agent_per_iter}, iter{i}')
-        worker_trainer.train_agents(training_steps_per_agent_per_iter)
-        print(f'training manager for {training_steps_per_agent_per_iter}, iter{i}')
-        manager_trainer.train_agents(training_steps_per_agent_per_iter)
+    # import cProfile
+    # from timeit import timeit
+    # print(timeit(lambda: worker_trainer.train_agents(training_steps_per_agent_per_iter), number=1))
+    # cProfile.runctx('worker_trainer.train_agents(training_steps_per_agent_per_iter)', None, locals(), sort='cumtime')
+    manager_trainer.train_agents(training_steps)
 
     hrl = HierarchicalRL(worker_trainer.learning_agent, manager_trainer.learning_agent, args, name=name)
     hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))
@@ -239,18 +246,18 @@ def get_all_agents(args, training_steps=1e7, agents_to_train='all'):
 
 if __name__ == '__main__':
     args = get_arguments()
-    # get_selfplay_agent(args, training_steps=1e8)
+    #get_selfplay_agent(args, training_steps=1e8)
     # print('GOT SP', flush=True)
     # get_bc_and_human_proxy(args, epochs=2)
     # print('GOT BC&HP', flush=True)
-    # get_behavioral_cloning_play_agent(args, training_steps=1e8)
+    #get_behavioral_cloning_play_agent(args, training_steps=1e8)
     # print('GOT BCP', flush=True)
-    # get_fcp_population(args, training_steps=1e7)
+    get_fcp_population(args, training_steps=1e7)
     # print('GOT FCP', flush=True)
-    # get_hrl_worker(args, training_steps=1e3)
-    # print('GOT WORK', flush=True)
-    get_hrl_agent(args, training_steps=1e8)
-    print('GOT HAHA', flush=True)
+    #get_hrl_worker(args, training_steps=50e6)
+    #print('GOT WORK', flush=True)
+    #get_hrl_agent(args, training_steps=5e7)
+    #print('GOT HAHA', flush=True)
 
     # get_bc_and_human_proxy(args)
     # get_behavioral_cloning_play_agent(args, training_steps=1e8)
