@@ -57,7 +57,7 @@ def combine_state_and_heatmap(state, heatmap, mdp, tile_size, hud_size, timestep
 # eye_data_df = pd.read_csv('data/eye_tracking_data/P99_9_GameEyeData.csv')
 
 import pyxdf
-data, header = pyxdf.load_xdf('data/eye_tracking_data/oaiET_stephane_test2.xdf')
+data, header = pyxdf.load_xdf('data/eye_tracking_data/oaiET_stephane_test3.xdf')
 
 game_data_df = {}
 eye_data_df = {}
@@ -91,7 +91,7 @@ for index, row in game_data_df.iterrows():
     state = OvercookedState.from_dict(json.loads(game_data['state']))
     eye_data = []
     # print(time)
-    while prev_eye_row['Time'] <= time + 0.200:
+    while prev_eye_row['Time'] <= time:
         eye_data.append((prev_eye_row['LRavgXposClip'], prev_eye_row['LRavgYposClip']))
         _, prev_eye_row = next(eye_data_gen)
 
