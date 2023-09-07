@@ -23,17 +23,17 @@ if __name__ == "__main__":
 
     args = get_arguments(additional_args)
 
-    bc, human_proxy = BehavioralCloningTrainer.load_bc_and_human_proxy(args, name=f'bc_{args.layout}')
+    # bc, human_proxy = BehavioralCloningTrainer.load_bc_and_human_proxy(args, name=f'bc_{args.layout}')
     # worker = load_agent(Path('agent_models/subtask_worker_bcp/best/agents_dir/agent_0'), args)
-    tm = bc #'human' #HumanPlayer('human', args)
+    # tm = bc #'human' #HumanPlayer('human', args)
     # agent = HumanManagerHRL(worker, args)
 
 
-    agent =  load_agent(Path('agent_models/HAHA_bcp'), args)
+    agent = 'human'# load_agent(Path('agent_models/HAHA_bcp'), args)
     # tm = load_agent(Path('agent_models/old_SP'), args)
 
     t_idx = 1 - args.p_idx
-    # tm = DummyAgent('random')# load_agent(Path(args.teammate), args)
+    tm = DummyAgent('random')# load_agent(Path(args.teammate), args)
     # tm.set_idx(t_idx, args.layout, is_hrl=isinstance(tm, HierarchicalRL), tune_subtasks=False)
     # if args.agent == 'human':
     #     agent = args.agent

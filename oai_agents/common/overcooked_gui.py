@@ -1,3 +1,4 @@
+from copy import deepcopy
 import json
 import numpy as np
 import pandas as pd
@@ -9,7 +10,6 @@ import matplotlib
 import time
 
 matplotlib.use('TkAgg')
-
 from os import listdir, environ, system, name
 from os.path import isfile, join
 import re
@@ -56,7 +56,7 @@ class OvercookedGUI:
     """Class to run an Overcooked Gridworld game, leaving one of the agents as fixed.
     Useful for debugging. Most of the code from http://pygametutorials.wikidot.com/tutorials-basic."""
     def __init__(self, args, layout_name=None, agent=None, teammate=None, p_idx=0, horizon=400,
-                 trial_id=None, user_id=None, stream=None, outlet=None, fps=5, start_message=None):
+                 trial_id=None, user_id=None, stream=None, outlet=None, fps=5, start_message='Press Enter to Start'):
         self.x = None
         self._running = True
         self._display_surf = None
@@ -79,8 +79,7 @@ class OvercookedGUI:
         self.env.teammate.set_idx(self.env.t_idx, self.env, is_hrl=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=False)
         self.teammate_name=teammate.name
 
-
-        self.grid_shape = self.env.grid_shape
+        self.grid_shape = self.env.mdp.shape
         self.trial_id = trial_id
         self.user_id = user_id
         self.fps = fps
@@ -93,10 +92,7 @@ class OvercookedGUI:
         self.data_path = args.base_dir / args.data_path
         self.data_path.mkdir(parents=True, exist_ok=True)
 
-
         self.tile_size = 180
-
-
 
         self.info_stream = stream
         self.outlet = outlet
@@ -112,7 +108,7 @@ class OvercookedGUI:
         self.surface_size = surface.get_size()
         self.x, self.y = (1920 - self.surface_size[0]) // 2, (1080 - self.surface_size[1]) // 2
         self.grid_shape = self.env.mdp.shape
-        self.hud_size = self.surface_size[1] - (self.grid_shape[1] * self.tile_size)
+        self.hud_size = self.surface_size[1] - (self.grid_shape[1] * self.tile_size) - 30
         environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (self.x, self.y)
 
         self.window = pygame.display.set_mode(self.surface_size, HWSURFACE | DOUBLEBUF | RESIZABLE)
@@ -176,9 +172,10 @@ class OvercookedGUI:
             self._running = False
 
     def step_env(self, agent_action):
-        prev_state = self.env.state
+        prev_state = deepcopy(self.env.state)
 
         obs, reward, done, info = self.env.step(agent_action)
+        self.on_render()
         if 'tutorial' in self.layout_name and info['sparse_r_by_agent'][self.p_idx] > 0:
             done = True
 
@@ -254,12 +251,12 @@ class OvercookedGUI:
                 # pygame.time.wait(sleep_time)
 
             done = self.step_env(action)
+
             self.human_action = None
             if True or self.curr_tick < 200:
                 pygame.time.wait(sleep_time)
             else:
                 pygame.time.wait(1000)
-            self.on_render()
             self.curr_tick += 1
 
             if done:
