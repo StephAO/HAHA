@@ -227,7 +227,7 @@ class OvercookedGUI:
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
         # Save screenshot
-        # pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
+        pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
 
     def on_cleanup(self):
         pygame.quit()
