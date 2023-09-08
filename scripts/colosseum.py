@@ -62,7 +62,7 @@ def load_agents_population(filepaths, args):
 if __name__ == "__main__":
     args = get_arguments()
     base_dir = args.base_dir / 'agent_models'
-    main_agents_fns = ["HAHA_bcp"]#, "BCP"]#, "HAHA"]#, "HAHA+tuned", "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
+    main_agents_fns = ["BCP"]#, "HAHA+tuned", "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
     main_agents_fns = [base_dir / fn for fn in main_agents_fns]
 
     main_agents = load_agents_population(main_agents_fns, args)
@@ -74,7 +74,8 @@ if __name__ == "__main__":
 
     # tm_fns = ["ck_0", "ck_4", "ck_8", "ck_12", "ck_16", "best"]
     # tm_fns = [base_dir / '2l_hd128_s1997' / fn / 'agents_dir' / 'agent_0' for fn in tm_fns]
-    tms = [*load_agents_population([base_dir / "old_SP"], args), human_proxy, DummyAgent('random')] # [*load_agents_population(tm_fns, args)]
+    tms = [bc, human_proxy]
+    # tms = [*load_agents_population([base_dir / "old_SP"], args), human_proxy, DummyAgent('random')] # [*load_agents_population(tm_fns, args)]
 
     score_matrices = eval_agents_with_various_teammates(main_agents, tms)
     for layout in args.layout_names:

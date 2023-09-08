@@ -19,7 +19,7 @@ def get_arguments(additional_args=[]):
                              'Options: "dense_lossless", "OAI_lossless", "OAI_feats", "OAI_egocentric"')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate used in imitation learning. lr for rl is defined in rl.py')
     parser.add_argument('--batch-size', type=int, default=32, help='batch size used in imitation learning. bs for rl is defined in rl.py')
-    parser.add_argument('--exp-name', type=str, default='aamas24_ent_',
+    parser.add_argument('--exp-name', type=str, default='aamas24',
                         help='Name of experiment. Used to tag save files.')
     parser.add_argument('--base-dir', type=str, default=Path.cwd(),
                         help='Base directory to save all models, data, wandbai.')

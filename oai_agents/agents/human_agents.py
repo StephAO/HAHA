@@ -13,6 +13,7 @@ class HumanManagerHRL(OAIAgent):
         self.policy = self.worker.policy
         self.curr_subtask_id = 11
         self.prev_pcs = None
+        self.action_id = 0
 
     def get_distribution(self, obs, sample=True):
         # Completed previous subtask, set new subtask
@@ -22,7 +23,7 @@ class HumanManagerHRL(OAIAgent):
         return self.worker.get_distribution(obs, sample=sample)
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool = False):
-        if Action.INDEX_TO_ACTION[int(self.action_id.squeeze())] == Action.INTERACT or self.curr_subtask_id == 11:
+        if (self.action_id and Action.INDEX_TO_ACTION[int(self.action_id.squeeze())] == Action.INTERACT) or self.curr_subtask_id == 11:
             doable_st = [Subtasks.IDS_TO_SUBTASKS[idx] for idx, doable in enumerate(obs['subtask_mask']) if doable == 1]
             print('DOABLE SUBTASKS:', [(dst, Subtasks.SUBTASKS_TO_IDS[dst]) for dst in doable_st])
             next_st = input("Enter next subtask (0-10): ")

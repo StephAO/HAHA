@@ -99,7 +99,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             reward = 0
         else:
             # Reward proportional to how much time is saved from using the pass compared to walking ourselves
-            reward = (curr_dist - smallest_dist) * 0.1
+            reward = (smallest_dist - curr_dist) * 0.1
 
         return np.clip(reward, -0.5, 0.5)
 

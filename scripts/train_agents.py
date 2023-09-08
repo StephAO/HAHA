@@ -2,6 +2,7 @@ from oai_agents.agents.il import BehavioralCloningTrainer
 from oai_agents.agents.rl import RLAgentTrainer, SB3Wrapper, VEC_ENV_CLS
 from oai_agents.agents.hrl import RLManagerTrainer, HierarchicalRL, DummyAgent
 from oai_agents.common.arguments import get_arguments
+from oai_agents.agents.agent_utils import load_agent
 from oai_agents.gym_environments.worker_env import OvercookedSubtaskGymEnv
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
@@ -31,21 +32,20 @@ def calculate_agent_pairing_score_matrix(agents, args):
 def create_pop_from_agents(args):
     # WARNING: THIS IS JUST TEMPLATE CODE. This function requires hand figuring out each ck to use for the mid ck
     base_path = args.base_dir / 'agent_models'
-    mid_indices = {'forced_coordination': [2, 9], 'counter_circuit_o_1order': [0, 7], 'asymmetric_advantages': [0, 1],
-                   'cramped_room': [0, 2], 'coordination_ring': [0, 3]}
+    mid_indices = {'forced_coordination': [6, 6, 5, 4, 6, 4, 4, 4], 'counter_circuit_o_1order': [3, 4, 4, 4, 5, 4, 3, 3], 'asymmetric_advantages': [3, 1, 2, 2, 2, 2, 1, 2],
+                   'cramped_room': [2, 2, 1, 1, 2, 2, 1, 1], 'coordination_ring': [3, 2, 2, 2, 2, 6, 3, 2]}
+    agent_names = ['fcp_spfs_hd64_seed105', 'fcp_spfs_hd64_seed2907', 'fcp_spfs_hd256_seed105', 'fcp_spfs_hd256_seed2907',
+                   'fcp_sphd64_seed105', 'fcp_sphd64_seed2907', 'fcp_sphd256_seed105', 'fcp_sphd256_seed2907']
     for layout_name in args.layout_names:
         pop_agents = []
-        for agent_name in ['2l_hd32_seed19950226', '2l_hd32_seed20220501', '2l_hd128_seed1997', '2l_hd128_seed219',
-                           '2l_tpl_hd32_seed1004219', '2l_tpl_hd32_seed20220501', '2l_tpl_hd128_seed219',
-                           '2l_tpl_hd128_seed2191004']:
+        for agent_name, mi in zip(agent_names, mid_indices[layout_name]):
+            worst = SB3Wrapper.load(base_path / agent_name / f'ck_0' / 'agents_dir' / 'agent_0', args)
+            mid = SB3Wrapper.load(base_path / agent_name / f'ck_{mi}' / 'agents_dir' / 'agent_0', args)
             best = SB3Wrapper.load(base_path / agent_name / 'best' / 'agents_dir' / 'agent_0', args)
-            pop_agents += [best]
-            for i in mid_indices[layout_name]:
-                next_agent = SB3Wrapper.load(base_path / agent_name / f'ck_{i}' / 'agents_dir' / 'agent_0', args)
-                pop_agents += [next_agent]
+            pop_agents += [worst, mid, best]
 
         mat = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
-        mat.set_agents(pop_agents)
+        mat.agents = pop_agents
         mat.save_agents()
 
 
@@ -173,7 +173,7 @@ def get_fcp_agent(args, training_steps=1e7):
 
 
 def get_hrl_worker(args, teammate_type='bcp', training_steps=1e7):
-    name = f'worker_{teammate_type}3'
+    name = f'worker_{teammate_type}'
     try:
         worker = RLAgentTrainer.load_agents(args, name=name, tag='best')[0]
     except FileNotFoundError as e:
@@ -208,7 +208,7 @@ def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_i
     """
     name = f'HAHA_{teammate_types}'
     # Get worker
-    worker = get_hrl_worker(args, teammate_types[0], training_steps=training_steps)
+    worker = get_hrl_worker(args, teammate_types[0], training_steps=15e6)
     # Get teammates
     if teammate_types[1] == 'bcp':
         teammates, _ = get_bc_and_human_proxy(args)
@@ -224,9 +224,9 @@ def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_i
     # from timeit import timeit
     # print(timeit(lambda: worker_trainer.train_agents(training_steps_per_agent_per_iter), number=1))
     # cProfile.runctx('worker_trainer.train_agents(training_steps_per_agent_per_iter)', None, locals(), sort='cumtime')
-    manager_trainer.train_agents(training_steps)
+    manager_trainer.train_agents(50e6)
 
-    hrl = HierarchicalRL(worker_trainer.learning_agent, manager_trainer.learning_agent, args, name=name)
+    hrl = HierarchicalRL(worker, manager_trainer.learning_agent, args, name=name)
     hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))
     return hrl
 
@@ -252,11 +252,11 @@ if __name__ == '__main__':
     # print('GOT BC&HP', flush=True)
     #get_behavioral_cloning_play_agent(args, training_steps=1e8)
     # print('GOT BCP', flush=True)
-    get_fcp_population(args, training_steps=1e7)
+    # get_fcp_population(args, training_steps=1e7)
     # print('GOT FCP', flush=True)
     #get_hrl_worker(args, training_steps=50e6)
     #print('GOT WORK', flush=True)
-    #get_hrl_agent(args, training_steps=5e7)
+    # get_hrl_agent(args, training_steps=5e7)
     #print('GOT HAHA', flush=True)
 
     # get_bc_and_human_proxy(args)
@@ -268,6 +268,6 @@ if __name__ == '__main__':
     # get_hrl_agent(args, 5e7)
 
     # create_test_population(args, 1e3)
-    # create_pop_from_agents(args)
+    create_pop_from_agents(args)
 
     # combine_populations(args)

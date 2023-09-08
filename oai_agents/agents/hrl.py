@@ -96,6 +96,7 @@ class HierarchicalRL(OAIAgent):
         self.output_message = True
         self.tune_subtasks = None
         self.curr_subtask_id = Subtasks.SUBTASKS_TO_IDS['unknown']
+        self.action_id = None
 
     def set_play_params(self, output_message, tune_subtasks):
         self.output_message = output_message
@@ -256,9 +257,9 @@ class HierarchicalRL(OAIAgent):
         return np.expand_dims(np.array(subtask), 0)
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
-        if Action.INDEX_TO_ACTION[int(self.action_id.squeeze())] == Action.INTERACT or \
+        if (self.action_id and Action.INDEX_TO_ACTION[int(self.action_id.squeeze())] == Action.INTERACT) or \
             self.num_steps_since_new_subtask >= 2 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
-            if Action.INDEX_TO_ACTION[int(self.action_id)] == Action.INTERACT:
+            if self.action_id and Action.INDEX_TO_ACTION[int(self.action_id)] == Action.INTERACT:
                 self.subtask_step += 1
             # Completed previous subtask, set new subtask
             if self.tune_subtasks:
