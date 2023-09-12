@@ -1,25 +1,30 @@
-from oai_agents.common.arguments import get_arguments
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
-from oai_agents.common.subtasks import Subtasks, calculate_completed_subtask
-from overcooked_ai_py.mdp.overcooked_env import OvercookedEnv
 from overcooked_ai_py.mdp.overcooked_mdp import OvercookedState, OvercookedGridworld, Action
+from sklearn.preprocessing import OneHotEncoder
+
 
 
 import json
-import numpy as np
 import pandas as pd
-from torch.utils.data import Dataset, DataLoader
-from tqdm import tqdm
-import sys
+from torch.utils.data import Dataset
+import numpy as np
+
+import warnings
+# Filter out UserWarnings
+warnings.simplefilter(action='ignore', category=UserWarning)
+
 
 class OvercookedDataset(Dataset):
-    def __init__(self, dataset, layouts, args, add_subtask_info=True):
-        self.seq_len = 15
+    def __init__(self, dataset, layouts, args, seq_len, num_classes, add_subtask_info=True):
+
+        self.seq_len = seq_len
+        self.num_classes = num_classes
         self.step = 1
         self.add_subtask_info = add_subtask_info
         self.encoding_fn = ENCODING_SCHEMES['OAI_feats']
-        self.data_path = '/content/HAHA/data/2019_hh_trials_all.pickle' #- For now the base classifier is based on 2019_hh_trials_all.pickle
+        self.data_path = '/Users/nikhilhulle/Desktop/HAHA-eyetracking/data/2019_hh_trials_all.pickle' #- For now the base classifier is based on 2019_hh_trials_all.pickle
         self.main_trials = pd.read_pickle(self.data_path)
+
         if dataset == '2019_hh_trials_all.pickle':
             self.main_trials.loc[self.main_trials.layout_name == 'random0', 'layout_name'] = 'forced_coordination'
             self.main_trials.loc[self.main_trials.layout_name == 'random3', 'layout_name'] = 'counter_circuit_o_1order'
@@ -37,11 +42,6 @@ class OvercookedDataset(Dataset):
             self.grid_shape[1] = max(mdp.shape[1], self.grid_shape[1])
 
         print(f'Number of {str(layouts)} trials: {len(self.main_trials)}, max grid size: {self.grid_shape}')
-        # Remove all transitions where both agents noop-ed
-        #self.main_trials = self.main_trials[self.main_trials['joint_action'] != '[[0, 0], [0, 0]]']
-        #print(f'Number of {str(layouts)} trials without double noops: {len(self.main_trials)}')
-
-        self.action_ratios = {k: 0 for k in Action.ALL_ACTIONS}
 
         def str_to_actions(joint_action):
             """
@@ -58,8 +58,6 @@ class OvercookedDataset(Dataset):
                     joint_action[i] = tuple(joint_action[i])
                 if type(joint_action[i]) is str:
                     joint_action[i] = joint_action[i].lower()
-                assert joint_action[i] in Action.ALL_ACTIONS
-                self.action_ratios[joint_action[i]] += 1
             return [Action.ACTION_TO_INDEX[a] for a in joint_action]
 
         def str_to_obss(df):
@@ -87,8 +85,11 @@ class OvercookedDataset(Dataset):
             self.ind_trials[i]['trial_id'] = self.ind_trials[i]['trial_id']
             self.ind_trials[i]['score_total'] = self.ind_trials[i]['score_total']
 
-
         self.main_trials = pd.concat([self.ind_trials[i][['agent_obs', 'action', 'score', 'trial_id', 'score_total']] for i in range(2)], axis=0, ignore_index=True)
+        self.encoder = OneHotEncoder(sparse=False)
+        self._fit_encoder()
+        self.update_score_for_each_trial_id()
+        self.bin_scores()
 
 
 
@@ -99,20 +100,19 @@ class OvercookedDataset(Dataset):
     def __len__(self):
         return (len(self.main_trials) - self.seq_len + 1) // self.step
 
+
     def update_score_for_each_trial_id(self):
         unique_trial_ids = self.main_trials['trial_id'].unique()
 
         for trial_id in unique_trial_ids:
-            max_score_for_trial = self.main_trials[self.main_trials['trial_id'] == trial_id]['score_total'].max()
-            self.main_trials.loc[self.main_trials['trial_id'] == trial_id, 'score'] = max_score_for_trial
+            # Get the last timestep for the specific trial_id
+            last_timestep_data = self.main_trials[self.main_trials['trial_id'] == trial_id].iloc[-1]
+            max_score_for_trial = last_timestep_data['score_total']
 
+            self.main_trials.loc[self.main_trials['trial_id'] == trial_id, 'score'] = max_score_for_trial
             print(f"Updated scores for trial ID {trial_id} to {max_score_for_trial}")
 
-    # def bin_scores(self):
-    #     # Divide the scores into 4 bins
-    #     NUM_CLASSES = 4
-    #     score_bins = pd.cut(self.main_trials['score'], bins=NUM_CLASSES, labels=False)
-    #     self.main_trials['score_bins'] = score_bins
+
 
     """
     pd.qcut function bins the continuous data into equal sized buckets based on sample quantiles.
@@ -120,11 +120,17 @@ class OvercookedDataset(Dataset):
     approximately the same number of data points.
     """
     def bin_scores(self):
-    # Divide the scores into 4 bins based on quantiles
-          NUM_CLASSES = 4
-          score_bins = pd.qcut(self.main_trials['score'], q=NUM_CLASSES, labels=False)
-          self.main_trials['score_bins'] = score_bins
+        # Divide the scores into 4 bins based on quantiles
 
+        score_bins = pd.qcut(self.main_trials['score'], q=self.num_classes, labels=False)
+        self.main_trials['score_bins'] = score_bins
+
+
+    def _fit_encoder(self):
+        # Fit the encoder with unique action values
+        unique_actions = np.unique(self.main_trials['action'].values).reshape(-1, 1)
+        print(f"unique_Actions: {unique_actions}")
+        self.encoder.fit(unique_actions)
 
 
     def __getitem__(self, idx):
@@ -133,25 +139,21 @@ class OvercookedDataset(Dataset):
 
         data_sequence = self.main_trials.iloc[start_idx:end_idx]
         agent_obs_sequence = np.stack(data_sequence['agent_obs'].values)
-        action_sequence = np.stack(data_sequence['action'].values)
+        action_sequence = self.encoder.transform(data_sequence[['action']])
+
+        score_total_sequence = np.stack(data_sequence['score_total'].values)
         score_bin = data_sequence['score_bins'].iloc[-1]
 
-        return {'agent_obs': agent_obs_sequence, 'action': action_sequence, 'score_bins': score_bin}
+        #If sequence is shorter than seq_len, pad it
+        padding_length = self.seq_len - len(agent_obs_sequence)
+        if padding_length > 0:
+            agent_obs_pad = np.zeros((padding_length, agent_obs_sequence.shape[1]))
+            agent_obs_sequence = np.vstack((agent_obs_sequence, agent_obs_pad))
 
-def main():
-    if 'ipykernel_launcher' in sys.argv[0]:
-        sys.argv = [sys.argv[0]]  # Remove additional arguments passed by Jupyter Notebook
-    args = get_arguments()
-    env = OvercookedEnv.from_mdp(OvercookedGridworld.from_layout_name(args.layout_names[0]), horizon=400)
-    encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
-    OD = OvercookedDataset(encoding_fn, args.layout_names, args)  # OvercookedDataset(env, encoding_fn, args)
-    OD.update_score_for_each_trial_id()
-    OD.bin_scores()
-    dataloader = DataLoader(OD, batch_size=1, shuffle=True, num_workers=0) #action 1d
-    # for batch in dataloader:
-    #     print(batch)
-    #     exit(0)
+            action_pad = np.zeros((padding_length, action_sequence.shape[1]))
+            action_sequence = np.vstack((action_sequence, action_pad))
 
+            score_total_pad = np.zeros(padding_length)
+            score_total_sequence = np.hstack((score_total_sequence, score_total_pad))
 
-if __name__ == '__main__':
-    main()
+        return {'agent_obs': agent_obs_sequence, 'action': action_sequence, 'score_bins': score_bin, 'score': score_total_sequence}
