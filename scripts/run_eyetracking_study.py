@@ -19,7 +19,7 @@ from itertools import product
 from pylsl import StreamInfo, StreamOutlet
 
 
-STEPS_PER_TRIAL = 100
+STEPS_PER_TRIAL = 400
 
 ROOT = tk.Tk()
 ROOT.title("Survey")
