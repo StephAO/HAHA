@@ -70,7 +70,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         else:
             # Reward proportional to how much time is saved from using the pass compared to walking ourselves
             reward = (curr_dist - smallest_dist) * 0.1
-        return np.clip(reward, -0.5, 0.5)
+        return np.clip(reward, -0.9, 2)
 
     def get_pickup_proximity_reward(self, feature_locations):
         # Calculate bonus reward for picking up an object on the pass.
@@ -101,7 +101,7 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             # Reward proportional to how much time is saved from using the pass compared to walking ourselves
             reward = (smallest_dist - curr_dist) * 0.1
 
-        return np.clip(reward, -0.5, 0.5)
+        return np.clip(reward, -0.9, 2)
 
     def get_fuller_pot_reward(self, state, terrain):
         """
@@ -196,19 +196,19 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
             if reward == 1:
                 # Extra rewards to incentivize better placements
                 if self.goal_subtask == 'put_onion_closer':
-                    pot_locations = self.get_non_full_pot_locations(self.state)
+                    pot_locations = self.mdp.get_pot_locations()
                     reward += self.get_putdown_proximity_reward(pot_locations)
                 elif self.goal_subtask == 'put_plate_closer':
-                    pot_locations = self.get_non_full_pot_locations(self.state)
+                    pot_locations = self.mdp.get_pot_locations()
                     reward += self.get_putdown_proximity_reward(pot_locations)
                 elif self.goal_subtask == 'put_soup_closer':
                     serving_locations = self.mdp.get_serving_locations()
                     reward += self.get_putdown_proximity_reward(serving_locations)
                 elif self.goal_subtask == 'get_onion_from_counter':
-                    pot_locations = self.get_non_full_pot_locations(self.state)
+                    pot_locations = self.mdp.get_pot_locations()
                     reward += self.get_pickup_proximity_reward(pot_locations)
                 elif self.goal_subtask == 'get_plate_from_counter':
-                    pot_locations = self.get_non_full_pot_locations(self.state)
+                    pot_locations = self.mdp.get_pot_locations()
                     reward += self.get_pickup_proximity_reward(pot_locations)
                 elif self.goal_subtask == 'get_soup_from_counter':
                     serving_locations = self.mdp.get_serving_locations()

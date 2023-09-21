@@ -354,7 +354,7 @@ class OAITrainer(ABC):
         for i, env in enumerate(self.eval_envs):
             tms = self.eval_teammates[env.get_layout_name()] if use_layout_specific_tms else self.eval_teammates
             rew_per_layout[env.layout_name] = []
-            for tm in tms:
+            for tm in tms[:3]:
                 env.set_teammate(tm)
                 for p_idx in [0, 1]:
                     env.set_reset_p_idx(p_idx)

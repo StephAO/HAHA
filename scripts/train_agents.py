@@ -131,8 +131,8 @@ def get_fcp_population(args, training_steps=2e7):
     try:
         fcp_pop = {}
         for layout_name in args.layout_names:
-            fcp_pop[layout_name] = RLAgentTrainer.load_agents(args, name=f'fcp_pop_{layout_name}', tag='haha')
-            print(f'Loaded fcp_pop with {len(fcp_pop)} agents.')
+            fcp_pop[layout_name] = RLAgentTrainer.load_agents(args, name=f'fcp_pop_{layout_name}', tag='aamas24')
+            print(f'Loaded fcp_pop with {len(fcp_pop[layout_name])} agents.')
     except FileNotFoundError as e:
         print(f'Could not find saved FCP population, creating them from scratch...\nFull Error: {e}')
         fcp_pop = {layout_name: [] for layout_name in args.layout_names}
@@ -160,7 +160,7 @@ def get_fcp_population(args, training_steps=2e7):
         for layout_name in args.layout_names:
             pop = RLAgentTrainer([], args, selfplay=True, name=f'fcp_pop_{layout_name}')
             pop.agents = fcp_pop[layout_name]
-            pop.save_agents(tag='haha')
+            pop.save_agents(tag='aamas24')
     return fcp_pop
 
 
@@ -172,7 +172,7 @@ def get_fcp_agent(args, training_steps=1e7):
     return fcp_trainer.get_agents()[0]
 
 
-def get_hrl_worker(args, teammate_type='bcp', training_steps=1e7):
+def get_hrl_worker(args, teammate_type='fcp', training_steps=1e7):
     name = f'worker_{teammate_type}'
     try:
         worker = RLAgentTrainer.load_agents(args, name=name, tag='best')[0]
@@ -208,7 +208,7 @@ def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_i
     """
     name = f'HAHA_{teammate_types}'
     # Get worker
-    worker = get_hrl_worker(args, teammate_types[0], training_steps=15e6)
+    worker = get_hrl_worker(args, teammate_types[0])#, training_steps=15e6)
     # Get teammates
     if teammate_types[1] == 'bcp':
         teammates, _ = get_bc_and_human_proxy(args)
@@ -217,14 +217,14 @@ def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_i
 
     # Create manager and manager env
     manager_trainer = RLManagerTrainer(worker, teammates, args, use_subtask_counts=False,
-                                       name=f'manager_{teammate_types[1]}', inc_sp=False, use_policy_clone=False, seed=2602)
+                                       name=f'manager_{teammate_types}', inc_sp=False, use_policy_clone=False, seed=2602)
 
     # Iteratively train worker and manager
     # import cProfile
     # from timeit import timeit
     # print(timeit(lambda: worker_trainer.train_agents(training_steps_per_agent_per_iter), number=1))
     # cProfile.runctx('worker_trainer.train_agents(training_steps_per_agent_per_iter)', None, locals(), sort='cumtime')
-    manager_trainer.train_agents(50e6)
+    manager_trainer.train_agents(1e8)
 
     hrl = HierarchicalRL(worker, manager_trainer.learning_agent, args, name=name)
     hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))
@@ -250,24 +250,24 @@ if __name__ == '__main__':
     # print('GOT SP', flush=True)
     # get_bc_and_human_proxy(args, epochs=2)
     # print('GOT BC&HP', flush=True)
-    #get_behavioral_cloning_play_agent(args, training_steps=1e8)
+    #get_behavioral_cloning_play_agent(args, training_steps=2e8)
     # print('GOT BCP', flush=True)
-    # get_fcp_population(args, training_steps=1e7)
+    #get_fcp_agent(args, training_steps=1e8)
     # print('GOT FCP', flush=True)
-    #get_hrl_worker(args, training_steps=50e6)
+    #get_hrl_worker(args, training_steps=1e8)
     #print('GOT WORK', flush=True)
-    # get_hrl_agent(args, training_steps=5e7)
+    get_hrl_agent(args, training_steps=1e8)
     #print('GOT HAHA', flush=True)
 
     # get_bc_and_human_proxy(args)
     # get_behavioral_cloning_play_agent(args, training_steps=1e8)
 
     # get_fcp_population(args, 2e7)
-    # get_fcp_agent(args, training_steps=1e8)
+    #get_fcp_agent(args, training_steps=1e8)
     # get_hrl_worker(args)
     # get_hrl_agent(args, 5e7)
 
     # create_test_population(args, 1e3)
-    create_pop_from_agents(args)
+    #create_pop_from_agents(args)
 
     # combine_populations(args)
