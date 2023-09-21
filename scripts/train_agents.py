@@ -206,7 +206,7 @@ def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_i
     teammates args is a tuple of length 2, where each value can be either bcp of fcp. The first value indicates the
     teammates to use for the worker, the second the teammates to use for the manager
     """
-    name = f'HAHA_{teammate_types}'
+    name = f'HAHA_{teammate_types}_fulltasks'
     # Get worker
     worker = get_hrl_worker(args, teammate_types[0])#, training_steps=15e6)
     # Get teammates
@@ -268,6 +268,12 @@ if __name__ == '__main__':
     # get_hrl_agent(args, 5e7)
 
     # create_test_population(args, 1e3)
-    #create_pop_from_agents(args)
+    # create_pop_from_agents(args)
 
     # combine_populations(args)
+
+    # worker = load_agent(args.base_dir / 'agent_models' / 'worker_bcp/best/agents_dir/agent_0', args)
+    # manager = load_agent(args.base_dir / 'agent_models' / 'manager_bcp/best/agents_dir/agent_0', args)
+    #
+    # hrl = HierarchicalRL(worker, manager, args, name='HAHA_bcp_bcp')
+    # hrl.save(Path(Path(args.base_dir / 'agent_models' / hrl.name / args.exp_name)))

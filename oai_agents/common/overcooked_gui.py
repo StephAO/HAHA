@@ -76,7 +76,7 @@ class OvercookedGUI:
         self.env.reset(p_idx=self.p_idx)
         if self.agent != 'human':
             self.agent.set_idx(self.p_idx, self.env, is_hrl=isinstance(self.agent, HierarchicalRL), tune_subtasks=False)
-        self.env.teammate.set_idx(self.env.t_idx, self.env, is_hrl=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=False)
+        self.env.teammate.set_idx(self.env.t_idx, self.env, is_hrl=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=True)
         self.teammate_name=teammate.name
 
 

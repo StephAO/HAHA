@@ -65,6 +65,7 @@ def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState
     # Get np.array representing current state
     # This returns 2xNxMxF (F is # features) if p_idx is None else NxMxF
     visual_obs = mdp.lossless_state_encoding(state, horizon=horizon, goal_objects=goal_objects, p_idx=p_idx)
+
     if p_idx is None:
         visual_obs = np.stack(visual_obs, axis=0)
         visual_obs = np.transpose(visual_obs, (0, 3, 1, 2))  # Reorder to features first --> 2xFxNxM
@@ -72,7 +73,6 @@ def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState
     else:
         visual_obs = np.transpose(visual_obs, (2, 0, 1))
         num_features = visual_obs.shape[0]
-
     # Remove orientation features since they are now irrelevant.
     # There are num_players * num_directions features.
     #num_layers_to_skip = num_players*len(Direction.ALL_DIRECTIONS)
