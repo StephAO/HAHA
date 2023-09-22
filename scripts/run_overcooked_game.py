@@ -28,12 +28,12 @@ if __name__ == "__main__":
     # tm = bc #'human' #HumanPlayer('human', args)
     # agent = HumanManagerHRL(worker, args)
 
-
-    agent = 'human'# load_agent(Path('agent_models/HAHA_bcp'), args)
+    agent = 'human'
+    tm = load_agent(Path('agent_models/HAHA_bcp_bcp'), args)
     # tm = load_agent(Path('agent_models/old_SP'), args)
 
     t_idx = 1 - args.p_idx
-    tm = DummyAgent('random')# load_agent(Path(args.teammate), args)
+    # tm = DummyAgent('random')# load_agent(Path(args.teammate), args)
     # tm.set_idx(t_idx, args.layout, is_hrl=isinstance(tm, HierarchicalRL), tune_subtasks=False)
     # if args.agent == 'human':
     #     agent = args.agent

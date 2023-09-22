@@ -90,32 +90,7 @@ class OAIAgent(nn.Module, ABC):
             else:
                 obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([False]), [{}])
             obs['visual_obs'] = obs['visual_obs'].squeeze()
-        if 'player_completed_subtasks' in self.policy.observation_space.keys():
-            # If this isn't the first step of the game, see if a subtask has been completed
-            comp_st = [None, None]
-            if self.prev_state is not None:
-                for i in range(2):
-                    try:
-                        cst = calculate_completed_subtask(self.terrain, self.prev_state, state, i)
-                    except ValueError as e:
-                        cst = None
-                    comp_st[i] = cst
-                # If a subtask has been completed, update counts
-                if comp_st[self.p_idx] is not None:
-                    player_completed_tasks = np.eye(Subtasks.NUM_SUBTASKS)[comp_st[self.p_idx]]
-                    self.prev_subtask = comp_st[self.p_idx]
-                else:
-                    player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
-                if comp_st[1 - self.p_idx] is not None:
-                    tm_completed_tasks = np.eye(Subtasks.NUM_SUBTASKS)[comp_st[1 - self.p_idx]]
-                else:
-                    tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
-                # If this is the first step of the game, reset subtask counts to 0
-            else:
-                player_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
-                tm_completed_tasks = np.zeros(Subtasks.NUM_SUBTASKS)
-            obs['player_completed_subtasks'] = player_completed_tasks
-            obs['teammate_completed_subtasks'] = tm_completed_tasks
+
         if 'subtask_mask' in self.policy.observation_space.keys():
             obs['subtask_mask'] = get_doable_subtasks(state, self.prev_subtask, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5)).astype(bool)
 

@@ -125,10 +125,10 @@ class LikertScaleGUI():
     NON_ANSWERED_VALUE = -4
 
     questions = ["The human-agent team worked fluently together:",
-                        "I was the most important team member:",
-                        "I trusted the agent to do the right thing:",
-                        "I understood what the agent was trying to accomplish:",
-                        "The agent was cooperative:"]
+                 "I was the most important team member:",
+                 "I trusted the agent to do the right thing:",
+                 "I understood what the agent was trying to accomplish:",
+                 "The agent was cooperative:"]
 
     def __init__(self):
         super().__init__()
@@ -194,8 +194,8 @@ if __name__ == '__main__':
     args = get_arguments()
    # teammates = [load_agent(Path('agent_models/BCP'), args),  DummyAgent('random'), load_agent(Path('agent_models/SP'), args), load_agent(Path('agent_models/BCP'), args),  DummyAgent('random'), load_agent(Path('agent_models/SP'), args)]
 
-    teammates = [load_agent(Path('agent_models/BCP'), args), DummyAgent('random'),
-                 load_agent(Path('agent_models/SP'), args)]
+    teammates = [load_agent(Path('agent_models/SP'), args), DummyAgent('random'),
+                 load_agent(Path('agent_models/HAHA_bcp_bcp'), args)]
 
     # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages', 'cramped_room', 'coordination_ring']
     # layouts = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages']
