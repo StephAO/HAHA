@@ -87,6 +87,7 @@ class OAIAgent(nn.Module, ABC):
             self.mdp = mdp
             self.layout_name = mdp.layout_name
             self.obs_fn = self.get_obs
+            all_counters = self.mdp.get_counter_locations()
             COUNTERS_PARAMS = {
                 'start_orientations': False,
                 'wait_allowed': False,
