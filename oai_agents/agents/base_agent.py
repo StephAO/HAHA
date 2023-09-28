@@ -42,6 +42,7 @@ class OAIAgent(nn.Module, ABC):
         self.horizon = None
         self.prev_subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
         self.use_hrl_obs = False
+        self.on_reset = True
 
     @abstractmethod
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool = False) -> Tuple[
@@ -60,16 +61,40 @@ class OAIAgent(nn.Module, ABC):
         https://stable-baselines3.readthedocs.io/en/master/modules/base.html#stable_baselines3.common.base_class.BaseAlgorithm.predict
         """
 
-    def set_idx(self, p_idx, env=None, layout_name=None, is_hrl=False, output_message=True, tune_subtasks=False):
+    def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False, goal_objects=None):
+        obs = self.encoding_fn(self.mdp, self.state, self.mdp.grid_shape, self.args.horizon, p_idx=p_idx, goal_objects=goal_objects)
+
+        if self.stack_frames:
+            obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
+            if on_reset:  # On reset
+                obs['visual_obs'] = self.stackedobs.reset(obs['visual_obs'])
+            else:
+                obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([done]), [{}])
+            obs['visual_obs'] = obs['visual_obs'].squeeze()
+        if 'subtask_mask' in self.policy.observation_space.keys():
+            obs['subtask_mask'] = get_doable_subtasks(state, self.prev_subtask, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 2)).astype(bool)
+
+        obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
+        return obs
+
+    def set_idx(self, p_idx, env=None, mdp=None, is_hrl=False, output_message=True, tune_subtasks=False):
         self.p_idx = p_idx
-        self.layout_name = env.layout_name if env is not None else layout_name
-        self.obs_closure_fn = env.get_obs if env is not None else (lambda x: x)
-        self.prev_state = None
+        if env is None:
+            assert mdp is not None
+            self.layout_name = mdp.layout_name
+            self.obs_fn = self.get_obs
+            self.valid_counters = [self.env.mdp.find_free_counters_valid_for_player(self.env.state, self.mlam, i)
+                                   for i in range(2)]
+        else:
+            self.layout_name = env.layout_name
+            self.obs_fn = env.get_obs
+            self.valid_counters = env.valid_counters
+
         self.stack_frames = self.policy.observation_space['visual_obs'].shape[0] == (27 * self.args.num_stack)
         self.stackedobs = StackedObservations(1, self.args.num_stack, self.policy.observation_space['visual_obs'], 'first')
         if is_hrl:
             self.set_play_params(output_message, tune_subtasks)
-        self.valid_counters = env.valid_counters
+        self.on_reset = True
 
     def set_encoding_params(self, mdp, horizon):
         self.mdp = mdp
@@ -82,20 +107,9 @@ class OAIAgent(nn.Module, ABC):
             raise ValueError('Please call set_idx() and set_encoding_params() before action. '
                              'Or, call predict with agent specific obs')
 
-        obs = self.encoding_fn(self.mdp, state, self.grid_shape, self.horizon, p_idx=self.p_idx)
-        if self.stack_frames:
-            obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
-            if self.prev_state is not None:
-                obs['visual_obs'] = self.stackedobs.reset(obs['visual_obs'])
-            else:
-                obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([False]), [{}])
-            obs['visual_obs'] = obs['visual_obs'].squeeze()
-
-        if 'subtask_mask' in self.policy.observation_space.keys():
-            obs['subtask_mask'] = get_doable_subtasks(state, self.prev_subtask, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 5)).astype(bool)
-
-        self.prev_state = state
-        obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
+        self.state = state
+        obs = self.get_obs(self.p_idx, on_reset=self.on_reset)
+        self.on_reset = False
 
         try:
             agent_msg = self.get_agent_output()
@@ -112,7 +126,7 @@ class OAIAgent(nn.Module, ABC):
         pass
 
     def reset(self):
-        pass
+        self.on_reset = True
 
     def save(self, path: Path) -> None:
         """

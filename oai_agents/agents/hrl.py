@@ -106,7 +106,7 @@ class HierarchicalRL(OAIAgent):
 
     def get_distribution(self, obs, sample=True):
         self.curr_subtask_id = self.manager.predict(obs, sample=sample)[0]
-        worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+        worker_obs = self.obs_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
         obs.update(worker_obs)
         return self.worker.get_distribution(obs, sample=sample)
 
@@ -302,7 +302,7 @@ class HierarchicalRL(OAIAgent):
             return np.array([Action.ACTION_TO_INDEX[Action.STAY]]), None
 
         self.num_steps_since_new_subtask += 1
-        worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+        worker_obs = self.obs_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
         worker_obs = {k: np.expand_dims(v, 0) for k, v in worker_obs.items()}
         self.action_id, _ = self.worker.predict(worker_obs, state=state, episode_start=episode_start, deterministic=deterministic)
         return self.action_id, None

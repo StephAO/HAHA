@@ -28,7 +28,7 @@ class HumanManagerHRL(OAIAgent):
             print('DOABLE SUBTASKS:', [(dst, Subtasks.SUBTASKS_TO_IDS[dst]) for dst in doable_st])
             next_st = input("Enter next subtask (0-10): ")
             self.curr_subtask_id = int(next_st)
-        worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
+        worker_obs = self.obs_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
         self.action_id, _ = self.worker.predict(worker_obs, state=state, episode_start=episode_start, deterministic=True)
         return self.action_id, None
 
