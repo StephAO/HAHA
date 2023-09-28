@@ -97,7 +97,7 @@ class OAIAgent(nn.Module, ABC):
                 'same_motion_goals': True
             }
             self.mlam = MediumLevelActionManager.from_pickle_or_compute(mdp, COUNTERS_PARAMS, force_compute=False)
-            self.valid_counters = [self.mdp.find_free_counters_valid_for_player(mdp.start_state, self.mlam, i)
+            self.valid_counters = [self.mdp.find_free_counters_valid_for_player(mdp.get_standard_start_state(), self.mlam, i)
                                    for i in range(2)]
         else:
             self.mdp = env.mdp
