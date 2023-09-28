@@ -73,7 +73,7 @@ class OAIAgent(nn.Module, ABC):
                 obs['visual_obs'], _ = self.stackedobs.update(obs['visual_obs'], np.array([done]), [{}])
             obs['visual_obs'] = obs['visual_obs'].squeeze()
         if 'subtask_mask' in self.policy.observation_space.keys():
-            obs['subtask_mask'] = get_doable_subtasks(state, self.prev_subtask, self.layout_name, self.terrain, self.p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 2)).astype(bool)
+            obs['subtask_mask'] = get_doable_subtasks(self.state, self.prev_subtask, self.layout_name, self.terrain, p_idx, self.valid_counters, USEABLE_COUNTERS.get(self.layout_name, 2)).astype(bool)
 
         obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
         return obs
