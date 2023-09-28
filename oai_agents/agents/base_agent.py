@@ -60,10 +60,10 @@ class OAIAgent(nn.Module, ABC):
         https://stable-baselines3.readthedocs.io/en/master/modules/base.html#stable_baselines3.common.base_class.BaseAlgorithm.predict
         """
 
-    def set_idx(self, p_idx, env, is_hrl=False, output_message=True, tune_subtasks=False):
+    def set_idx(self, p_idx, env=None, layout_name=None, is_hrl=False, output_message=True, tune_subtasks=False):
         self.p_idx = p_idx
-        self.layout_name = env.layout_name
-        self.obs_closure_fn = env.get_obs
+        self.layout_name = env.layout_name or layout_name
+        self.obs_closure_fn = env.get_obs or (lambda x: x)
         self.prev_state = None
         self.stack_frames = self.policy.observation_space['visual_obs'].shape[0] == (27 * self.args.num_stack)
         self.stackedobs = StackedObservations(1, self.args.num_stack, self.policy.observation_space['visual_obs'], 'first')
