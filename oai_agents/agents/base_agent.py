@@ -78,11 +78,13 @@ class OAIAgent(nn.Module, ABC):
         obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
         return obs
 
-    def set_idx(self, p_idx, env=None, mdp=None, is_hrl=False, output_message=True, tune_subtasks=False):
+    def set_encoding_params(self, p_idx, horizon, env=None, mdp=None, is_hrl=False, output_message=True, tune_subtasks=False):
         self.p_idx = p_idx
+        self.horizon = horizon
         if env is None:
             print(mdp, flush=True)
             assert mdp is not None
+            self.mdp = mdp
             self.layout_name = mdp.layout_name
             self.obs_fn = self.get_obs
             COUNTERS_PARAMS = {
@@ -97,25 +99,21 @@ class OAIAgent(nn.Module, ABC):
             self.valid_counters = [self.env.mdp.find_free_counters_valid_for_player(mdp.start_state, self.mlam, i)
                                    for i in range(2)]
         else:
+            self.mdp = env.mdp
             self.layout_name = env.layout_name
             self.obs_fn = env.get_obs
             self.valid_counters = env.valid_counters
-
+        self.terrain = self.mdp.terrain_mtx
         self.stack_frames = self.policy.observation_space['visual_obs'].shape[0] == (27 * self.args.num_stack)
         self.stackedobs = StackedObservations(1, self.args.num_stack, self.policy.observation_space['visual_obs'], 'first')
         if is_hrl:
             self.set_play_params(output_message, tune_subtasks)
         self.on_reset = True
-
-    def set_encoding_params(self, mdp, horizon):
-        self.mdp = mdp
-        self.horizon = horizon
-        self.terrain = self.mdp.terrain_mtx
         self.grid_shape = (7, 7)
 
     def action(self, state, deterministic=False):
         if self.p_idx is None or self.mdp is None or self.horizon is None:
-            raise ValueError('Please call set_idx() and set_encoding_params() before action. '
+            raise ValueError('Please call set_encoding_params() before action. '
                              'Or, call predict with agent specific obs')
 
         self.state = state

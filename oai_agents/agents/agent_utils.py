@@ -47,7 +47,7 @@ class DummyAgent():
             action = np.array([action])
         return action, None
 
-    def set_idx(self, *args, **kwargs):
+    def set_encoding_params(self, *args, **kwargs):
         pass
 
     def set_obs_closure_fn(self, obs_closure_fn):
