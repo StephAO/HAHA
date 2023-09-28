@@ -63,7 +63,7 @@ class OAIAgent(nn.Module, ABC):
         """
 
     def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False, goal_objects=None):
-        obs = self.encoding_fn(self.mdp, self.state, self.mdp.grid_shape, self.args.horizon, p_idx=p_idx, goal_objects=goal_objects)
+        obs = self.encoding_fn(self.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx, goal_objects=goal_objects)
 
         if self.stack_frames:
             obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)
