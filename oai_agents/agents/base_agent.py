@@ -62,7 +62,7 @@ class OAIAgent(nn.Module, ABC):
 
     def set_idx(self, p_idx, env=None, layout_name=None, is_hrl=False, output_message=True, tune_subtasks=False):
         self.p_idx = p_idx
-        self.layout_name = env.layout_name or layout_name
+        self.layout_name = env.layout_name if env is not None else layout_name
         self.obs_closure_fn = env.get_obs or (lambda x: x)
         self.prev_state = None
         self.stack_frames = self.policy.observation_space['visual_obs'].shape[0] == (27 * self.args.num_stack)
