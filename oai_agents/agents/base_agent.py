@@ -78,7 +78,7 @@ class OAIAgent(nn.Module, ABC):
         obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
         return obs
 
-    def set_encoding_params(self, p_idx, horizon, env=None, mdp=None, is_hrl=False, output_message=True, tune_subtasks=False):
+    def set_encoding_params(self, p_idx, horizon, env=None, mdp=None, is_haha=False, output_message=True, tune_subtasks=False):
         self.p_idx = p_idx
         self.horizon = horizon
         if env is None:
@@ -106,7 +106,7 @@ class OAIAgent(nn.Module, ABC):
         self.terrain = self.mdp.terrain_mtx
         self.stack_frames = self.policy.observation_space['visual_obs'].shape[0] == (27 * self.args.num_stack)
         self.stackedobs = StackedObservations(1, self.args.num_stack, self.policy.observation_space['visual_obs'], 'first')
-        if is_hrl:
+        if is_haha:
             self.set_play_params(output_message, tune_subtasks)
         self.on_reset = True
         self.grid_shape = (7, 7)

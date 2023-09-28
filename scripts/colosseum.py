@@ -37,8 +37,8 @@ def eval_agents_with_various_teammates(agents_to_evaluate, teammates):
                     p2 = p2[eval_env.layout_name][0] if type(p2) == dict else p2
                     print(f'Now evaluating {p1.name} with teammates {p2.name}')
                     for p_idx in [0, 1]:
-                        p1.set_encoding_params(p_idx, env.args.horizon, eval_env, is_hrl=('haha' in p1.name), tune_subtasks="tuned" in p1.name)
-                        p2.set_encoding_params(1 - p_idx, env.args.horizon, eval_env, is_hrl=('haha' in p2.name), tune_subtasks="tuned" in p2.name)
+                        p1.set_encoding_params(p_idx, env.args.horizon, eval_env, is_haha=('haha' in p1.name), tune_subtasks="tuned" in p1.name)
+                        p2.set_encoding_params(1 - p_idx, env.args.horizon, eval_env, is_haha=('haha' in p2.name), tune_subtasks="tuned" in p2.name)
                         eval_env.set_teammate(p2)
                         eval_env.set_reset_p_idx(p_idx)
                         reward = run_game(eval_env, p1)

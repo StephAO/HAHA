@@ -75,8 +75,8 @@ class OvercookedGUI:
         self.env.set_teammate(teammate)
         self.env.reset(p_idx=self.p_idx)
         if self.agent != 'human':
-            self.agent.set_encoding_params(self.p_idx, self.args.horizon, env=self.env, is_hrl=isinstance(self.agent, HierarchicalRL), tune_subtasks=False)
-        self.env.teammate.set_encoding_params(self.env.t_idx, self.args.horizon, env=self.env, is_hrl=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=False)
+            self.agent.set_encoding_params(self.p_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.agent, HierarchicalRL), tune_subtasks=False)
+        self.env.teammate.set_encoding_params(self.env.t_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=False)
         self.teammate_name=teammate.name
         self.deterministic = False
         self.env.deterministic = self.deterministic
