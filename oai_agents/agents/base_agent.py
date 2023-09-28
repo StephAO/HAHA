@@ -5,6 +5,7 @@ from oai_agents.common.subtasks import calculate_completed_subtask, get_doable_s
 from oai_agents.gym_environments.base_overcooked_env import USEABLE_COUNTERS
 
 from overcooked_ai_py.mdp.overcooked_mdp import Action
+from overcooked_ai_py.planning.planners import MediumLevelActionManager
 
 from abc import ABC, abstractmethod
 import argparse
@@ -80,10 +81,20 @@ class OAIAgent(nn.Module, ABC):
     def set_idx(self, p_idx, env=None, mdp=None, is_hrl=False, output_message=True, tune_subtasks=False):
         self.p_idx = p_idx
         if env is None:
+            print(mdp, flush=True)
             assert mdp is not None
             self.layout_name = mdp.layout_name
             self.obs_fn = self.get_obs
-            self.valid_counters = [self.env.mdp.find_free_counters_valid_for_player(self.env.state, self.mlam, i)
+            COUNTERS_PARAMS = {
+                'start_orientations': False,
+                'wait_allowed': False,
+                'counter_goals': all_counters,
+                'counter_drop': all_counters,
+                'counter_pickup': all_counters,
+                'same_motion_goals': True
+            }
+            self.mlam = MediumLevelActionManager.from_pickle_or_compute(mdp, COUNTERS_PARAMS, force_compute=False)
+            self.valid_counters = [self.env.mdp.find_free_counters_valid_for_player(mdp.start_state, self.mlam, i)
                                    for i in range(2)]
         else:
             self.layout_name = env.layout_name
