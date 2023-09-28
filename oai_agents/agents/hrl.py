@@ -96,7 +96,7 @@ class HierarchicalRL(OAIAgent):
         self.output_message = True
         self.tune_subtasks = None
         self.curr_subtask_id = Subtasks.SUBTASKS_TO_IDS['unknown']
-        self.action_id = None
+        self.action_id = 0
 
     def set_play_params(self, output_message, tune_subtasks):
         self.output_message = output_message
@@ -187,101 +187,94 @@ class HierarchicalRL(OAIAgent):
         assert np.isclose(np.sum(probs.numpy()), 1)
         if self.layout_name == None:
             raise ValueError("Set current layout using set_curr_layout before attempting manual adjustment")
-        elif self.layout_name == 'counter_circuit_o_1order':
-            # if self.p_idx == 0:
-                # Up weight supporting tasks
-            subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['unknown']]
-            subtask_weighting = [0.1]
-            # if self.prev_subtask_id != Subtasks.SUBTASKS_TO_IDS['put_onion_closer']:
-            #     subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']]
-            #     subtask_weighting += [100]
-            # else:
-            #     subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']]
-            #     subtask_weighting += [0.001]
-            # if self.prev_subtask_id != Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']:
-            #     subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
-            #     subtask_weighting += [100]
-            # else:
-            #     subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
-            #     subtask_weighting += [0.001]
-            if Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'put_onion_closer':
-                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']]
-                subtask_weighting += [0.01]
-            elif Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'put_onion_in_pot':
-                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
-                subtask_weighting += [0.01]
-            if Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'get_onion_from_dispenser':
-                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']]
-                subtask_weighting += [0.01]
-            elif Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'get_onion_from_counter':
-                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
-                subtask_weighting += [0.01]
+
+        subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['unknown']]
+        subtask_weighting = [0.1]
+        if Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'put_onion_closer':
+            subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']]
+            subtask_weighting += [0.01]
+        elif Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'put_onion_in_pot':
+            subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
+            subtask_weighting += [0.01]
+        if Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'get_onion_from_dispenser':
+            subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']]
+            subtask_weighting += [0.01]
+        elif Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'get_onion_from_counter':
+            subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+            subtask_weighting += [0.01]
+
+
+        if self.layout_name in ['asymmetric_advantages', 'cramped_room', 'counter_circuit_o_1order']:
             if self.non_full_pot_exists(obs) and not self.is_urgent(obs):
-                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]
-                subtask_weighting += [0.1]
+                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'], Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']]
+                subtask_weighting += [0.1, 0.1]
+        if self.layout_name in ['counter_circuit_o_1order']:
+            if not isinstance(self.action_id, int):
+                self.action_id = int(self.action_id.squeeze())
+            if Action.INDEX_TO_ACTION[self.action_id] == Action.INTERACT and Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'get_onion_from_dispenser':
+                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
+                subtask_weighting += [10]
             # print(subtasks_to_weigh, len(subtasks_to_weigh))
             # print(subtask_weighting, len(subtask_weighting))
-            new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+        new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
 
             # print(probs, new_probs)
 
 
-        elif self.layout_name == 'forced_coordination':
-            # NOTE: THIS ASSUMES BEING P2
-            # Since tasks are very limited, we use a different change instead of support and coordinated.
-            if self.p_idx == 1:
-                if (self.subtask_step + 2) % 16 == 0 or (self.subtask_step + 4) % 16 == 0:
-                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
-                elif (self.subtask_step + 1) % 16 == 0 or (self.subtask_step + 3) % 16 == 0:
-                    subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
-                else:
-                    if self.subtask_step % 2 == 0:
-                        subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']
-                    else:
-                        subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_onion_closer']
-                subtasks_to_weigh = [subtasks_to_weigh]
-                subtask_weighting = [1e8 for _ in subtasks_to_weigh]
-                new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-                # print(self.subtask_step, [Subtasks.IDS_TO_SUBTASKS[s] for s in subtasks_to_weigh])
-            else:
-                new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
+        # elif self.layout_name == 'forced_coordination':
+        #     if self.p_idx == 1:
+        #         if (self.subtask_step + 2) % 16 == 0 or (self.subtask_step + 4) % 16 == 0:
+        #             subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']
+        #         elif (self.subtask_step + 1) % 16 == 0 or (self.subtask_step + 3) % 16 == 0:
+        #             subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_plate_closer']
+        #         else:
+        #             if self.subtask_step % 2 == 0:
+        #                 subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']
+        #             else:
+        #                 subtasks_to_weigh = Subtasks.SUBTASKS_TO_IDS['put_onion_closer']
+        #         subtasks_to_weigh = [subtasks_to_weigh]
+        #         subtask_weighting = [1e8 for _ in subtasks_to_weigh]
+        #         new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+        #         # print(self.subtask_step, [Subtasks.IDS_TO_SUBTASKS[s] for s in subtasks_to_weigh])
+        #     else:
+        #         new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
             # self.subtask_step += 1
-        elif self.layout_name == 'asymmetric_advantages':
-            #
-            if self.p_idx == 0:
-                if self.non_full_pot_exists(obs):
-                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
-                    subtask_weighting = [1e12 for _ in subtasks_to_weigh]
-                    new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+        # elif self.layout_name == 'asymmetric_advantages':
+        #     #
+        #     if self.p_idx == 0:
+        #         if self.non_full_pot_exists(obs):
+        #             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+        #             subtask_weighting = [1e12 for _ in subtasks_to_weigh]
+        #             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+        #
+        #         elif (not self.a_soup_is_almost_done(obs, time_left_thresh=2) or self.other_player_has_plate(obs))\
+        #                 and self.waiting_steps < 5:
+        #             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['unknown'],
+        #                                  Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+        #             subtask_weighting = [1e12 for _ in subtasks_to_weigh]
+        #             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+        #             self.waiting_steps += 1
+        #         else:
+        #             new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
+        #             self.waiting_steps = 0
+        #
+        #     elif self.p_idx == 1:
+        #         if self.non_full_pot_exists(obs) and not self.a_soup_is_almost_done(obs, time_left_thresh=14) and not self.is_urgent(obs):
+        #             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'], Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']]
+        #             subtask_weighting = [1e8 for _ in subtasks_to_weigh]
+        #             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+        #             self.waiting_steps = 0
+        #         elif self.other_player_has_plate(obs) and self.waiting_steps < 5:
+        #             subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]
+        #             subtask_weighting = [1e-12 for _ in subtasks_to_weigh]
+        #             new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
+        #             self.waiting_steps += 1
+        #         else:
+        #             new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
+        #             self.waiting_steps = 0
 
-                elif (not self.a_soup_is_almost_done(obs, time_left_thresh=2) or self.other_player_has_plate(obs))\
-                        and self.waiting_steps < 5:
-                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['unknown'],
-                                         Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
-                    subtask_weighting = [1e12 for _ in subtasks_to_weigh]
-                    new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-                    self.waiting_steps += 1
-                else:
-                    new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
-                    self.waiting_steps = 0
-
-            elif self.p_idx == 1:
-                if self.non_full_pot_exists(obs) and not self.a_soup_is_almost_done(obs, time_left_thresh=14) and not self.is_urgent(obs):
-                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser'], Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']]
-                    subtask_weighting = [1e8 for _ in subtasks_to_weigh]
-                    new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-                    self.waiting_steps = 0
-                elif self.other_player_has_plate(obs) and self.waiting_steps < 5:
-                    subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack']]
-                    subtask_weighting = [1e-12 for _ in subtasks_to_weigh]
-                    new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
-                    self.waiting_steps += 1
-                else:
-                    new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
-                    self.waiting_steps = 0
-
-        else:
-            new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
+        # else:
+        #     new_probs = np.copy(probs.cpu()) if type(probs) == th.Tensor else np.copy(probs)
         while not np.isclose(np.sum(new_probs), 1, rtol=1e-3, atol=1e-3):
             new_probs /= np.sum(new_probs)
             # print('--------------\n', new_probs, '\n--->\n', probs)
@@ -299,9 +292,9 @@ class HierarchicalRL(OAIAgent):
                 self.curr_subtask_id = self.get_manually_tuned_action(obs, deterministic=deterministic)
             else:
                 self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
-                                                            deterministic=True)[0]
+                                                            deterministic=deterministic)[0]
             self.num_steps_since_new_subtask = 0
-            print(Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)])
+            # print(Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)])
 
         if not isinstance(self.curr_subtask_id, int):
             self.curr_subtask_id = int(self.curr_subtask_id.squeeze())
@@ -311,7 +304,7 @@ class HierarchicalRL(OAIAgent):
         self.num_steps_since_new_subtask += 1
         worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
         worker_obs = {k: np.expand_dims(v, 0) for k, v in worker_obs.items()}
-        self.action_id, _ = self.worker.predict(worker_obs, state=state, episode_start=episode_start, deterministic=True)
+        self.action_id, _ = self.worker.predict(worker_obs, state=state, episode_start=episode_start, deterministic=deterministic)
         return self.action_id, None
 
     def get_agent_output(self):

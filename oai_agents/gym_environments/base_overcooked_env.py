@@ -20,8 +20,8 @@ import torch as th
 # DEPRECATED NOTE: For counter circuit, trained workers with 8, but trained manager with 4. Only 4 spots are useful add
 # more during subtask worker training for robustness
 # Max number of counters the agents should use
-USEABLE_COUNTERS = {'counter_circuit_o_1order': 4, 'forced_coordination': 4, 'asymmetric_advantages': 2,
-                    'cramped_room': 4, 'coordination_ring': 4}  # FOR WORKER TRAINING
+USEABLE_COUNTERS = {'counter_circuit_o_1order': 2, 'forced_coordination': 2, 'asymmetric_advantages': 2,
+                    'cramped_room': 2, 'coordination_ring': 2}  # FOR WORKER TRAINING
 
 
 # USEABLE_COUNTERS = {'counter_circuit_o_1order': 4, 'forced_coordination': 3, 'asymmetric_advantages': 2, 'cramped_room': 3, 'coordination_ring': 3} # FOR MANAGER TRAINING
@@ -83,6 +83,7 @@ class OvercookedGymEnv(Env):
         self.teammate = None
         self.p_idx = None
         self.joint_action = [None, None]
+        self.deterministic = False
         if full_init:
             self.set_env_layout(**kwargs)
 
@@ -193,7 +194,7 @@ class OvercookedGymEnv(Env):
         joint_action[self.p_idx] = action
         tm_obs = self.get_obs(p_idx=self.t_idx, enc_fn=self.teammate.encoding_fn)
         with th.no_grad():
-            joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=False)[0]
+            joint_action[self.t_idx] = self.teammate.predict(tm_obs, deterministic=self.deterministic)[0]
         joint_action = [Action.INDEX_TO_ACTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
         self.joint_action = joint_action
 
@@ -202,9 +203,8 @@ class OvercookedGymEnv(Env):
         if self.is_eval_env:
             if self.prev_state and self.state.time_independent_equal(self.prev_state) and tuple(joint_action) == tuple(
                     self.prev_actions):
-                joint_action = [np.random.choice(range(len(Direction.ALL_DIRECTIONS))),
-                                np.random.choice(range(len(Direction.ALL_DIRECTIONS)))]
-                joint_action = [Direction.INDEX_TO_DIRECTION[(a.squeeze() if type(a) != int else a)] for a in joint_action]
+                joint_action = [Action.STAY, Action.STAY]
+                joint_action[self.t_idx] = Direction.INDEX_TO_DIRECTION[self.step_count % 4]
 
             self.prev_state, self.prev_actions = deepcopy(self.state), deepcopy(joint_action)
 

@@ -36,12 +36,15 @@ class DummyAgent():
         self.use_hrl_obs = False
 
     def predict(self, x, state=None, episode_start=None, deterministic=False):
+        add_dim = len(x) == 1
         if self.action == 'random':
             action = np.random.randint(0, Action.NUM_ACTIONS)
         elif self.action == 'random_dir':
             action = np.random.randint(0, 4)
         else:
             action = self.action
+        if add_dim:
+            action = np.array([action])
         return action, None
 
     def set_idx(self, *args, **kwargs):

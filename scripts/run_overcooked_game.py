@@ -23,14 +23,14 @@ if __name__ == "__main__":
 
     args = get_arguments(additional_args)
 
-    bc, human_proxy = BehavioralCloningTrainer.load_bc_and_human_proxy(args, name=f'bc_{args.layout}')
+    # bc, human_proxy = BehavioralCloningTrainer.load_bc_and_human_proxy(args, name=f'bc_{args.layout}')
     # tm = bc
     # worker = load_agent(Path('agent_models/worker_bcp/'), args)
     tm = load_agent(Path('agent_models/HAHA_bcp_bcp'), args)
     # agent = HumanManagerHRL(worker, args)
 
 
-    agent = 'human'# HumanManagerHRL(haha.worker, args)
+    agent = load_agent(Path('agent_models/HAHA_bcp_bcp'), args)# 'human'# HumanManagerHRL(haha.worker, args)
     # tm = load_agent(Path('agent_models/old_SP'), args)
 
     t_idx = 1 - args.p_idx

@@ -76,8 +76,10 @@ class OvercookedGUI:
         self.env.reset(p_idx=self.p_idx)
         if self.agent != 'human':
             self.agent.set_idx(self.p_idx, self.env, is_hrl=isinstance(self.agent, HierarchicalRL), tune_subtasks=False)
-        self.env.teammate.set_idx(self.env.t_idx, self.env, is_hrl=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=True)
+        self.env.teammate.set_idx(self.env.t_idx, self.env, is_hrl=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=False)
         self.teammate_name=teammate.name
+        self.deterministic = False
+        self.env.deterministic = self.deterministic
 
 
         self.grid_shape = self.env.grid_shape
@@ -252,7 +254,7 @@ class OvercookedGUI:
                 action = self.human_action if self.human_action is not None else Action.ACTION_TO_INDEX[Action.STAY]
             else:
                 obs = self.env.get_obs(self.env.p_idx, on_reset=False)
-                action = self.agent.predict(obs, state=self.env.state, deterministic=False)[0]
+                action = self.agent.predict(obs, state=self.env.state, deterministic=self.deterministic)[0]
                 # pygame.time.wait(sleep_time)
 
             done = self.step_env(action)
