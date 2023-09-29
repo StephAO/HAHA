@@ -78,7 +78,7 @@ class OAIAgent(nn.Module, ABC):
         obs = {k: v for k, v in obs.items() if k in self.policy.observation_space.keys()}
         return obs
 
-    def set_encoding_params(self, p_idx, horizon, env=None, mdp=None, is_haha=False, output_message=True, tune_subtasks=False):
+    def set_encoding_params(self, p_idx, horizon, env=None, mdp=None, is_haha=False, output_message=False, tune_subtasks=False):
         self.p_idx = p_idx
         self.horizon = horizon
         if env is None:

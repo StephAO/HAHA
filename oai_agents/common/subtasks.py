@@ -159,18 +159,16 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, valid_
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_soup_from_counter']] = 1
     # The player is holding an onion, so it can only accomplish tasks that involve putting the onion somewhere
     elif state.players[p_idx].held_object.name == 'onion':
-        # There must be an empty counter to put something down
-        if len(loose_objects) < n_counters and prev_subtask != 'get_onion_from_counter':
-            subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_closer']] = 1
         # There must be an empty pot to put an onion into
         if not (layout_name == 'forced_coordination' and p_idx == 1):
             if non_full_pot_exists(state, terrain, layout_name):
                 subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']] = 1
+        # There must be an empty counter to put something down
+        if prev_subtask != 'get_onion_from_counter':
+            if len(loose_objects) < n_counters or np.sum(subtask_mask[:-1]) == 0:
+                subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_onion_closer']] = 1
     # The player is holding a plate, so it can only accomplish tasks that involve putting the plate somewhere
     elif state.players[p_idx].held_object.name == 'dish':
-        # There must be an empty counter to put something down
-        if len(loose_objects) < n_counters and prev_subtask != 'get_plate_from_counter':
-            subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_plate_closer']] = 1
         if not (layout_name == 'forced_coordination' and p_idx == 1):
             # Can only grab the soup using the plate if a soup is currently cooking
             for obj in state.objects.values():
@@ -178,12 +176,16 @@ def get_doable_subtasks(state, prev_subtask, layout_name, terrain, p_idx, valid_
                 if obj.name == 'soup' and terrain[y][x] == 'P' and not obj.is_idle:
                     subtask_mask[Subtasks.SUBTASKS_TO_IDS['get_soup']] = 1
                     break
+        # There must be an empty counter to put something down
+        if prev_subtask != 'get_plate_from_counter':
+            if len(loose_objects) < n_counters or np.sum(subtask_mask[:-1]) == 0:
+                subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_plate_closer']] = 1
     # The player is holding a soup, so it can only accomplish tasks that involve putting the soup somewhere
     elif state.players[p_idx].held_object.name == 'soup':
         if not (layout_name == 'forced_coordination' and p_idx == 1):
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['serve_soup']] = 1
         # There must be an empty counter to put something down
-        if len(loose_objects) < n_counters:
+        if len(loose_objects) < n_counters or np.sum(subtask_mask[:-1]) == 0:
             subtask_mask[Subtasks.SUBTASKS_TO_IDS['put_soup_closer']] = 1
 
     # Becomes a stay action for 1 turn
