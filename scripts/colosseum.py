@@ -20,7 +20,7 @@ def run_game(env, agent):
 
 def eval_agents_with_various_teammates(agents_to_evaluate, teammates):
     eval_envs_kwargs = {'is_eval_env': True, 'args': args, 'horizon': 400, 'ret_completed_subtasks': True}
-    args.layout_names = ['forced_coordination']#['counter_circuit_o_1order', 'asymmetric_advantages', 'cramped_room', 'coordination_ring', 'forced_coordination']
+    args.layout_names = ['forced_coordination', 'counter_circuit_o_1order', 'asymmetric_advantages', 'cramped_room', 'coordination_ring', 'forced_coordination']
     args.layout_names = [ln + '_mod' for ln in args.layout_names]
     score_matrices = {ln: np.zeros((len(agents_to_evaluate), len(teammates))) for ln in args.layout_names}
 

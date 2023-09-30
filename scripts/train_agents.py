@@ -86,7 +86,7 @@ def get_selfplay_agent(args, training_steps=1e7, tag=None):
     except FileNotFoundError as e:
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
         selfplay_trainer = RLAgentTrainer([], args, selfplay=True, name=name, seed=678, use_frame_stack=False,
-                                          use_lstm=False, use_cnn=False)
+                                          use_lstm=False, use_cnn=False, deterministic=False)
         selfplay_trainer.train_agents(train_timesteps=training_steps)
         agents = selfplay_trainer.get_agents()
     return agents
@@ -120,7 +120,7 @@ def get_behavioral_cloning_play_agent(args, training_steps=1e7):
     except FileNotFoundError as e:
         print(f'Could not find saved BCP, creating them from scratch...\nFull Error: {e}')
         teammates, _ = get_bc_and_human_proxy(args)
-        self_play_trainer = RLAgentTrainer(teammates, args, name=name)
+        self_play_trainer = RLAgentTrainer(teammates, args, name=name, deterministic=True)
         self_play_trainer.train_agents(train_timesteps=training_steps)
         bcp = self_play_trainer.get_agents()
     return bcp
@@ -165,9 +165,10 @@ def get_fcp_population(args, training_steps=2e7):
 
 
 def get_fcp_agent(args, training_steps=1e7):
+    name = 'fcp'
     teammates = get_fcp_population(args, training_steps)
-    fcp_trainer = RLAgentTrainer(teammates, args, name='fcp', use_subtask_counts=False, use_policy_clone=False,
-                                 seed=2602)
+    fcp_trainer = RLAgentTrainer(teammates, args, name=name, use_subtask_counts=False, use_policy_clone=False,
+                                 seed=2602, deterministic=True)
     fcp_trainer.train_agents(train_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 

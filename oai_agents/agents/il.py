@@ -77,8 +77,7 @@ class BehaviouralCloningPolicy(nn.Module):
 
     def predict(self, obs, state=None, episode_start=None, deterministic=False):
         """Predict action. If sample is True, sample action from distribution, else pick best scoring action"""
-        return Categorical(logits=self.forward(obs)).sample() if deterministic else th.argmax(self.forward(obs),
-                                                                                              dim=-1), None
+        return Categorical(logits=th.argmax(self.forward(obs) if deterministic else self.forward(obs)).sample(), dim=-1), None
 
     def get_distribution(self, obs):
         return Categorical(logits=self.forward(obs))
@@ -113,7 +112,7 @@ class BehaviouralCloningAgent(OAIAgent):
         return self.policy.action_predictor(z)
 
     def predict(self, obs, state=None, episode_start=None, deterministic=False):
-        deterministic = False # BC Agents are just much better is this is False
+        # deterministic = False # BC Agents are just much better is this is False
         obs = {k: th.tensor(v, device=self.device) for k, v in obs.items()}
         action_logits = self.forward(obs)
         action = th.argmax(action_logits, dim=-1) if deterministic else Categorical(logits=action_logits).sample()

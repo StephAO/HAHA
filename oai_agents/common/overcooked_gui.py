@@ -77,8 +77,9 @@ class OvercookedGUI:
         if self.agent != 'human':
             self.agent.set_encoding_params(self.p_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.agent, HierarchicalRL), tune_subtasks=False)
         self.env.teammate.set_encoding_params(self.env.t_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=False)
+        self.env.encoding_fn = self.agent.encoding_fn
         self.teammate_name=teammate.name
-        self.deterministic = False
+        self.deterministic = True
         self.env.deterministic = self.deterministic
 
 
@@ -98,7 +99,8 @@ class OvercookedGUI:
         self.info_stream = stream
         self.outlet = outlet
         # Currently unused, but keeping in case we need it in the future.
-        self.collect_trajectory = False
+        self.collect_trajectory = True
+        self.trajectory = []
 
     def start_screen(self):
         pygame.init()
@@ -220,7 +222,7 @@ class OvercookedGUI:
             self.outlet.push_sample([trans_str])
 
         if self.collect_trajectory:
-            self.trajectory.append(transition)
+            self.trajectory.append(self.env.get_joint_action())
         return done
 
     def on_render(self, pidx=None):

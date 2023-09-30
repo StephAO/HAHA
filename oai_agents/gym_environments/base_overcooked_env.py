@@ -32,7 +32,8 @@ class OvercookedGymEnv(Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self, grid_shape=None, ret_completed_subtasks=False, stack_frames=False, is_eval_env=False,
-                 shape_rewards=False, enc_fn=None, full_init=True, args=None, num_enc_channels=27, **kwargs):
+                 shape_rewards=False, enc_fn=None, full_init=True, args=None, num_enc_channels=27, deterministic=False,
+                 **kwargs):
         self.is_eval_env = is_eval_env
         self.args = args
         self.device = args.device
@@ -83,7 +84,7 @@ class OvercookedGymEnv(Env):
         self.teammate = None
         self.p_idx = None
         self.joint_action = [None, None]
-        self.deterministic = False
+        self.deterministic = deterministic
         if full_init:
             self.set_env_layout(**kwargs)
 

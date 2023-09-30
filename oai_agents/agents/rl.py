@@ -18,7 +18,7 @@ class RLAgentTrainer(OAITrainer):
     def __init__(self, teammates, args, selfplay=False, name=None, env=None, eval_envs=None,
                  use_cnn=False, use_lstm=False, use_frame_stack=False, taper_layers=False, use_subtask_counts=False,
                  use_policy_clone=False, num_layers=2, hidden_dim=256, use_subtask_eval=False, use_hrl=False,
-                 fcp_ck_rate=None, seed=None):
+                 fcp_ck_rate=None, deterministic=False, seed=None):
         name = name or 'rl_agent'
         super(RLAgentTrainer, self).__init__(name, args, seed=seed)
         if not teammates and not selfplay:
@@ -36,13 +36,13 @@ class RLAgentTrainer(OAITrainer):
         self.encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
         self.run_id = None
         if env is None:
-            env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts,
-                          'stack_frames': use_frame_stack, 'full_init': False, 'args': args}
+            env_kwargs = {'shape_rewards': True, 'ret_completed_subtasks': use_subtask_counts, 'full_init': False,
+                          'stack_frames': use_frame_stack, 'deterministic': deterministic,'args': args}
             self.env = make_vec_env(OvercookedGymEnv, n_envs=args.n_envs, seed=seed,
                                     vec_env_cls=VEC_ENV_CLS, env_kwargs=env_kwargs)
 
-            eval_envs_kwargs = {'is_eval_env': True, 'ret_completed_subtasks': use_subtask_counts,
-                                'stack_frames': use_frame_stack, 'horizon': 400, 'args': args}
+            eval_envs_kwargs = {'is_eval_env': True, 'ret_completed_subtasks': use_subtask_counts, 'horizon': 400,
+                                'stack_frames': use_frame_stack, 'deterministic': deterministic, 'args': args}
             self.eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(self.n_layouts)]
         else:
             self.env = env
