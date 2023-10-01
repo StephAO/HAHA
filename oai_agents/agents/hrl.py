@@ -96,6 +96,7 @@ class HierarchicalRL(OAIAgent):
         self.output_message = True
         self.tune_subtasks = None
         self.curr_subtask_id = Subtasks.SUBTASKS_TO_IDS['unknown']
+        self.prev_subtask_id = Subtasks.SUBTASKS_TO_IDS['unknown']
         self.action_id = 0
 
     def set_play_params(self, output_message, tune_subtasks):
@@ -115,20 +116,28 @@ class HierarchicalRL(OAIAgent):
         # if (new_probs[indices] > (1 - 1e-12)).any() or (new_probs[indices] < 1e-12).any():
         #     print("Agent is too decisive, no behavior changed", flush=True)
         #     return new_probs
-        original_values = np.zeros_like(new_probs)
-        adjusted_values = np.zeros_like(new_probs)
+        # print(f'{probs} ==>')
         for i, idx in enumerate(indices):
-            original_values[idx] = new_probs[idx]
-            adjusted_values[idx] = new_probs[idx] * weights[i]
-            new_probs[idx] = 0
-        if np.sum(adjusted_values) > 1:
-            adjusted_values = adjusted_values / np.sum(adjusted_values)
-        if np.sum(original_values) > 1:
-            original_values = original_values / np.sum(original_values)
-        new_probs = new_probs - (np.sum(adjusted_values) - np.sum(original_values)) * new_probs / (np.sum(new_probs) + 1e-8)
-        new_probs = np.clip(new_probs, 0, None)
-        for idx in indices:
-            new_probs[idx] = adjusted_values[idx]
+            new_probs[idx] *= weights[i]
+        # print(f'{new_probs}-->')
+        new_probs = new_probs / np.sum(new_probs)
+
+        # original_values = np.zeros_like(new_probs)
+        # adjusted_values = np.zeros_like(new_probs)
+        # for i, idx in enumerate(indices):
+        #     original_values[idx] = new_probs[idx]
+        #     adjusted_values[idx] = new_probs[idx] * weights[i]
+        #     # new_probs[idx] = 0
+        # if np.sum(adjusted_values) > 1:
+        #     adjusted_values = adjusted_values / np.sum(adjusted_values)
+        # if np.sum(original_values) > 1:
+        #     original_values = original_values / np.sum(original_values)
+        # new_probs = new_probs - (np.sum(adjusted_values) - np.sum(original_values)) * new_probs / (np.sum(new_probs) + 1e-8)
+        # new_probs = np.clip(new_probs, 0, None)
+        # for idx in indices:
+        #     new_probs[idx] = adjusted_values[idx]
+
+        # print(f'{new_probs}\n---')
         return new_probs
 
     def other_player_has_plate(self, obs):
@@ -159,6 +168,21 @@ class HierarchicalRL(OAIAgent):
         # print('===')
         return False
 
+    def num_onions_on_counter(self, obs):
+        pot_locations_idx = 10
+        onions_idx = 23
+        if len(obs['visual_obs'].shape) == 4:
+            return np.sum((1 - obs['visual_obs'][0][pot_locations_idx]) * obs['visual_obs'][0][onions_idx])
+        else:
+            return np.sum((1 - obs['visual_obs'][pot_locations_idx]) * obs['visual_obs'][onions_idx])
+
+    def num_all_onions(self, obs):
+        onions_idx = 23
+        if len(obs['visual_obs'].shape) == 4:
+            return np.sum(obs['visual_obs'][0][onions_idx])
+        else:
+            return np.sum(obs['visual_obs'][onions_idx])
+
     def a_soup_is_almost_done(self, obs, time_left_thresh=10):
         pot_locations_idx = 10
         onions_in_soup_idx = 18
@@ -188,32 +212,49 @@ class HierarchicalRL(OAIAgent):
         if self.layout_name == None:
             raise ValueError("Set current layout using set_curr_layout before attempting manual adjustment")
 
-        subtasks_to_weigh = [Subtasks.SUBTASKS_TO_IDS['unknown']]
-        subtask_weighting = [0.1]
-        if Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'put_onion_closer':
-            subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']]
-            subtask_weighting += [0.01]
-        elif Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'put_onion_in_pot':
-            subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
-            subtask_weighting += [0.01]
-        if Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'get_onion_from_dispenser':
-            subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']]
-            subtask_weighting += [0.01]
-        elif Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'get_onion_from_counter':
-            subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
-            subtask_weighting += [0.01]
+        subtasks_to_weigh = []#Subtasks.SUBTASKS_TO_IDS['unknown']]
+        subtask_weighting = []
+        # Finish out the curr task. These task will be impossible to continue when accomplished.
+        if Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] in ['put_onion_closer', 'put_onion_in_pot', 'get_onion_from_dispenser', 'get_onion_from_counter']:
+            subtasks_to_weigh += [int(self.curr_subtask_id)]
+            subtask_weighting += [100]
 
+        if self.non_full_pot_exists(obs) and not self.is_urgent(obs) and self.layout_name in ['counter_circuit_o_1order', 'coordination_ring']:
+            subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'], Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']]
+            subtask_weighting += [0.01, 0.01]
 
-        if self.layout_name in ['asymmetric_advantages', 'cramped_room', 'counter_circuit_o_1order']:
-            if self.non_full_pot_exists(obs) and not self.is_urgent(obs):
-                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'], Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']]
-                subtask_weighting += [0.1, 0.1]
         if self.layout_name in ['counter_circuit_o_1order']:
             if not isinstance(self.action_id, int):
                 self.action_id = int(self.action_id.squeeze())
-            if Action.INDEX_TO_ACTION[self.action_id] == Action.INTERACT and Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'get_onion_from_dispenser':
+            if self.num_onions_on_counter(obs) < 3 and (Subtasks.IDS_TO_SUBTASKS[int(self.prev_subtask_id)] == 'put_onion_closer' or \
+               Action.INDEX_TO_ACTION[self.action_id] == Action.INTERACT and Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'put_onion_closer'):
+                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+                subtask_weighting += [1000]
+            if Subtasks.IDS_TO_SUBTASKS[int(self.prev_subtask_id)] == 'get_onion_from_dispenser' or \
+               Action.INDEX_TO_ACTION[self.action_id] == Action.INTERACT and Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'get_onion_from_dispenser':
                 subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
-                subtask_weighting += [10]
+                subtask_weighting += [1000]
+            elif Subtasks.IDS_TO_SUBTASKS[int(self.prev_subtask_id)] == 'get_onion_from_counter' or \
+                 Action.INDEX_TO_ACTION[self.action_id] == Action.INTERACT and Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'get_onion_from_counter':
+                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']]
+                subtask_weighting += [1000]
+        elif self.layout_name == 'forced_coordination':
+            if not isinstance(self.action_id, int):
+                self.action_id = int(self.action_id.squeeze())
+            if Subtasks.IDS_TO_SUBTASKS[int(self.prev_subtask_id)] == 'put_onion_closer' or \
+                    Action.INDEX_TO_ACTION[self.action_id] == Action.INTERACT and Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'put_onion_closer':
+                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_onion_from_counter']]
+                subtask_weighting += [1e-4]
+            if Subtasks.IDS_TO_SUBTASKS[int(self.prev_subtask_id)] == 'put_plate_closer' or \
+                    Action.INDEX_TO_ACTION[self.action_id] == Action.INTERACT and Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'put_plate_closer':
+                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']]
+                subtask_weighting += [1e-4]
+            if self.num_all_onions(obs) < 6:
+                subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
+                subtask_weighting += [100]
+
+        # for k, v in zip(subtasks_to_weigh, subtask_weighting):
+            # print(f'*{Subtasks.IDS_TO_SUBTASKS[k]} --> {v}')
             # print(subtasks_to_weigh, len(subtasks_to_weigh))
             # print(subtask_weighting, len(subtask_weighting))
         new_probs = self.adjust_distributions(probs, subtasks_to_weigh, subtask_weighting)
@@ -282,26 +323,32 @@ class HierarchicalRL(OAIAgent):
         return np.expand_dims(np.array(subtask), 0)
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
-        if True:#(self.action_id and Action.INDEX_TO_ACTION[int(self.action_id.squeeze())] == Action.INTERACT) or \
-            #self.num_steps_since_new_subtask >= 5 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
-            self.prev_subtask_id = self.curr_subtask_id
-            if self.action_id and Action.INDEX_TO_ACTION[int(self.action_id)] == Action.INTERACT:
-                self.subtask_step += 1
-            # Completed previous subtask, set new subtask
-            if self.tune_subtasks:
-                self.curr_subtask_id = self.get_manually_tuned_action(obs, deterministic=deterministic)
-            else:
-                self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
-                                                            deterministic=deterministic)[0]
+        if self.num_steps_since_new_subtask > 5:
+            self.curr_subtask_id = Subtasks.SUBTASKS_TO_IDS['unknown']
+            self.prev_subtask_id = Subtasks.SUBTASKS_TO_IDS['unknown']
+        if self.action_id and Action.INDEX_TO_ACTION[int(self.action_id)] == Action.INTERACT:
+            self.subtask_step += 1
+
+        curr_st_id = self.curr_subtask_id
+        # Completed previous subtask, set new subtask
+        if self.tune_subtasks:
+            self.curr_subtask_id = self.get_manually_tuned_action(obs, deterministic=deterministic)
+        else:
+            self.curr_subtask_id = self.manager.predict(obs, state=state, episode_start=episode_start,
+                                                        deterministic=deterministic)[0]
+
+        if self.curr_subtask_id == curr_st_id:
+            self.num_steps_since_new_subtask += 1
+        else:
+            self.prev_subtask_id = curr_st_id
             self.num_steps_since_new_subtask = 0
-            # print(Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)])
+        # print(Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)])
 
         if not isinstance(self.curr_subtask_id, int):
             self.curr_subtask_id = int(self.curr_subtask_id.squeeze())
         if self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
             return np.array([Action.ACTION_TO_INDEX[Action.STAY]]), None
 
-        self.num_steps_since_new_subtask += 1
         worker_obs = self.obs_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
         worker_obs = {k: np.expand_dims(v, 0) for k, v in worker_obs.items()}
         self.action_id, _ = self.worker.predict(worker_obs, state=state, episode_start=episode_start, deterministic=deterministic)

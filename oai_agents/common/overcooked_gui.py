@@ -68,18 +68,18 @@ class OvercookedGUI:
             kwargs = {'single_subtask_id': 10, 'args': args, 'is_eval_env': True}
             self.env = OvercookedSubtaskGymEnv(**p_kwargs, **kwargs)
         else:
-            self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True,
+            self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=False,
                                         is_eval_env=True, horizon=horizon)
         self.agent = agent
         self.p_idx = p_idx
         self.env.set_teammate(teammate)
         self.env.reset(p_idx=self.p_idx)
         if self.agent != 'human':
-            self.agent.set_encoding_params(self.p_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.agent, HierarchicalRL), tune_subtasks=False)
-        self.env.teammate.set_encoding_params(self.env.t_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=False)
-        self.env.encoding_fn = self.agent.encoding_fn
+            self.agent.set_encoding_params(self.p_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.agent, HierarchicalRL), tune_subtasks=True)
+            self.env.encoding_fn = self.agent.encoding_fn
+        self.env.teammate.set_encoding_params(self.env.t_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=True)
         self.teammate_name=teammate.name
-        self.deterministic = True
+        self.deterministic = False
         self.env.deterministic = self.deterministic
 
 
@@ -94,7 +94,7 @@ class OvercookedGUI:
         self.human_action = None
         self.data_path = args.base_dir / args.data_path
         self.data_path.mkdir(parents=True, exist_ok=True)
-        self.tile_size = 50
+        self.tile_size = 150
 
         self.info_stream = stream
         self.outlet = outlet

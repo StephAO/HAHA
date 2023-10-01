@@ -15,15 +15,9 @@ def get_entropy(dist):
         probs = dist.probs.detach().squeeze().numpy()
     else:
         probs = dist.distribution.probs.squeeze().numpy()
-        # print(dist.distribution.probs, entropy(dist.distribution.probs.squeeze()))
-    # print('pre: ', probs)
-    probs = np.delete(probs, -2)
-    # print('mid: ', probs)
-    probs = probs / np.sum(probs)
-    # print('post:', probs)
+    # probs = np.delete(probs, -2)
+    # probs = probs / np.sum(probs)
     ent = entropy(probs)
-    # if ent < 0.1:
-    #     exit(0)
     return ent
 
 def run_game(env, agent, deterministic):
@@ -47,7 +41,7 @@ args = get_arguments()
 # teammate = load_agent(fn, args=args)
 agent, teammate = get_bc_and_human_proxy(args)
 
-deterministic = True
+deterministic = False
 
 
 eval_envs_kwargs = {'is_eval_env': True, 'args': args, 'horizon': 400, 'ret_completed_subtasks': True}
@@ -66,4 +60,4 @@ for env in eval_envs:
     _, eps = run_game(env, a, deterministic)
     entropy_per_state += eps
 
-print(f'AVERAGE ENTRPOPY: {np.mean(entropy_per_state)}')
+print(f'AVERAGE ENTROPY: {np.mean(entropy_per_state)}')
