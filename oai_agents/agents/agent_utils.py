@@ -3,6 +3,7 @@ from overcooked_ai_py.mdp.overcooked_mdp import Action
 
 from gym import spaces
 import numpy as np
+import os
 from pathlib import Path
 import torch as th
 
@@ -13,6 +14,9 @@ def load_agent(agent_path, args=None):
     agent_path = Path(agent_path)
     load_dict = th.load(agent_path / 'agent_file', map_location=args.device)
     agent = load_dict['agent_type'].load(agent_path, args)
+    print(agent_path / 'new_agent')
+    if os.path.isfile(agent_path / 'new_agent'):
+        agent.new_agent = True
     return agent
 
 def is_held_obj(player, object):
@@ -34,6 +38,7 @@ class DummyAgent():
         self.policy = DummyPolicy(spaces.Dict({'visual_obs': spaces.Box(0,1,(1,))}))
         self.encoding_fn = lambda *args, **kwargs: {}
         self.use_hrl_obs = False
+        self.new_agent = False
 
     def predict(self, x, state=None, episode_start=None, deterministic=False):
         add_dim = len(x) == 1

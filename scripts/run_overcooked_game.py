@@ -31,8 +31,8 @@ if __name__ == "__main__":
     # agent = HumanManagerHRL(worker, args)
 
 
-    tm = load_agent(Path('agent_models/HAHA_fcp_fcp'), args)# 'human'# HumanManagerHRL(haha.worker, args)
-    agent = 'human'#load_agent(Path('agent_models/HAHA_fcp_fcp'), args)
+    tm = load_agent(Path('agent_models/sp_det'), args)# 'human'# HumanManagerHRL(haha.worker, args)
+    agent = load_agent(Path('agent_models/sp_det'), args)#load_agent(Path('agent_models/HAHA_fcp_fcp'), args)
 
     t_idx = 1 - args.p_idx
     # teammate = DummyAgent('random')# load_agent(Path(args.teammate), args)

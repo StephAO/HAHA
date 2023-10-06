@@ -235,8 +235,8 @@ def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_i
 def get_all_agents(args, training_steps=1e7, agents_to_train='all'):
     agents = {}
     fcp_pop = None
-    if agents_to_train == 'all' or 'sp' in agents_to_train:
-        agents['sp'] = get_selfplay_agent(args, training_steps=5e6)
+    if agents_to_train == 'all' or 'selfplay' in agents_to_train:
+        agents['selfplay'] = get_selfplay_agent(args, training_steps=5e6)
     if agents_to_train == 'all' or 'bcp' in agents_to_train:
         agents['bcp'] = get_behavioral_cloning_play_agent(args, training_steps=5e6)
     if agents_to_train == 'all' or 'fcp' in agents_to_train:

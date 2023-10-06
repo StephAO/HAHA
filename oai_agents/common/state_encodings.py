@@ -6,7 +6,7 @@ import numpy as np
 def OAI_feats_closure():
     mlams = {}
     def OAI_get_feats(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int,
-                      num_pots: int = 2, p_idx=None, goal_objects=None):
+                      num_pots: int = 2, p_idx=None, goal_objects=None, new_agent=False):
         """
         Uses Overcooked-ai's BC 96 dim BC featurization. Only returns agent_obs
         """
@@ -35,7 +35,7 @@ OAI_feats = OAI_feats_closure()
 
 
 def OAI_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shape: tuple, horizon: int, p_idx=None,
-                     goal_objects=None):
+                     goal_objects=None, new_agent=False):
     """
     Uses Overcooked-ai's RL lossless encoding by stacking 27 binary masks (27xNxM). Only returns visual_obs.
     """
@@ -54,7 +54,8 @@ def OAI_encode_state(mdp: OvercookedGridworld, state: OvercookedState, grid_shap
 
 
 def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState,
-                                grid_shape: tuple, horizon: int, p_idx=None, goal_objects=None) -> Dict[str, np.array]:
+                                grid_shape: tuple, horizon: int, p_idx=None, goal_objects=None,
+                                new_agent=False) -> Dict[str, np.array]:
     """
     Returns the egocentric encode state. Player will always be facing down (aka. SOUTH).
     grid_shape: The desired padded output shape from the egocentric view
@@ -64,7 +65,7 @@ def OAI_egocentric_encode_state(mdp: OvercookedGridworld, state: OvercookedState
 
     # Get np.array representing current state
     # This returns 2xNxMxF (F is # features) if p_idx is None else NxMxF
-    visual_obs = mdp.lossless_state_encoding(state, horizon=horizon, goal_objects=goal_objects, p_idx=p_idx)
+    visual_obs = mdp.lossless_state_encoding(state, horizon=horizon, goal_objects=goal_objects, p_idx=p_idx, new_agent=new_agent)
 
     if p_idx is None:
         visual_obs = np.stack(visual_obs, axis=0)

@@ -44,6 +44,7 @@ class OAIAgent(nn.Module, ABC):
         self.prev_subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
         self.use_hrl_obs = False
         self.on_reset = True
+        self.new_agent = False
 
     @abstractmethod
     def predict(self, obs: th.Tensor, state=None, episode_start=None, deterministic: bool = False) -> Tuple[
@@ -63,7 +64,7 @@ class OAIAgent(nn.Module, ABC):
         """
 
     def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False, goal_objects=None):
-        obs = self.encoding_fn(self.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx, goal_objects=goal_objects)
+        obs = self.encoding_fn(self.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx, goal_objects=goal_objects, new_agent=self.new_agent)
 
         if self.stack_frames:
             obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)

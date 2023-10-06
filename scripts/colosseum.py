@@ -8,30 +8,40 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from tqdm import tqdm
 from scripts.train_agents import get_bc_and_human_proxy
 
-def run_game(env, agent, deterministic=False):
+
+
+TEAMMATE_DET = True
+AGENT_DET = True
+
+def run_game(env, agent):
     done = False
     cum_reward = 0
     obs = env.reset()
     while not done:
-        action = agent.predict(obs, deterministic=deterministic)[0]
+        action = agent.predict(obs, deterministic=AGENT_DET)[0]
         obs, reward, done, info = env.step(action)
         cum_reward += reward
+    print(cum_reward)
     return cum_reward
 
-def eval_agents_with_various_teammates(agents_to_evaluate, teammates, deterministic=False):
+def eval_agents_with_various_teammates(agents_to_evaluate, teammates, training_tms=None):
     eval_envs_kwargs = {'is_eval_env': True, 'args': args, 'horizon': 400, 'ret_completed_subtasks': True}
     args.layout_names = ['counter_circuit_o_1order', 'asymmetric_advantages', 'cramped_room', 'forced_coordination', 'coordination_ring']
     # args.layout_names = [ln + '_mod' for ln in args.layout_names]
-    score_matrices = {ln: np.zeros((len(agents_to_evaluate), len(teammates))) for ln in args.layout_names}
+    num_teammates = len(teammates) + 1 if training_tms else len(teammates)
+    score_matrices = {ln: np.zeros((len(agents_to_evaluate), num_teammates)) for ln in args.layout_names}
 
-    tot_rounds = len(args.layout_names) * len(agents_to_evaluate) * len(teammates)
+    tot_rounds = len(args.layout_names) * len(agents_to_evaluate) * num_teammates
     with tqdm(total=tot_rounds) as pbar:
         for i, p1 in enumerate(agents_to_evaluate):
             eval_envs_kwargs['ret_completed_subtasks'] = ('haha' in p1.name)
             eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(len(args.layout_names))]
             for eval_env in eval_envs:
-                eval_env.deterministic = deterministic
-                for j, p2 in enumerate(teammates):
+                eval_env.deterministic = TEAMMATE_DET
+                eval_env.encoding_fn = p1.encoding_fn
+                eval_env.new_agent = p1.new_agent
+                tms = teammates + training_tms[i] if training_tms is not None else teammates
+                for j, p2 in enumerate(tms):
                     # if type(p2) != dict and p1.name == p2.name:
                     #     continue
                     p2 = p2[eval_env.layout_name][0] if type(p2) == dict else p2
@@ -42,7 +52,7 @@ def eval_agents_with_various_teammates(agents_to_evaluate, teammates, determinis
                         eval_env.set_teammate(p2)
                         eval_env.set_reset_p_idx(p_idx)
                         for _ in range(5):
-                            reward = run_game(eval_env, p1, deterministic=deterministic)
+                            reward = run_game(eval_env, p1)
                             # mean_reward, std_reward = evaluate_policy(p1, eval_env, n_eval_episodes=10,
                             #                                           deterministic=True, warn=False, render=False)
                             score_matrices[eval_env.layout_name][i][j] += reward / 5
@@ -75,12 +85,15 @@ def load_agents_population(filepaths, args):
 if __name__ == "__main__":
     args = get_arguments()
     base_dir = args.base_dir / 'agent_models'
-    main_agents_fns = ["HAHA_fcp_fcp+tuned"]#,"HAHA_fcp_fcp",  "BCP", "FCP"]#"HAHA_bcp_bcp+tuned"]#, "HAHA_fcp_fcp"]# "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
+    main_agents_fns = ['sp_det']#'["bcp", "bcp_det", "sp", "sp_det"]#, "HAHA_fcp_fcp"]# "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
     main_agents_fns = [base_dir / fn for fn in main_agents_fns]
 
     main_agents = load_agents_population(main_agents_fns, args) #+[DummyAgent('random')] +
     bc, human_proxy = get_bc_and_human_proxy(args)
 
+    inc_training_tm = True
+    print(main_agents_fns)
+    training_tms = [([bc] if 'bcp' in str(fn) else load_agents_population([fn], args)) for fn in main_agents_fns] if inc_training_tm else None
     # Load main agents again to avoid issues with hrl object
     # tms = [*load_agents_population(["SP"], args), DummyAgent('random'), human_proxy] # *load_agents_population(main_agents_fns, args),
     # tms = get_fcp_population(args, training_steps)
@@ -89,11 +102,12 @@ if __name__ == "__main__":
     # tm_fns = [base_dir / '2l_hd128_s1997' / fn / 'agents_dir' / 'agent_0' for fn in tm_fns]
     # tms = [bc, human_proxy]
     tms = [*load_agents_population([base_dir / "SP"], args), human_proxy, DummyAgent('random')] # [*load_agents_population(tm_fns, args)]
+    # tms = load_agents_population(main_agents_fns, args)
 
-    score_matrices = eval_agents_with_various_teammates(main_agents, tms)
+    score_matrices = eval_agents_with_various_teammates(main_agents, tms, training_tms=training_tms)
     for layout in args.layout_names:
         print(f"For env: {layout}")
         for i, agent in enumerate(main_agents):
-            print(f"Agent {agent.name} had an average score of {np.mean(score_matrices[layout][i])}")
+            print(f"Agent {agent.name} had an average score of {np.mean(score_matrices[layout][i][:3])} with other agents and {score_matrices[layout][i][-1]} with itself")
 
 

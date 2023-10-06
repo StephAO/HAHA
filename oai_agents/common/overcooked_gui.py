@@ -51,7 +51,6 @@ from overcooked_ai_py.visualization.state_visualizer import StateVisualizer, rob
 from overcooked_ai_py.planning.planners import MediumLevelActionManager
 from scripts.train_agents import get_bc_and_human_proxy
 
-
 class OvercookedGUI:
     """Class to run an Overcooked Gridworld game, leaving one of the agents as fixed.
     Useful for debugging. Most of the code from http://pygametutorials.wikidot.com/tutorials-basic."""
@@ -77,9 +76,10 @@ class OvercookedGUI:
         if self.agent != 'human':
             self.agent.set_encoding_params(self.p_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.agent, HierarchicalRL), tune_subtasks=True)
             self.env.encoding_fn = self.agent.encoding_fn
+            self.env.new_agent = agent.new_agent
         self.env.teammate.set_encoding_params(self.env.t_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=True)
         self.teammate_name=teammate.name
-        self.deterministic = False
+        self.deterministic = True
         self.env.deterministic = self.deterministic
 
 
@@ -234,7 +234,7 @@ class OvercookedGUI:
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
         # Save screenshot
-        # pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.png")
+        # pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.bmp")
 
     def on_cleanup(self):
         pygame.quit()
