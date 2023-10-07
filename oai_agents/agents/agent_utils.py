@@ -14,7 +14,7 @@ def load_agent(agent_path, args=None):
     agent_path = Path(agent_path)
     load_dict = th.load(agent_path / 'agent_file', map_location=args.device)
     agent = load_dict['agent_type'].load(agent_path, args)
-    print(agent_path / 'new_agent')
+    # print(agent_path / 'new_agent')
     if os.path.isfile(agent_path / 'new_agent'):
         agent.new_agent = True
     return agent
