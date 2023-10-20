@@ -131,7 +131,7 @@ class OvercookedGUI:
             win = gw.getWindowsWithTitle('pygame window')[0]
             win.activate()
 
-        start_screen = True
+        start_screen = False
         while start_screen:
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
@@ -145,6 +145,9 @@ class OvercookedGUI:
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
         self._running = True
+
+        pygame.image.save(self.window, f"screenshots/{self.env.layout_name}.png")
+        exit(0)
 
         if USING_WINDOWS:
             win = gw.getWindowsWithTitle('pygame window')[0]

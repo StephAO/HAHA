@@ -83,8 +83,8 @@ def load_agents_population(filepaths, args):
 
 if __name__ == "__main__":
     args = get_arguments()
-    base_dir = args.base_dir / 'agent_models / ent_aamas24'
-    main_agents_fns = ['fcp', 'fcp_det', "bcp", "bcp_det", "sp", "sp_det"]#, "HAHA_fcp_fcp"]# "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
+    base_dir = args.base_dir / 'agent_models'# / 'ent_aamas24'
+    main_agents_fns = ['HAHA_fcp_fcp']#'fcp', 'fcp_det', "bcp", "bcp_det", "sp", "sp_det"]#, "HAHA_fcp_fcp"]# "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
     main_agents_fns = [base_dir / fn for fn in main_agents_fns]
 
     main_agents = load_agents_population(main_agents_fns, args) #+[DummyAgent('random')] +
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     # tm_fns = ["ck_0", "ck_4", "ck_8", "ck_12", "ck_16", "best"]
     # tm_fns = [base_dir / '2l_hd128_s1997' / fn / 'agents_dir' / 'agent_0' for fn in tm_fns]
     # tms = [bc, human_proxy]
-    tms = [*load_agents_population([base_dir / "SP"], args), human_proxy]#, DummyAgent('random')] # [*load_agents_population(tm_fns, args)]
+    tms = [*load_agents_population([base_dir / "SP"], args), human_proxy, DummyAgent('random')] # [*load_agents_population(tm_fns, args)]
     # tms = load_agents_population(main_agents_fns, args)
 
     """
@@ -125,10 +125,11 @@ if __name__ == "__main__":
 
 
     column_names = ['agent_name'] + args.layout_names + ['average']
-    for tm_det in [True, False]:
+    for tm_det in [False, True]:
         score_matrices = {}
-        for agent_det in [True, False]:
+        for agent_det in [False, True]:
             score_matrices[agent_det] = eval_agents_with_various_teammates(main_agents, tms, training_tms=training_tms, agent_det=agent_det, tm_det=tm_det)
+            exit(0)
             # print(f"For layouts: {args.layout_names}, agents{main_agents_fns}")
             # for layout in args.layout_names:
             #     for i, agent in enumerate(main_agents):
