@@ -83,7 +83,7 @@ def load_agents_population(filepaths, args):
 
 if __name__ == "__main__":
     args = get_arguments()
-    base_dir = args.base_dir / 'agent_models / ent_aamas24'
+    base_dir = args.base_dir / 'agent_models' / 'ent_aamas24'
     main_agents_fns = ['fcp', 'fcp_det', "bcp", "bcp_det", "sp", "sp_det"]#, "HAHA_fcp_fcp"]# "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
     main_agents_fns = [base_dir / fn for fn in main_agents_fns]
 
@@ -97,14 +97,14 @@ if __name__ == "__main__":
         training_tms = []
         for fn in main_agents_fns:
             if 'bcp' in str(fn):
-                teammates.append([bc])
+                training_tms.append([bc])
             elif 'fcp' in str(fn):
                 fcp_pop = {}
                 for layout_name in args.layout_names:
                     fcp_pop[layout_name] = RLAgentTrainer.load_agents(args, name=f'fcp_pop_{layout_name}', tag='aamas24')[:3]
                 training_tms.append([fcp_pop])
             else:
-                load_agents_population([fn], args)
+                training_tms.append(load_agents_population([fn], args))
     else:
         training_tms = None
     # Load main agents again to avoid issues with hrl object
