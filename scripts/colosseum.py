@@ -84,27 +84,27 @@ def load_agents_population(filepaths, args):
 if __name__ == "__main__":
     args = get_arguments()
     base_dir = args.base_dir / 'agent_models'# / 'ent_aamas24'
-    main_agents_fns = ['HAHA_fcp_fcp']#'fcp', 'fcp_det', "bcp", "bcp_det", "sp", "sp_det"]#, "HAHA_fcp_fcp"]# "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
+    main_agents_fns = ['HAHA_fcp_fcp', 'fcp', 'HAHA_bcp_bcp', "bcp"]#, "HAHA_fcp_fcp"]# "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
     main_agents_fns = [base_dir / fn for fn in main_agents_fns]
 
     main_agents = load_agents_population(main_agents_fns, args) #+[DummyAgent('random')] +
     bc, human_proxy = get_bc_and_human_proxy(args)
 
-    inc_training_tm = True
+    inc_training_tm = False
     print(main_agents_fns)
 
     if inc_training_tm:
         training_tms = []
         for fn in main_agents_fns:
             if 'bcp' in str(fn):
-                teammates.append([bc])
+                training_tms.append([bc])
             elif 'fcp' in str(fn):
                 fcp_pop = {}
                 for layout_name in args.layout_names:
                     fcp_pop[layout_name] = RLAgentTrainer.load_agents(args, name=f'fcp_pop_{layout_name}', tag='aamas24')[:3]
                 training_tms.append([fcp_pop])
             else:
-                load_agents_population([fn], args)
+                training_tms.append(load_agents_population([fn], args))
     else:
         training_tms = None
     # Load main agents again to avoid issues with hrl object
@@ -125,11 +125,7 @@ if __name__ == "__main__":
 
 
     column_names = ['agent_name'] + args.layout_names + ['average']
-    for tm_det in [False, True]:
-        score_matrices = {}
-        for agent_det in [False, True]:
-            score_matrices[agent_det] = eval_agents_with_various_teammates(main_agents, tms, training_tms=training_tms, agent_det=agent_det, tm_det=tm_det)
-            exit(0)
+    score_matrices = eval_agents_with_various_teammates(main_agents, tms, training_tms=training_tms, agent_det=False, tm_det=False)
             # print(f"For layouts: {args.layout_names}, agents{main_agents_fns}")
             # for layout in args.layout_names:
             #     for i, agent in enumerate(main_agents):
@@ -140,57 +136,47 @@ if __name__ == "__main__":
             #     for i, agent in enumerate(main_agents):
             #         print(np.mean(score_matrices[layout][i][-1]),end='' if (i == len(main_agents) - 1) else ',')
             #     print()
-        tm_names = [('human_proxy' if isinstance(a, dict) else a.name) for a in tms]
-        if inc_training_tm:
-            tm_names += ['training_partner']
+    tm_names = [('human_proxy' if isinstance(a, dict) else a.name) for a in tms]
+    if inc_training_tm:
+        tm_names += ['training_partner']
 
-        for i, tm_name in enumerate(tm_names):
-            # SEPARATE CSVS
-            data = []
-            # ONE ROW IS 1 AGENT
-            for j, agent_name in enumerate([a.name for a in main_agents]):
-                # EACH AGENT NAME is two rows for det/sto
-                row_data_det = [agent_name + '_d']
-                row_data_sto = [agent_name + '_s']
-                avg_det, avg_sto = [], []
-                # EACH COL is a separate layout + average
-                for layout_name in args.layout_names:
-                    row_data_det.append(score_matrices[True][layout_name][j][i])
-                    row_data_sto.append(score_matrices[False][layout_name][j][i])
-                    if tm_name == 'training_partner':
-                        continue
-                    avg_det.append(score_matrices[True][layout_name][j][i])
-                    avg_sto.append(score_matrices[False][layout_name][j][i])
-
-                row_data_det.append(np.mean(avg_det))
-                row_data_sto.append(np.mean(avg_sto))
-
-                data.extend([row_data_det, row_data_sto])
-
-            df = pd.DataFrame(data=data, columns=column_names)
-            df.to_csv(f'data/ua_eval_{tm_name}_{tm_det}.csv')
-
-        # AVERAGE OVER TMS CSV
+    for i, tm_name in enumerate(tm_names):
+        # SEPARATE CSVS
         data = []
         # ONE ROW IS 1 AGENT
         for j, agent_name in enumerate([a.name for a in main_agents]):
-            # EACH AGENT NAME is two rows for det/sto
-            row_data_det = [agent_name + '_d']
-            row_data_sto = [agent_name + '_s']
-            avg_det, avg_sto = [], []
+            row_data = [agent_name]
+            avg = []
             # EACH COL is a separate layout + average
             for layout_name in args.layout_names:
-                # :-1 to remove training teammate score
-                row_data_det.append(np.mean(score_matrices[True][layout_name][j][:-1]))
-                row_data_sto.append(np.mean(score_matrices[False][layout_name][j][:-1]))
-                avg_det.append(np.mean(score_matrices[True][layout_name][j][:-1]))
-                avg_sto.append(np.mean(score_matrices[False][layout_name][j][:-1]))
+                row_data.append(score_matrices[layout_name][j][i])
+                if tm_name == 'training_partner':
+                    continue
+                avg.append(score_matrices[layout_name][j][i])
 
-            row_data_det.append(np.mean(avg_det))
-            row_data_sto.append(np.mean(avg_sto))
-
-            data.extend([row_data_det, row_data_sto])
+            row_data.append(np.mean(avg))
+            data.append(row_data)
 
         df = pd.DataFrame(data=data, columns=column_names)
-        df.to_csv(f'data/ua_eval_avg_over_tms_{tm_det}.csv')
+        df.to_csv(f'data/ua_eval_{tm_name}.csv')
+
+    # AVERAGE OVER TMS CSV
+    data = []
+    # ONE ROW IS 1 AGENT
+    for j, agent_name in enumerate([a.name for a in main_agents]):
+        # EACH AGENT NAME is two rows for det/sto
+        row_data = [agent_name]
+        avg = []
+        # EACH COL is a separate layout + average
+        for layout_name in args.layout_names:
+            # :-1 to remove training teammate score
+            row_data.append(np.mean(score_matrices[layout_name][j][:-1]))
+            avg.append(np.mean(score_matrices[layout_name][j][:-1]))
+
+        row_data.append(np.mean(avg))
+
+        data.append(row_data)
+
+    df = pd.DataFrame(data=data, columns=column_names)
+    df.to_csv(f'data/ua_eval_avg_over_tms.csv')
 

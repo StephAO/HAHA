@@ -79,14 +79,14 @@ def get_eval_teammates(args):
 
 # SP
 def get_selfplay_agent(args, training_steps=1e7, tag=None):
-    name = 'selfplay'
+    name = 'sp_det'
     try:
         tag = tag or 'best'
         agents = RLAgentTrainer.load_agents(args, name=name, tag=tag)
     except FileNotFoundError as e:
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
         selfplay_trainer = RLAgentTrainer([], args, selfplay=True, name=name, seed=678, use_frame_stack=False,
-                                          use_lstm=False, use_cnn=False, deterministic=False)
+                                          use_lstm=False, use_cnn=False, deterministic=True)
         selfplay_trainer.train_agents(train_timesteps=training_steps)
         agents = selfplay_trainer.get_agents()
     return agents
@@ -114,7 +114,7 @@ def get_bc_and_human_proxy(args, epochs=300):
 
 # BCP
 def get_behavioral_cloning_play_agent(args, training_steps=1e7):
-    name = 'bcp'
+    name = 'bcp_det'
     try:
         bcp = RLAgentTrainer.load_agents(args, name=name)
     except FileNotFoundError as e:
@@ -124,6 +124,27 @@ def get_behavioral_cloning_play_agent(args, training_steps=1e7):
         self_play_trainer.train_agents(train_timesteps=training_steps)
         bcp = self_play_trainer.get_agents()
     return bcp
+
+def get_test_fcp_pop(args):
+    fcp_pop = {layout_name: [] for layout_name in args.layout_names}
+    agents = []
+    num_layers = 2
+
+    ck_rate = training_steps // 10
+
+    print(f'Starting training for: {name}')
+    rlat = RLAgentTrainer([], args, selfplay=True, name='fcp_test_pop', hidden_dim=128, use_frame_stack=False,
+                          fcp_ck_rate=ck_rate, seed=seed, num_layers=num_layers)
+    rlat.train_agents(train_timesteps=2e7)
+
+    for layout_name in args.layout_names:
+        agents = rlat.get_fcp_agents(layout_name)
+        fcp_pop[layout_name] += agents
+
+    for layout_name in args.layout_names:
+        pop = RLAgentTrainer([], args, selfplay=True, name=f'fcp_test_pop_{layout_name}')
+        pop.agents = fcp_pop[layout_name]
+        pop.save_agents(tag='aamas24')
 
 
 # FCP
@@ -165,7 +186,7 @@ def get_fcp_population(args, training_steps=2e7):
 
 
 def get_fcp_agent(args, training_steps=1e7):
-    name = 'fcp'
+    name = 'fcp_det'
     teammates = get_fcp_population(args, training_steps)
     fcp_trainer = RLAgentTrainer(teammates, args, name=name, use_subtask_counts=False, use_policy_clone=False,
                                  seed=2602, deterministic=True)
@@ -247,17 +268,18 @@ def get_all_agents(args, training_steps=1e7, agents_to_train='all'):
 
 if __name__ == '__main__':
     args = get_arguments()
-    #get_selfplay_agent(args, training_steps=1e8)
+    #get_selfplay_agent(args, training_steps=2e8)
     # print('GOT SP', flush=True)
     # get_bc_and_human_proxy(args, epochs=2)
     # print('GOT BC&HP', flush=True)
     #get_behavioral_cloning_play_agent(args, training_steps=2e8)
     # print('GOT BCP', flush=True)
-    #get_fcp_agent(args, training_steps=1e8)
+    #get_fcp_agent(args, training_steps=2e8)
+    get_test_fcp_pop(args)
     # print('GOT FCP', flush=True)
     #get_hrl_worker(args, training_steps=1e8)
     #print('GOT WORK', flush=True)
-    get_hrl_agent(args, training_steps=1e8)
+    #get_hrl_agent(args, training_steps=1e8)
     #print('GOT HAHA', flush=True)
 
     # get_bc_and_human_proxy(args)
