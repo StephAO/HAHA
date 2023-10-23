@@ -53,7 +53,7 @@ def create_full_dataframe(xdf_file):
     game_data_gen = game_data_df.iterrows()
     _, game_data_row = next(game_data_gen)
 
-    min_game_time, max_game_time = game_data_df['Time'].min(), game_data_df['Time'][:-1].max()
+    min_game_time, max_game_time = game_data_df['Time'].min(), game_data_df['Time'].max()
     eye_data_df = eye_data_df[eye_data_df['Time'] > min_game_time]
     eye_data_df = eye_data_df[eye_data_df['Time'] < max_game_time]
 
@@ -65,21 +65,32 @@ def create_full_dataframe(xdf_file):
     curr_game_data = json.loads(game_str)
     OvercookedGridworld.from_layout_name(curr_game_data['layout_name'])
     curr_state = OvercookedState.from_dict(json.loads(curr_game_data['state']))
+    curr_game_timestep, curr_trial_id = curr_game_data['cur_gameloop'], curr_game_data['trial_id']
     # timestep 1
     _, game_data_row = next(game_data_gen)
     next_game_time, next_game_str = game_data_row['Time'], game_data_row['GameEvents']
+    next_game_data = json.loads(next_game_str)
 
-    obj_column = {k: [] for k in ['Game_Timestep', 'AvgGridX', 'AvgGridY', 'AvgObj', 'LObj', 'RObj']}
-    curr_game_timestep = curr_game_data['cur_gameloop']
+    obj_column = {k: [] for k in ['Game_Timestep', 'Trial_ID', 'AvgGridX', 'AvgGridY', 'AvgObj', 'LObj', 'RObj']}
+    between_trial_rows = []
 
     for index, row in eye_data_df.iterrows():
         if row['Time'] >= next_game_time:
-            curr_game_data = json.loads(next_game_str)
+            curr_game_data = next_game_data
             curr_state = OvercookedState.from_dict(json.loads(curr_game_data['state']))
-            curr_game_timestep = curr_game_data['cur_gameloop']
+            curr_game_timestep, curr_trial_id = curr_game_data['cur_gameloop'], curr_game_data['trial_id']
+
             _, game_data_row = next(game_data_gen)
             next_game_time, next_game_str = game_data_row['Time'], game_data_row['GameEvents']
+            next_game_data = json.loads(next_game_str)
+
+        # New trial, remove data between trials
+        if curr_trial_id != next_game_data['trial_id']:
+            between_trial_rows.append(index)
+            continue
+
         obj_column['Game_Timestep'].append(curr_game_timestep)
+        obj_column['Trial_ID'].append(curr_trial_id)
 
         top_left_x, top_left_y, surface_size, tile_size, grid_shape, hud_size = curr_game_data['dimension']
         hud_size = 50
@@ -123,6 +134,8 @@ def create_full_dataframe(xdf_file):
                 obj_column['AvgGridX'].append(grid_x)
                 obj_column['AvgGridY'].append(grid_y)
 
+    eye_data_df.drop(between_trial_rows, axis=0, inplace=True)
+
     for k, v in obj_column.items():
         eye_data_df[k] = v
 
@@ -131,9 +144,11 @@ def create_full_dataframe(xdf_file):
     # print(eye_data_df[1000:].head(1000))
 
     # print(grid_centers)
+
+
     csv_filename = str(xdf_file).replace('.xdf', '.csv')
     eye_data_df.to_csv(csv_filename)
-    print(f'Created {csv_filename} from {xdf_file}')
+    print(f'Created {csv_filename} of length {len(eye_data_df)} from {xdf_file}')
 
 def eye_pos_to_gaze_obj(pos, state, mdp, p_idx):
     gaze_obj = TERRAIN_CHAR_TO_NAME[mdp.get_terrain_type_at_pos(pos)]
