@@ -247,7 +247,7 @@ class OvercookedGUI:
                 action = self.human_action if self.human_action is not None else Action.ACTION_TO_INDEX[Action.STAY]
             else:
                 obs = self.env.get_obs(self.env.p_idx, on_reset=False)
-                action = self.agent.predict(obs, state=self.env.state, deterministic=False)[0]
+                action = self.agent.predict(obs, state=self.env.state, deterministic=True)[0]
                 # pygame.time.wait(sleep_time)
 
             done = self.step_env(action)

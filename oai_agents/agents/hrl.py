@@ -104,9 +104,8 @@ class HierarchicalRL(OAIAgent):
         self.waiting_steps = 0
 
     def get_distribution(self, obs, sample=True):
-        if np.sum(obs['player_completed_subtasks']) == 1:
-            # Completed previous subtask, set new subtask
-            self.curr_subtask_id = self.manager.predict(obs, sample=sample)[0]
+        # Completed previous subtask, set new subtask
+        self.curr_subtask_id = self.manager.predict(obs, sample=sample)[0]
         worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
         obs.update(worker_obs)
         return self.worker.get_distribution(obs, sample=sample)
@@ -258,12 +257,8 @@ class HierarchicalRL(OAIAgent):
         return np.expand_dims(np.array(subtask), 0)
 
     def predict(self, obs, state=None, episode_start=None, deterministic: bool=False):
-        # TODO consider forcing new subtask if none has been completed in x timesteps
-        # print(obs['player_completed_subtasks'],  self.prev_player_comp_st, (obs['player_completed_subtasks'] != self.prev_player_comp_st).any(), flush=True)
-        if np.sum(obs['player_completed_subtasks']) == 1 or np.sum(obs['teammate_completed_subtasks']) == 1 or \
-            self.num_steps_since_new_subtask >= 2 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
-            if np.sum(obs['player_completed_subtasks'][:-1]) == 1:
-                self.subtask_step += 1
+        if True:
+            # self.num_steps_since_new_subtask >= 2 or self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
             # Completed previous subtask, set new subtask
             if self.tune_subtasks:
                 self.curr_subtask_id = self.get_manually_tuned_action(obs, deterministic=deterministic)
@@ -275,13 +270,12 @@ class HierarchicalRL(OAIAgent):
         # self.num_steps_since_new_subtask = 0
         if not isinstance(self.curr_subtask_id, int):
             self.curr_subtask_id = int(self.curr_subtask_id.squeeze())
-        # print(Subtasks.IDS_TO_SUBTASKS[self.curr_subtask_id])
         if self.curr_subtask_id == Subtasks.SUBTASKS_TO_IDS['unknown']:
             return np.array([Action.ACTION_TO_INDEX[Action.STAY]]), None
         self.num_steps_since_new_subtask += 1
         worker_obs = self.obs_closure_fn(p_idx=self.p_idx, goal_objects=Subtasks.IDS_TO_GOAL_MARKERS[self.curr_subtask_id])
         worker_obs = {k: np.expand_dims(v, 0) for k, v in worker_obs.items()}
-        return self.worker.predict(worker_obs, state=state, episode_start=episode_start, deterministic=False)
+        return self.worker.predict(worker_obs, state=state, episode_start=episode_start, deterministic=deterministic)
 
     def get_agent_output(self):
         return Subtasks.IDS_TO_HR_SUBTASKS[int(self.curr_subtask_id)] if self.output_message else ' '

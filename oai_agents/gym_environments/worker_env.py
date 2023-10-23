@@ -208,8 +208,6 @@ class OvercookedSubtaskGymEnv(OvercookedGymEnv):
         if self.manager is not None:
             man_obs = self.get_obs(self.p_idx, for_manager=True)
             man_obs['subtask_mask'] = doable_subtasks
-            man_obs['player_completed_subtasks'] = np.zeros(Subtasks.NUM_SUBTASKS)
-            man_obs['teammate_completed_subtasks'] = np.zeros(Subtasks.NUM_SUBTASKS)
             self.goal_subtask_id = int(self.manager.predict(man_obs, deterministic=False)[0].squeeze())
         else:
             self.goal_subtask_id = np.random.choice(np.nonzero(doable_subtasks)[0])
