@@ -50,12 +50,20 @@ def create_full_dataframe(xdf_file):
     print(f'Parsing {xdf_file}')
     game_data_df, eye_data_df = xdf_to_panda_df(xdf_file)
 
+    last_game_timestep = json.loads(game_data_df['GameEvents'].iloc[-1])['cur_gameloop']
+    pd.options.display.float_format = '{:.2f}'.format
+
+    while last_game_timestep != 400:
+        game_data_df = game_data_df.iloc[:-1]
+        last_game_timestep = json.loads(game_data_df['GameEvents'].iloc[-1])['cur_gameloop']
+
     game_data_gen = game_data_df.iterrows()
     _, game_data_row = next(game_data_gen)
 
     min_game_time, max_game_time = game_data_df['Time'].min(), game_data_df['Time'].max()
+
     eye_data_df = eye_data_df[eye_data_df['Time'] > min_game_time]
-    eye_data_df = eye_data_df[eye_data_df['Time'] < max_game_time]
+    eye_data_df = eye_data_df[eye_data_df['Time'] < max_game_time + 0.2]
 
     mdps = {}
     grid_centers = {}
@@ -74,15 +82,23 @@ def create_full_dataframe(xdf_file):
     obj_column = {k: [] for k in ['Game_Timestep', 'Trial_ID', 'AvgGridX', 'AvgGridY', 'AvgObj', 'LObj', 'RObj']}
     between_trial_rows = []
 
+    on_last_row = False
+
     for index, row in eye_data_df.iterrows():
         if row['Time'] >= next_game_time:
+            if on_last_row:
+                break
             curr_game_data = next_game_data
             curr_state = OvercookedState.from_dict(json.loads(curr_game_data['state']))
             curr_game_timestep, curr_trial_id = curr_game_data['cur_gameloop'], curr_game_data['trial_id']
 
-            _, game_data_row = next(game_data_gen)
-            next_game_time, next_game_str = game_data_row['Time'], game_data_row['GameEvents']
-            next_game_data = json.loads(next_game_str)
+            try:
+                _, game_data_row = next(game_data_gen)
+                next_game_time, next_game_str = game_data_row['Time'], game_data_row['GameEvents']
+                next_game_data = json.loads(next_game_str)
+            except StopIteration:
+                on_last_row = True
+                next_game_time += 0.2
 
         # New trial, remove data between trials
         if curr_trial_id != next_game_data['trial_id']:
@@ -136,6 +152,7 @@ def create_full_dataframe(xdf_file):
 
     eye_data_df.drop(between_trial_rows, axis=0, inplace=True)
 
+
     for k, v in obj_column.items():
         eye_data_df[k] = v
 
@@ -144,7 +161,6 @@ def create_full_dataframe(xdf_file):
     # print(eye_data_df[1000:].head(1000))
 
     # print(grid_centers)
-
 
     csv_filename = str(xdf_file).replace('.xdf', '.csv')
     eye_data_df.to_csv(csv_filename)
@@ -246,6 +262,8 @@ def create_heatmap(xdf_file):
 if __name__ == '__main__':
     directory_name = 'data/eye_tracking_data/'
     for filename in os.listdir(directory_name):
+        # if filename != 'oaiET_CU2025.xdf':
+        #     continue
         f = os.path.join(directory_name, filename)
         # checking if it is a file
         if os.path.isfile(f) and str(f)[-4:] == '.xdf':
