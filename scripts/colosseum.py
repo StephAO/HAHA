@@ -36,7 +36,6 @@ def eval_agents_with_various_teammates(agents_to_evaluate, teammates, training_t
             for eval_env in eval_envs:
                 eval_env.deterministic = tm_det
                 eval_env.encoding_fn = p1.encoding_fn
-                eval_env.new_agent = p1.new_agent
                 tms = teammates + training_tms[i] if training_tms is not None else teammates
                 for j, p2 in enumerate(tms):
                     # if type(p2) != dict and p1.name == p2.name:

@@ -86,7 +86,7 @@ def get_selfplay_agent(args, training_steps=1e7, tag=None):
     except FileNotFoundError as e:
         print(f'Could not find saved selfplay agent, creating them from scratch...\nFull Error: {e}')
         selfplay_trainer = RLAgentTrainer([], args, selfplay=True, name=name, seed=678, use_frame_stack=False,
-                                          use_lstm=False, use_cnn=False, deterministic=True)
+                                          use_lstm=False, use_cnn=False, deterministic=False)
         selfplay_trainer.train_agents(train_timesteps=training_steps)
         agents = selfplay_trainer.get_agents()
     return agents
@@ -113,14 +113,14 @@ def get_bc_and_human_proxy(args, epochs=300):
 
 
 # BCP
-def get_behavioral_cloning_play_agent(args, training_steps=1e7):
-    name = 'bcp_det'
+def get_behavioral_cloning_play_agent(args, seed=100, training_steps=1e7):
+    name = f'bcp_{seed}'
     try:
         bcp = RLAgentTrainer.load_agents(args, name=name)
     except FileNotFoundError as e:
         print(f'Could not find saved BCP, creating them from scratch...\nFull Error: {e}')
         teammates, _ = get_bc_and_human_proxy(args)
-        self_play_trainer = RLAgentTrainer(teammates, args, name=name, deterministic=True)
+        self_play_trainer = RLAgentTrainer(teammates, args, name=name, deterministic=False)
         self_play_trainer.train_agents(train_timesteps=training_steps)
         bcp = self_play_trainer.get_agents()
     return bcp
@@ -185,17 +185,17 @@ def get_fcp_population(args, training_steps=2e7):
     return fcp_pop
 
 
-def get_fcp_agent(args, training_steps=1e7):
-    name = 'fcp_det'
+def get_fcp_agent(args, seed=100, training_steps=1e7):
+    name = f'fcp_{seed}'
     teammates = get_fcp_population(args, training_steps)
     fcp_trainer = RLAgentTrainer(teammates, args, name=name, use_subtask_counts=False, use_policy_clone=False,
-                                 seed=2602, deterministic=True)
+                                 seed=2602, deterministic=False)
     fcp_trainer.train_agents(train_timesteps=training_steps)
     return fcp_trainer.get_agents()[0]
 
 
-def get_hrl_worker(args, teammate_type='fcp', training_steps=1e7):
-    name = f'worker_{teammate_type}'
+def get_hrl_worker(args, teammate_type='fcp', seed=100, training_steps=1e7):
+    name = f'worker_{teammate_type}_{seed}'
     try:
         worker = RLAgentTrainer.load_agents(args, name=name, tag='best')[0]
     except FileNotFoundError as e:
@@ -223,14 +223,14 @@ def get_hrl_worker(args, teammate_type='fcp', training_steps=1e7):
     return worker
 
 
-def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, num_iterations=10):
+def get_hrl_agent(args, teammate_types=('bcp', 'bcp'), training_steps=1e7, seed=100, num_iterations=10):
     """
     teammates args is a tuple of length 2, where each value can be either bcp of fcp. The first value indicates the
     teammates to use for the worker, the second the teammates to use for the manager
     """
-    name = f'HAHA_{teammate_types}_fulltasks'
+    name = f'HAHA_{teammate_types}_{seed}'
     # Get worker
-    worker = get_hrl_worker(args, teammate_types[0])#, training_steps=15e6)
+    worker = get_hrl_worker(args, teammate_types[0], seed=seed)#, training_steps=15e6)
     # Get teammates
     if teammate_types[1] == 'bcp':
         teammates, _ = get_bc_and_human_proxy(args)

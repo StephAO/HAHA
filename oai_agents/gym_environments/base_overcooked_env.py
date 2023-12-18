@@ -40,7 +40,6 @@ class OvercookedGymEnv(Env):
         # Observation encoding setup
         enc_fn = enc_fn or args.encoding_fn
         self.encoding_fn = ENCODING_SCHEMES[enc_fn]
-        self.new_agent = False
         if enc_fn == 'OAI_egocentric':
             # Override grid shape to make it egocentric
             assert grid_shape is None, 'Grid shape cannot be used when egocentric encodings are used!'
@@ -167,10 +166,8 @@ class OvercookedGymEnv(Env):
 
     def get_obs(self, p_idx, done=False, enc_fn=None, on_reset=False, goal_objects=None):
         enc_fn = enc_fn or self.encoding_fn
-        new_agent = self.teammate.new_agent if p_idx == self.t_idx else self.new_agent
-        # TODO remove new_agent when I'm done with this set of agents
         obs = enc_fn(self.env.mdp, self.state, self.grid_shape, self.args.horizon, p_idx=p_idx,
-                     goal_objects=goal_objects, new_agent=new_agent)
+                     goal_objects=goal_objects)
 
         if self.stack_frames(p_idx):
             obs['visual_obs'] = np.expand_dims(obs['visual_obs'], 0)

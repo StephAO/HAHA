@@ -78,7 +78,6 @@ for agent in agents:
                     tm = teammate[env.layout_name][0] if isinstance(teammate, dict) else teammate
                     a = agent[env.layout_name][0] if isinstance(agent, dict) else agent
                     env.encoding_fn = a.encoding_fn
-                    env.new_agent = a.new_agent
                     env.set_teammate(tm)
                     for i in range(2 if agent_det and teammate_det else 10):
                         env.set_reset_p_idx(i % 2)
