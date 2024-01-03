@@ -7,19 +7,22 @@ from pathlib import Path
 from PIL import Image
 import pygame
 
-from overcooked_ai_py.mdp.overcooked_mdp import OvercookedState, OvercookedGridworld
+from overcooked_ai_py.mdp.overcooked_mdp import OvercookedState, OvercookedGridworld, Action
 from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
 import pyxdf
 
+from oai_agents.common.subtasks import Subtasks, calculate_completed_subtask
+
 
 TERRAIN_CHAR_TO_NAME = {
-    ' ' : 'Floor',
-    'X' : 'Counter',
-    'P' : 'Pot',
-    'D' : 'Dish Dispenser',
-    'O' : 'Onion Dispenser',
-    'S' : 'Serving Area'
+    ' ': 'Floor',
+    'X': 'Counter',
+    'P': 'Pot',
+    'D': 'Dish Dispenser',
+    'O': 'Onion Dispenser',
+    'S': 'Serving Area'
 }
+
 
 def xdf_to_panda_df(xdf_file):
     data, header = pyxdf.load_xdf(xdf_file)
@@ -44,7 +47,9 @@ def xdf_to_panda_df(xdf_file):
             eye_data_df['AvgY'] = (i['time_series'][:, 1] + i['time_series'][:, 16]) * 1080 / 2
     game_data_df = pd.DataFrame(game_data_df)
     eye_data_df = pd.DataFrame(eye_data_df)
+    eye_data_df.index += 1
     return game_data_df, eye_data_df
+
 
 def create_full_dataframe(xdf_file):
     print(f'Parsing {xdf_file}')
@@ -78,41 +83,77 @@ def create_full_dataframe(xdf_file):
     _, game_data_row = next(game_data_gen)
     next_game_time, next_game_str = game_data_row['Time'], game_data_row['GameEvents']
     next_game_data = json.loads(next_game_str)
+    next_state = OvercookedState.from_dict(json.loads(next_game_data['state']))
 
-    obj_column = {k: [] for k in ['Game_Timestep', 'Trial_ID', 'AvgGridX', 'AvgGridY', 'AvgObj', 'LObj', 'RObj']}
+    object_columns = {k: [] for k in ['Game_Timestep', 'Trial_ID', 'AvgGridX', 'AvgGridY', 'AvgObj', 'LObj', 'RObj']}
+    eye_data_df['p1_curr_subtask'] = None
+    eye_data_df['p2_curr_subtask'] = None
+    subtask_start_idx = [1, 1]
     between_trial_rows = []
 
     on_last_row = False
 
     for index, row in eye_data_df.iterrows():
+        # If time indicates a new game step, update curr_game_data
         if row['Time'] >= next_game_time:
             if on_last_row:
                 break
-            curr_game_data = next_game_data
-            curr_state = OvercookedState.from_dict(json.loads(curr_game_data['state']))
+            curr_state, curr_game_data = next_state, next_game_data
             curr_game_timestep, curr_trial_id = curr_game_data['cur_gameloop'], curr_game_data['trial_id']
-
+            # Find time of next game step. If no next game step, set next_game_time to 0.2s after the last game step
             try:
                 _, game_data_row = next(game_data_gen)
                 next_game_time, next_game_str = game_data_row['Time'], game_data_row['GameEvents']
                 next_game_data = json.loads(next_game_str)
+                next_state = OvercookedState.from_dict(json.loads(next_game_data['state']))
             except StopIteration:
                 on_last_row = True
                 next_game_time += 0.2
+                for i in range(2):
+                    subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
+                    eye_data_df.loc[subtask_start_idx[i]:index, f'p{i + 1}_curr_subtask'] = subtask
+                    subtask_start_idx[i] = index + 1
+
+            curr_next_same_game = True
+            if curr_trial_id != next_game_data['trial_id']:
+                curr_next_same_game = False
+                for i in range(2):
+                    subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
+                    # NOTE because this is based on eye data index, the "next" subtask starts one eye dataframe index
+                    # after the interact action occurs, NOT on the start of the next game step
+                    eye_data_df.loc[subtask_start_idx[i]:index, f'p{i + 1}_curr_subtask'] = subtask
+                    subtask_start_idx[i] = index + 1
+
+            # Check for subtask completion
+            # For each agent
+            try:
+                joint_action = json.loads(curr_game_data['joint_action'])
+            except json.decoder.JSONDecodeError:
+                # Hacky fix taken from https://github.com/HumanCompatibleAI/human_aware_rl/blob/master/human_aware_rl/human/data_processing_utils.py#L29
+                joint_action = eval(joint_action)
+            for i in range(2):
+                # All subtasks will start and end with an INTERACT action
+                if joint_action[i] == 'interact' and curr_next_same_game:
+                    # Find out which subtask has been completed
+                    subtask = calculate_completed_subtask(curr_game_data['layout'], curr_state, next_state, i)
+                    if subtask is not None:
+                        # Label previous actions with subtask
+                        eye_data_df.loc[subtask_start_idx[i]:index, f'p{i + 1}_curr_subtask'] = subtask
+                        subtask_start_idx[i] = index + 1
 
         # New trial, remove data between trials
         if curr_trial_id != next_game_data['trial_id']:
             between_trial_rows.append(index)
             continue
 
-        obj_column['Game_Timestep'].append(curr_game_timestep)
-        obj_column['Trial_ID'].append(curr_trial_id)
+        object_columns['Game_Timestep'].append(curr_game_timestep)
+        object_columns['Trial_ID'].append(curr_trial_id)
 
         top_left_x, top_left_y, surface_size, tile_size, grid_shape, hud_size = curr_game_data['dimension']
         hud_size = 50
 
         grid_top_left = (top_left_x, top_left_y + hud_size)
-        
+
         if curr_game_data['layout_name'] not in mdps:
             ln = curr_game_data['layout_name']
             mdps[ln] = OvercookedGridworld.from_layout_name(ln)
@@ -134,7 +175,7 @@ def create_full_dataframe(xdf_file):
             x -= grid_top_left[0]
             y -= grid_top_left[1]
             if np.isnan(x) or np.isnan(y):
-                obj = 'NaN'
+                obj = 'null'
                 grid_x, grid_y = -1, -1
             elif not (0 < x < x_bins[-1] and 0 < y < y_bins[-1]):
                 # Out of bounds
@@ -145,26 +186,34 @@ def create_full_dataframe(xdf_file):
                 grid_y = np.digitize(y, y_bins)
                 pos = (grid_x, grid_y)
                 obj = eye_pos_to_gaze_obj(pos, curr_state, mdps[curr_game_data['layout_name']], curr_game_data['p_idx'])
-            obj_column[eye_type + 'Obj'].append(obj)
+            object_columns[eye_type + 'Obj'].append(obj)
             if eye_type == 'Avg':
-                obj_column['AvgGridX'].append(grid_x)
-                obj_column['AvgGridY'].append(grid_y)
+                object_columns['AvgGridX'].append(grid_x)
+                object_columns['AvgGridY'].append(grid_y)
+
+    subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
+    for i in range(2):
+        eye_data_df.loc[subtask_start_idx[i]:index, f'p{i + 1}_curr_subtask'] = subtask
 
     eye_data_df.drop(between_trial_rows, axis=0, inplace=True)
 
-
-    for k, v in obj_column.items():
+    for k, v in object_columns.items():
         eye_data_df[k] = v
 
     # pd.set_option('display.min_rows', 1000)
     # pd.set_option('display.max_rows', 1000)
-    # print(eye_data_df[1000:].head(1000))
+    # print(eye_data_df.tail(1000))
+
+    # Make sure that this data is defined everywhere
+    assert not (eye_data_df['p1_curr_subtask'].isna().any())
+    assert not (eye_data_df['p2_curr_subtask'].isna().any())
 
     # print(grid_centers)
 
-    csv_filename = str(xdf_file).replace('.xdf', '.csv')
+    csv_filename = str(xdf_file).replace('.xdf', '_GazeLabels.csv')
     eye_data_df.to_csv(csv_filename)
     print(f'Created {csv_filename} of length {len(eye_data_df)} from {xdf_file}')
+
 
 def eye_pos_to_gaze_obj(pos, state, mdp, p_idx):
     gaze_obj = TERRAIN_CHAR_TO_NAME[mdp.get_terrain_type_at_pos(pos)]
@@ -209,7 +258,8 @@ def map_eye_tracking_to_grid(eye_data, top_left_x, top_left_y, surface_size, til
 
 
 def combine_state_and_heatmap(state, heatmap, mdp, tile_size, hud_size, timestep, trial_id):
-    surface = StateVisualizer(tile_size=tile_size).render_state(state, grid=mdp.terrain_mtx, hud_data={"timestep": timestep})
+    surface = StateVisualizer(tile_size=tile_size).render_state(state, grid=mdp.terrain_mtx,
+                                                                hud_data={"timestep": timestep})
     pil_string_image = pygame.image.tostring(surface, "RGBA", False)
     state_img = Image.frombytes("RGBA", surface.get_size(), pil_string_image)
 
@@ -217,12 +267,14 @@ def combine_state_and_heatmap(state, heatmap, mdp, tile_size, hud_size, timestep
     heatmap_img[:, :, 0] = 255
     for x in range(heatmap.shape[0]):
         for y in range(heatmap.shape[1]):
-            heatmap_img[x * tile_size: (x + 1) * tile_size, y * tile_size + hud_size: (y + 1) * tile_size + hud_size, 3] = heatmap[x][y] * 255
+            heatmap_img[x * tile_size: (x + 1) * tile_size, y * tile_size + hud_size: (y + 1) * tile_size + hud_size,
+            3] = heatmap[x][y] * 255
     heatmap_img = Image.fromarray(np.uint8(np.transpose(heatmap_img, (1, 0, 2))), "RGBA")
 
     state_img = Image.alpha_composite(state_img, heatmap_img)
     Path(f'screenshots/').mkdir(parents=True, exist_ok=True)
     state_img.save(f'screenshots/{trial_id}_{timestep}.png')
+
 
 def create_heatmap(xdf_file):
     # game_data_df = pd.read_csv('data/eye_tracking_data/P99_9_GameData.csv')
@@ -253,20 +305,41 @@ def create_heatmap(xdf_file):
         hud_size = 50
         # tile_size, hud_size = game_data['dimension'][3], 50#game_data['dimension'][5]
         heatmap = map_eye_tracking_to_grid(eye_data, x, y, surface_size, tile_size, grid_shape, hud_size)
-        combine_state_and_heatmap(state, heatmap, mdp, tile_size, hud_size, game_data['cur_gameloop'], game_data['trial_id'])
+        combine_state_and_heatmap(state, heatmap, mdp, tile_size, hud_size, game_data['cur_gameloop'],
+                                  game_data['trial_id'])
         # if index > 5:
         #     exit(0)
 
 
+def contains_gaze_labels(files_in_folder):
+    for filename in files_in_folder:
+        if 'GazeLabels.csv' in filename:
+            return True
+    return False
+
 
 if __name__ == '__main__':
-    directory_name = 'data/eye_tracking_data/'
-    for filename in os.listdir(directory_name):
-        # if filename != 'oaiET_CU2025.xdf':
-        #     continue
-        f = os.path.join(directory_name, filename)
-        # checking if it is a file
-        if os.path.isfile(f) and str(f)[-4:] == '.xdf':
-            create_full_dataframe(f)
+    root_directory = 'C:/Users/anthony.ries/OneDrive - US Army/Documents/MDrive/Experiments/OAI_eyetracking/Data/'
+    for folder in os.listdir(root_directory):
+        folder_path = os.path.join(root_directory, folder)
+
+        if os.path.isdir(folder_path) and (folder.startswith("AF") or folder.startswith("CU")):
+            files_in_folder = os.listdir(folder_path)
+
+            # Check if any file in the folder contains the text "GazeLabels"
+            if contains_gaze_labels(files_in_folder):
+                continue  # Skip to the next folder
+
+            for filename in files_in_folder:
+                file_path = os.path.join(folder_path, filename)
+
+                # Check if it is a file and has a .xdf extension
+                if os.path.isfile(file_path) and filename.endswith('.xdf'):
+                    create_full_dataframe(file_path)
+
+                    
     # create_heatmap('data/eye_tracking_data/oaiET_stephane_test2.xdf')
     # xdf_to_panda_df('data/eye_tracking_data/oaiET_stephane_test3.xdf')
+
+    # create_full_dataframe('data/eye_tracking_data/oaiET_CU2025.xdf')
+    # create_full_dataframe('data/eye_tracking_data/oaiET_stephane_test2.xdf')
