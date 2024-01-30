@@ -1,53 +1,9 @@
-from pathlib import Path
 from collections import defaultdict
 import numpy as np
 import torch
 # from scripts.memmap_creation import participant_memmap, obs_heatmap_memmap
 from scripts.preprocess_eyetracking import combine_and_standardize
-from pathlib import Path
 
-
-def create_memmaps(participant_memmap_file, obs_heatmap_memmap_file, num_participants = 18, num_trials_per_participant = 18, obs_channels = 27, grid_shape = (9, 5)):
-    """
-    Creates and returns memory-mapped arrays for participants and observation heatmaps.
-
-    Parameters:
-    - participant_memmap_file: File path for the participant memory-mapped file.
-    - obs_heatmap_memmap_file: File path for the observation heatmap memory-mapped file.
-    - num_participants: Total number of participants.
-    - num_trials_per_participant: Number of trials per participant.
-    - obs_channels: Number of binary masks in the observation data.
-    - grid_shape: Shape of the padded grid.
-
-    Returns:
-    - participant_memmap: Memory-mapped array for participants.
-    - obs_heatmap_memmap: Memory-mapped array for observation heatmaps.
-    """
-
-    # Ensure the directory exists
-    Path(participant_memmap_file).parent.mkdir(parents=True, exist_ok=True)
-    Path(obs_heatmap_memmap_file).parent.mkdir(parents=True, exist_ok=True)
-
-
-    participant_memmap = np.memmap(
-        participant_memmap_file,
-        dtype=[('participant_id', 'S6'), ('trial_id', 'i4'), ('score', 'i4'), ('start_index', 'i4'), ('end_index', 'i4')],
-        mode='r+',
-        shape=(num_participants * num_trials_per_participant, )
-    )
-
-
-    obs_heatmap_memmap = np.memmap(
-        obs_heatmap_memmap_file,
-        dtype='float32',
-        mode='r+',
-        shape=(num_participants * num_trials_per_participant * 400, obs_channels + 1, *grid_shape)
-    )
-
-    return participant_memmap, obs_heatmap_memmap
-
-# Example usage:
-# participant_memmap, obs_heatmap_memmap = create_memmaps(participant_memmap_file, obs_heatmap_memmap_file, num_participants, num_trials_per_participant, obs_channels, grid_shape)
 
 def process_data(participant_memmap, obs_heatmap_memmap, num_timesteps_to_consider):
     """
@@ -73,17 +29,18 @@ def process_data(participant_memmap, obs_heatmap_memmap, num_timesteps_to_consid
         # Process visual observation and heatmap for the first X timesteps
         for timestep_data in obs_heatmap_data[:num_timesteps_to_consider]:
             visual_obs = timestep_data[:-1, :, :]  # All but last channel
-            heatmap = timestep_data[-1, :, :]     # Last channel
+            heatmap = timestep_data[-1, :, :]  # Last channel
             flattened_output_with_score = combine_and_standardize(visual_obs, heatmap, score)
             trial_data[(participant_id, trial_id)].append(flattened_output_with_score)
             trial_labels[(participant_id, trial_id)].append(score)
 
     return trial_data, trial_labels
 
+
 # Example usage:
 # trial_data, trial_labels = process_data(participant_memmap, obs_heatmap_memmap, num_timesteps_to_consider)
 
-def process_trial_data(trial_data, trial_labels, num_bins = 3):
+def process_trial_data(trial_data, trial_labels, num_bins=3):
     """
     Process trial data by binning the labels and organizing the data.
 
@@ -126,5 +83,3 @@ def process_trial_data(trial_data, trial_labels, num_bins = 3):
 
 # Example usage:
 # processed_data = process_trial_data(trial_data, trial_labels, num_bins)
-
-

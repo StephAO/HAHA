@@ -1,5 +1,4 @@
 import json
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -12,13 +11,11 @@ from collections import defaultdict
 from overcooked_ai_py.mdp.overcooked_mdp import OvercookedState, OvercookedGridworld
 from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
 from oai_agents.common.state_encodings import OAI_encode_state
-from scripts import analyze_eyetracking
-
-
 
 desired_N = 9
 desired_M = 5
 next_index_for_obs_heatmap = 0
+
 
 def map_eye_tracking(eye_data, top_left_x, top_left_y, surface_size, tile_size, grid_shape, hud_size):
     grid_top_left = (top_left_x, top_left_y + hud_size)
@@ -44,6 +41,7 @@ def map_eye_tracking(eye_data, top_left_x, top_left_y, surface_size, tile_size, 
 
     return heat_map
 
+
 def pad_to_shape(tensor, pad_shape):
     """
     Pads the given tensor to the specified shape.
@@ -52,6 +50,7 @@ def pad_to_shape(tensor, pad_shape):
     n, m = tensor.shape[-2], tensor.shape[-1]
     padded[..., :n, :m] = tensor
     return padded
+
 
 def get_max_scores_per_trial(game_data_df):
     trial_scores = game_data_df['GameEvents'].apply(lambda x: (json.loads(x)['trial_id'], json.loads(x)['score']))
@@ -122,6 +121,7 @@ def process_xdf_file(xdf_file_path):
 
     return processed_data
 
+
 def combine_state_and_heatmap(state, heatmap, mdp, tile_size, hud_size, timestep, trial_id):
     surface = StateVisualizer(tile_size=tile_size).render_state(state, grid=mdp.terrain_mtx,
                                                                 hud_data={"timestep": timestep})
@@ -139,6 +139,7 @@ def combine_state_and_heatmap(state, heatmap, mdp, tile_size, hud_size, timestep
     state_img = Image.alpha_composite(state_img, heatmap_img)
     Path(f'screenshots/').mkdir(parents=True, exist_ok=True)
     state_img.save(f'screenshots/{trial_id}_{timestep}.png')
+
 
 def process_folder_with_xdf_files(folder_path, obs_heatmap_memmap, participant_memmap):
     global next_index_for_obs_heatmap
@@ -170,8 +171,8 @@ def process_folder_with_xdf_files(folder_path, obs_heatmap_memmap, participant_m
                 )
                 participant_index += 1
 
-# process_folder_with_xdf_files("/Users/nikhilhulle/Desktop/Code/data")
 
+# process_folder_with_xdf_files("path/to/xdf/files")
 
 
 def combine_and_standardize(visual_obs, heatmap, score, desired_N=9, desired_M=5):
