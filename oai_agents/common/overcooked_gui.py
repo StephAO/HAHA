@@ -67,7 +67,7 @@ class OvercookedGUI:
             kwargs = {'single_subtask_id': 10, 'args': args, 'is_eval_env': True}
             self.env = OvercookedSubtaskGymEnv(**p_kwargs, **kwargs)
         else:
-            self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=False,
+            self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True,
                                         is_eval_env=True, horizon=horizon)
         self.agent = agent
         self.p_idx = p_idx
@@ -145,8 +145,8 @@ class OvercookedGUI:
         pygame.display.flip()
         self._running = True
 
-        pygame.image.save(self.window, f"screenshots/{self.env.layout_name}.png")
-        exit(0)
+        # pygame.image.save(self.window, f"screenshots/{self.env.layout_name}.png")
+        # exit(0)
 
         if USING_WINDOWS:
             win = gw.getWindowsWithTitle('pygame window')[0]
@@ -262,6 +262,7 @@ class OvercookedGUI:
                 # pygame.time.wait(sleep_time)
 
             done = self.step_env(action)
+
             self.human_action = None
             if True or self.curr_tick < 200:
                 pygame.time.wait(sleep_time)

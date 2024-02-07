@@ -163,7 +163,7 @@ class HierarchicalRL(OAIAgent):
                 # print(obs['visual_obs'][onions_in_soup_idx])
                 # print(loc, obs['visual_obs'][onions_in_pot_idx][loc], obs['visual_obs'][onions_in_soup_idx][loc])
                 # obs['visual_obs'][onions_in_pot_idx][loc] < 3 and
-                if obs['visual_obs'][onions_in_soup_idx][loc] != 6:
+                if obs['visual_obs'][onions_in_soup_idx][loc] < 3:
                     return True
         # print('===')
         return False
@@ -218,26 +218,25 @@ class HierarchicalRL(OAIAgent):
         if Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] in ['put_onion_closer', 'put_onion_in_pot', 'get_onion_from_dispenser', 'get_onion_from_counter']:
             subtasks_to_weigh += [int(self.curr_subtask_id)]
             subtask_weighting += [100]
-
-        if self.non_full_pot_exists(obs) and not self.is_urgent(obs) and self.layout_name in ['counter_circuit_o_1order', 'coordination_ring']:
+        if self.non_full_pot_exists(obs) and self.num_onions_on_counter(obs) < 2 and not self.is_urgent(obs) and self.layout_name in ['counter_circuit_o_1order', 'coordination_ring']:
             subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_plate_from_dish_rack'], Subtasks.SUBTASKS_TO_IDS['get_plate_from_counter']]
             subtask_weighting += [0.01, 0.01]
 
         if self.layout_name in ['counter_circuit_o_1order']:
             if not isinstance(self.action_id, int):
                 self.action_id = int(self.action_id.squeeze())
-            if self.num_onions_on_counter(obs) < 3 and (Subtasks.IDS_TO_SUBTASKS[int(self.prev_subtask_id)] == 'put_onion_closer' or \
+            if self.num_onions_on_counter(obs) < 2 and (Subtasks.IDS_TO_SUBTASKS[int(self.prev_subtask_id)] == 'put_onion_closer' or \
                Action.INDEX_TO_ACTION[self.action_id] == Action.INTERACT and Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'put_onion_closer'):
                 subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['get_onion_from_dispenser']]
-                subtask_weighting += [1000]
+                subtask_weighting += [100]
             if Subtasks.IDS_TO_SUBTASKS[int(self.prev_subtask_id)] == 'get_onion_from_dispenser' or \
                Action.INDEX_TO_ACTION[self.action_id] == Action.INTERACT and Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'get_onion_from_dispenser':
                 subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_closer']]
-                subtask_weighting += [1000]
+                subtask_weighting += [100]
             elif Subtasks.IDS_TO_SUBTASKS[int(self.prev_subtask_id)] == 'get_onion_from_counter' or \
                  Action.INDEX_TO_ACTION[self.action_id] == Action.INTERACT and Subtasks.IDS_TO_SUBTASKS[int(self.curr_subtask_id)] == 'get_onion_from_counter':
                 subtasks_to_weigh += [Subtasks.SUBTASKS_TO_IDS['put_onion_in_pot']]
-                subtask_weighting += [1000]
+                subtask_weighting += [100]
         elif self.layout_name == 'forced_coordination':
             if not isinstance(self.action_id, int):
                 self.action_id = int(self.action_id.squeeze())

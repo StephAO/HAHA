@@ -31,8 +31,8 @@ if __name__ == "__main__":
     # agent = HumanManagerHRL(worker, args)
 
 
-    tm = load_agent(Path('agent_models/sp_det'), args)# 'human'# HumanManagerHRL(haha.worker, args)
-    agent = load_agent(Path('agent_models/sp_det'), args)#load_agent(Path('agent_models/HAHA_fcp_fcp'), args)
+    tm = load_agent(Path('agent_models_ICML/HAHA_fcp_61'), args)# 'human'# HumanManagerHRL(haha.worker, args)
+    agent = load_agent(Path('agent_models_ICML/HAHA_fcp_61'), args)#load_agent(Path('agent_models/HAHA_fcp_fcp'), args)
 
     t_idx = 1 - args.p_idx
     # teammate = DummyAgent('random')# load_agent(Path(args.teammate), args)
@@ -43,6 +43,6 @@ if __name__ == "__main__":
     #     agent = load_agent(Path(args.agent), args)
     #     agent.set_idx(args.p_idx, args.layout, is_haha=isinstance(agent, HierarchicalRL), tune_subtasks=False)
 
-    dc = OvercookedGUI(args, agent=agent, teammate=tm, layout_name=args.layout, p_idx=args.p_idx, fps=5)
+    dc = OvercookedGUI(args, agent=agent, teammate=tm, layout_name=args.layout, p_idx=args.p_idx, fps=10)
     dc.on_execute()
     print(dc.trajectory)
