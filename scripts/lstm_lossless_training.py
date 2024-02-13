@@ -1,9 +1,9 @@
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 
-from oai_agents.common.memmap_create_and_retrieve import return_memmaps
-from tests import Models
-from scripts.transformer_helper import process_trial_data, process_data
+from eye_tracking_dataset_operations.memmap_create_and_retrieve import return_memmaps
+from scripts import models
+from eye_tracking_dataset_operations.transformer_helper import process_trial_data, process_data
 
 import torch
 import torch.nn as nn
@@ -11,32 +11,33 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import f1_score
-
+from oai_agents.common.arguments_transformer import LSTMConfig
 
 # Memmap file paths
-participant_memmap_file = "/Users/nikhilhulle/Desktop/HAHA-eyetracking/data/obs_heatmap_memmap.dat"  # "/HAHA-eyetracking/data/participant_memmap.dat" "path/to/memmap/participant_memmap.dat"
-obs_heatmap_memmap_file = "/Users/nikhilhulle/Desktop/HAHA-eyetracking/data/participant_memmap.dat"  # "/HAHA-eyetracking/data/obs_heatmap_memmap.dat" "path/to/memmap/obs_heatmap_memmap.dat"
+participant_memmap_file = "/data/obs_heatmap_memmap.dat"  # "/HAHA-eyetracking/data/participant_memmap.dat" "path/to/memmap/participant_memmap.dat"
+obs_heatmap_memmap_file = "/data/participant_memmap.dat"  # "/HAHA-eyetracking/data/obs_heatmap_memmap.dat" "path/to/memmap/obs_heatmap_memmap.dat"
 
 
 
-num_timesteps_to_consider = 20
+num_timesteps_to_consider = LSTMConfig.num_timesteps_to_consider
 
 # Model Initialization
-d_model = 512
-nhead = 8
-num_layers = 8
-dim_feedforward = 2048
-num_classes = 4
-input_dim = 1260  # Based on input dimension
-hidden_dim = 512  # Hidden dimension size
-output_dim = 4    # Number of output classes
-dropout_rate = 0.5  # Dropout rate
+d_model = LSTMConfig.d_model
+nhead = LSTMConfig.nhead
+num_layers = LSTMConfig.num_layers
+dim_feedforward = LSTMConfig.dim_feedforward
+num_classes = LSTMConfig.num_classes
+input_dim = LSTMConfig.input_dim
+hidden_dim = LSTMConfig.hidden_dim
+output_dim = LSTMConfig.output_dim
+dropout_rate = LSTMConfig.dropout_rate
 
 # warmup
 
-warmup_steps = 300  # Define the number of steps for warmup
-base_lr = 1e-6  # Starting learning rate
-max_lr = 1e-5  # Target learning rate (same as the optimizer's initial lr)
+warmup_steps = LSTMConfig.warmup_steps
+base_lr = LSTMConfig.base_lr
+max_lr = LSTMConfig.max_lr
+num_epochs = LSTMConfig.num_epochs
 
 # only needed initially to make the memmaps, please comment out after the memmaps are created.
 # setup_and_process_xdf_files("/path/t0/folder/with/xdfFiles", participant_memmap_file,obs_heatmap_memmap_file) # /path/t0/folder/with/xdfFiles
@@ -80,7 +81,7 @@ train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True)
 val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=False)
 
 # Initialize the LSTM model
-lstm_model = Models.LSTMLosslessEncoding(input_dim, hidden_dim, output_dim, num_layers, dropout_rate)
+lstm_model = models.LSTMLosslessEncoding(input_dim, hidden_dim, output_dim, num_layers, dropout_rate)
 
 # Criterion and Optimizer
 criterion = nn.CrossEntropyLoss()
@@ -101,7 +102,7 @@ val_correct_per_class = np.zeros(num_classes)
 val_total_per_class = np.zeros(num_classes)
 
 # Training Loop
-num_epochs = 300
+
 for epoch in range(num_epochs):
     lstm_model.train()
     total_loss, total_f1, total_samples = 0, 0, 0

@@ -1,8 +1,7 @@
 import numpy as np
 from pathlib import Path
 
-from scripts.analyse_memmap import print_all_participant_data
-from scripts.preprocess_eyetracking import process_folder_with_xdf_files
+from eye_tracking_dataset_operations.preprocess_eyetracking import process_folder_with_xdf_files
 
 # Parameters
 num_participants = 26  # Total number of participants

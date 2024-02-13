@@ -5,32 +5,34 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader, Dataset
 import matplotlib.pyplot as plt
 import csv
+from oai_agents.common.arguments_transformer import TransformerConfig
+from eye_tracking_dataset_operations.memmap_create_and_retrieve import return_memmaps
+from scripts import models
+from eye_tracking_dataset_operations.transformer_helper import process_trial_data, process_data
 
-from oai_agents.common.memmap_create_and_retrieve import return_memmaps
-from tests import Models
-from scripts.transformer_helper import process_trial_data, process_data
 
 # Memmap file paths
 participant_memmap_file = "/data/obs_heatmap_memmap.dat"  # "path/to/memmap/participant_memmap.dat"
 obs_heatmap_memmap_file = "/data/participant_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
 
-num_timesteps_to_consider = 20
+num_timesteps_to_consider = TransformerConfig.num_timesteps_to_consider
 
-# Model Initialization
-d_model = 512
-nhead = 8
-num_layers = 8
-dim_feedforward = 2048
-num_classes = 4
-input_dim = 1260  # Based on input dimension
 
-# warmup
-warmup_steps = 300
-base_lr = 1e-6
-max_lr = 1e-5
+d_model = TransformerConfig.d_model
+nhead = TransformerConfig.n_head
+num_layers = TransformerConfig.num_layers
+dim_feedforward = TransformerConfig.dim_feedforward
+num_classes = TransformerConfig.num_classes
+input_dim = TransformerConfig.input_dim
 
-# Training Loop
-num_epochs = 10
+
+warmup_steps = TransformerConfig.warmup_steps
+base_lr = TransformerConfig.base_lr
+max_lr = TransformerConfig.max_lr
+
+decay_step_size = TransformerConfig.decay_step_size
+decay_factor = TransformerConfig.decay_factor
+num_epochs = TransformerConfig.num_epochs
 
 # only needed initially to make the memmaps, please comment out after the memmaps are created.
 # setup_and_process_xdf_files("/path/t0/folder/with/xdfFiles", participant_memmap_file,obs_heatmap_memmap_file) #
@@ -71,15 +73,14 @@ val_dataset = CustomDataset(X_val, y_val)
 train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True)
 val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=False)
 
-model = Models.SimpleTransformer(d_model, nhead, num_layers, dim_feedforward, num_classes, input_dim)
+model = models.SimpleTransformer(d_model, nhead, num_layers, dim_feedforward, num_classes, input_dim)
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=1e-6, weight_decay=0)
 
-scheduler = Models.WarmupScheduler(optimizer, warmup_steps, base_lr, max_lr)
+scheduler = models.WarmupScheduler(optimizer, warmup_steps, base_lr, max_lr)
 
-decay_step_size = 50
-decay_factor = 0.5
+
 scheduler_decay = StepLR(optimizer, step_size=decay_step_size, gamma=decay_factor)
 
 
@@ -193,7 +194,7 @@ for epoch in range(num_epochs):
     print(
         f"Epoch {epoch + 1}/{num_epochs} - Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
 
-with open('../scripts/training_metrics.csv', 'w', newline='') as file:
+with open('training_metrics.csv', 'w', newline='') as file:
     writer = csv.writer(file)
     writer.writerow(
         ['Epoch', 'Train Loss', 'Train Accuracy', 'Validation Loss', 'Validation Accuracy', 'Learning Rate'])
@@ -235,4 +236,4 @@ plt.legend()
 plt.show()
 
 # Save the model if needed
-torch.save(model.state_dict(), '../scripts/model.pth')
+torch.save(model.state_dict(), 'model.pth')

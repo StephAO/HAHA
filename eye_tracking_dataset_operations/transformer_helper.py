@@ -2,7 +2,7 @@ from collections import defaultdict
 import numpy as np
 import torch
 # from scripts.memmap_creation import participant_memmap, obs_heatmap_memmap
-from scripts.preprocess_eyetracking import combine_and_standardize
+from eye_tracking_dataset_operations.preprocess_eyetracking import combine_and_standardize
 
 
 def process_data(participant_memmap, obs_heatmap_memmap, num_timesteps_to_consider):
