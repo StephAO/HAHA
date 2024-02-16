@@ -1,12 +1,24 @@
-from oai_agents.common import overcooked_dataset_et_eyetracking, arguments
-from tests import LSTM_baseline_classifier
+### This file does not have the latest code and is deprecated as of now.
+
+
+from oai_agents.common import overcooked_dataset_et_eyetracking
+from scripts import models
 from oai_agents.common import arguments
 from oai_agents.common.state_encodings import ENCODING_SCHEMES
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import torch
 import matplotlib.pyplot as plt
 import torch.nn as nn
 from sklearn.metrics import f1_score, classification_report, confusion_matrix
+
+
+def compute_bin_accuracies(conf_matrix):
+    # Extracting diagonal (true positives for each class)
+    true_positives = conf_matrix.diagonal()
+    # Summing each column (total samples per class)
+    total_per_class = conf_matrix.sum(axis=1)
+    return true_positives / total_per_class
+
 
 seq_len = 1  # This is the sequence length of the input to the model
 obs_dim = 96  # This is the agent_obs size
@@ -20,7 +32,8 @@ f1_results = []
 
 args = arguments.get_arguments()
 encoding_fn = ENCODING_SCHEMES[args.encoding_fn]
-OD = overcooked_dataset_et_eyetracking.OvercookedDataset(encoding_fn, args.layout_names, args, seq_len=seq_len, num_classes=4)
+OD = overcooked_dataset_et_eyetracking.OvercookedDataset(encoding_fn, args.layout_names, args, seq_len=seq_len,
+                                                         num_classes=4)
 
 distinct_trial_ids = list(set(OD.main_trials['trial_id']))
 distinct_trial_ids.sort()  # Ensure they are in order
@@ -41,9 +54,7 @@ test_data = [OD[idx] for idx in test_indices]
 train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
 test_loader = DataLoader(test_data, batch_size=64, shuffle=False)
 
-
-
-model = LSTM_baseline_classifier.ProficiencyPredictor(obs_dim, action_dim, hidden_dim, output_dim, num_layers, 0.5)
+model = models.LSTMFeatureBased(obs_dim, action_dim, hidden_dim, output_dim, num_layers, 0.5)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 criterion = nn.CrossEntropyLoss()
@@ -107,10 +118,10 @@ for epoch in range(num_epochs):
     val_f1_scores.append(f1)
     f1_results.append(best_f1)
     conf_matrix = confusion_matrix(all_true, all_preds)
-    bin_accuracies = LSTM_baseline_classifier.compute_bin_accuracies(conf_matrix)
+    bin_accuracies = compute_bin_accuracies(conf_matrix)
     bin_accuracies_list.append(bin_accuracies)
 
-    print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss}, Val F1 Score: {f1}")
+    print(f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {train_loss}, Val F1 Score: {f1}")
     print(f"Bin Accuracies: {bin_accuracies}")
 
 print(f"RESULTS FOR SEQUENCE LENGTH {seq_len}")
@@ -134,7 +145,7 @@ plt.ylabel('F1 Score')
 # Bin Accuracies
 for bin_idx in range(output_dim):
     plt.subplot(1, 3, 3)
-    plt.plot([x[bin_idx] for x in bin_accuracies_list], label=f'Bin {bin_idx+1}')
+    plt.plot([x[bin_idx] for x in bin_accuracies_list], label=f'Bin {bin_idx + 1}')
     plt.title('Bin Accuracies Over Epochs')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
