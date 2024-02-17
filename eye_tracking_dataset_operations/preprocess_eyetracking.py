@@ -6,6 +6,7 @@ from PIL import Image
 import pygame
 import glob
 import pyxdf
+import csv
 
 from collections import defaultdict
 from overcooked_ai_py.mdp.overcooked_mdp import OvercookedState, OvercookedGridworld
@@ -167,12 +168,60 @@ def process_folder_with_xdf_files(folder_path, obs_heatmap_memmap, participant_m
                 # Update the participant_memmap with a single record for the trial
                 participant_memmap[participant_index] = (
                     userid.encode(), trial_id, score,
-                    start_index, next_index_for_obs_heatmap
+                    start_index, next_index_for_obs_heatmap, 0, 0, 0, 0, 0
                 )
                 participant_index += 1
 
 
 # process_folder_with_xdf_files("path/to/xdf/files")
+
+def fill_participant_questions_from_csv(participant_memmap_file, csv_file_path):
+    """
+    Fill the Question_1 to Question_5 fields in participant_memmap based on a CSV file.
+    """
+
+    num_participants = 26  # Total number of participants
+    num_trials_per_participant = 18  # Trials per participant
+
+    # Load participant data from CSV into a dictionary
+    participant_memmap, _ = np.memmap(
+        participant_memmap_file,
+        dtype=[('participant_id', 'S6'), ('trial_id', 'i4'), ('score', 'i4'), ('start_index', 'i4'),
+               ('end_index', 'i4'), ('Question_1', 'i4'), ('Question_2', 'i4'), ('Question_3', 'i4'), ('Question_4', 'i4'), ('Question_5', 'i4')],
+        mode='r+',
+        shape=(num_participants * num_trials_per_participant,)
+    )
+    participant_answers = {}
+    with open(csv_file_path, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            # Assuming 'participant_id' matches the CSV column name and is a string
+            participant_id = row['Participant_ID']
+            participant_answers[participant_id] = {
+                'Question_1': int(row['Question1']),
+                'Question_2': int(row['Question2']),
+                'Question_3': int(row['Question3']),
+                'Question_4': int(row['Question4']),
+                'Question_5': int(row['Question5']),
+            }
+
+    # Iterate through participant_memmap and update questions for each participant
+    for record in participant_memmap:
+        # Decode participant_id from bytes to string to match keys in participant_answers
+
+        participant_id = record['participant_id'].decode()
+        if participant_id in participant_answers:
+            # Retrieve the answers for the current participant
+            answers = participant_answers[participant_id]
+            # Update the record with the answers from the CSV
+            record['Question_1'] = answers['Question_1']
+            record['Question_2'] = answers['Question_2']
+            record['Question_3'] = answers['Question_3']
+            record['Question_4'] = answers['Question_4']
+            record['Question_5'] = answers['Question_5']
+
+# Example usage:
+# fill_participant_questions_from_csv(participant_memmap, 'path/to/your/csv_file.csv')
 
 
 def combine_and_standardize(visual_obs, heatmap, score, desired_N=9, desired_M=5):

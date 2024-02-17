@@ -23,7 +23,8 @@ def process_data(participant_memmap, obs_heatmap_memmap, num_timesteps_to_consid
     trial_labels = defaultdict(list)
 
     for record in participant_memmap:
-        participant_id, trial_id, score, start_idx, end_idx = record
+        participant_id, trial_id, score, start_idx, end_idx, question_1, question_2, question_3, question_4, question_5 = record
+
         obs_heatmap_data = obs_heatmap_memmap[start_idx:end_idx]
 
         # Process visual observation and heatmap for the first X timesteps
@@ -34,6 +35,7 @@ def process_data(participant_memmap, obs_heatmap_memmap, num_timesteps_to_consid
             trial_data[(participant_id, trial_id)].append(flattened_output_with_score)
             trial_labels[(participant_id, trial_id)].append(score)
 
+    print(len(trial_data))
     return trial_data, trial_labels
 
 
