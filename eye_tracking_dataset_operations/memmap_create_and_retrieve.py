@@ -10,7 +10,8 @@ obs_channels = 27  # Number of binary masks in the observation data
 grid_shape = (9, 5)  # Padded grid size
 
 
-def return_memmaps(participant_memmap_file, obs_heatmap_memmap_file, num_participants= num_participants, num_trials_per_participant=18,
+def return_memmaps(participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file,
+                   num_participants= num_participants, num_trials_per_participant=18,
                    obs_channels=27, grid_shape=(9, 5)):
     """
     Returns memory-mapped arrays for participants and observation heatmaps.
@@ -47,7 +48,21 @@ def return_memmaps(participant_memmap_file, obs_heatmap_memmap_file, num_partici
         shape=(num_participants * num_trials_per_participant * 400, obs_channels + 1, *grid_shape)
     )
 
-    return participant_memmap, obs_heatmap_memmap
+    subtask_memmap = np.memmap(
+        subtask_memmap_file,
+        dtype='float32',
+        mode='r+',
+        shape=(num_participants * num_trials_per_participant * 400, 2)
+    )
+
+    gaze_obj_memmap = np.memmap(
+        gaze_obj_memmap_file,
+        dtype='float32',
+        mode='r+',
+        shape=(num_participants * num_trials_per_participant * 400, 3)
+    )
+
+    return participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap
 
 
 
@@ -56,8 +71,8 @@ def return_memmaps(participant_memmap_file, obs_heatmap_memmap_file, num_partici
 # participant_memmap, obs_heatmap_memmap = create_memmaps(participant_memmap_file, obs_heatmap_memmap_file, num_participants, num_trials_per_participant, obs_channels, grid_shape)
 
 
-def setup_and_process_xdf_files(data_folder, participant_memmap_file, obs_heatmap_memmap_file, num_participants=18,
-                                num_trials_per_participant=num_participants,
+def setup_and_process_xdf_files(data_folder, participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file,
+                                gaze_obj_memmap_file, num_participants=18, num_trials_per_participant=num_participants,
                                 obs_channels=27, grid_shape=(9, 5)):
     """
     Sets up memory-mapped files and processes a folder with XDF files.
@@ -75,6 +90,8 @@ def setup_and_process_xdf_files(data_folder, participant_memmap_file, obs_heatma
     # Ensure the directory exists for memmap files
     Path(participant_memmap_file).parent.mkdir(parents=True, exist_ok=True)
     Path(obs_heatmap_memmap_file).parent.mkdir(parents=True, exist_ok=True)
+    Path(subtask_memmap_file).parent.mkdir(parents=True, exist_ok=True)
+    Path(gaze_obj_memmap_file).parent.mkdir(parents=True, exist_ok=True)
 
     # Create participant memmap
     participant_memmap = np.memmap(
@@ -84,7 +101,7 @@ def setup_and_process_xdf_files(data_folder, participant_memmap_file, obs_heatma
         shape=(num_participants * num_trials_per_participant, )
     )
 
-# Observation and Heatmap Memmap
+    # Observation and Heatmap Memmap
     obs_heatmap_memmap = np.memmap(
         obs_heatmap_memmap_file,
         dtype='float32',
@@ -93,9 +110,24 @@ def setup_and_process_xdf_files(data_folder, participant_memmap_file, obs_heatma
         # +1 in obs_channels to account for the heatmap
     )
 
+    # Subtask memmap
+    subtask_memmap = np.memmap(
+        subtask_memmap_file,
+        dtype='float32',
+        mode='w+',
+        shape=(num_participants * num_trials_per_participant * 400, 2)
+    )
 
-# Process the XDF files in the data folder
-    process_folder_with_xdf_files(data_folder, obs_heatmap_memmap, participant_memmap)
+    # Gaze object memmap
+    gaze_obj_memmap = np.memmap(
+        gaze_obj_memmap_file,
+        dtype='float32',
+        mode='w+',
+        shape=(num_participants * num_trials_per_participant * 400, 3)
+    )
+
+    # Process the XDF files in the data folder
+    process_folder_with_xdf_files(data_folder, obs_heatmap_memmap, participant_memmap, subtask_memmap, gaze_obj_memmap)
 
 
 # function to analyse data

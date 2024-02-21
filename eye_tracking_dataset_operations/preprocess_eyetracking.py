@@ -12,15 +12,17 @@ from collections import defaultdict
 from overcooked_ai_py.mdp.overcooked_mdp import OvercookedState, OvercookedGridworld
 from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
 from oai_agents.common.state_encodings import OAI_encode_state
+from oai_agents.common.subtasks import Subtasks, calculate_completed_subtask
 
 desired_N = 9
 desired_M = 5
-next_index_for_obs_heatmap = 0
 
+GAZE_OBJ_TO_IDX = {'self': 0, 'teammate': 1, 'environment': 2}
 
-def map_eye_tracking(eye_data, top_left_x, top_left_y, surface_size, tile_size, grid_shape, hud_size):
+def map_eye_tracking(eye_data, top_left_x, top_left_y, surface_size, tile_size, grid_shape, hud_size, state, p_idx):
     grid_top_left = (top_left_x, top_left_y + hud_size)
     heat_map = np.zeros(grid_shape)
+    gaze_obj_count = np.zeros(len(GAZE_OBJ_TO_IDX), dtype=int)
     # +1 to make it inclusive to the total size
     x_bins = list(range(tile_size, surface_size[0] + 1, tile_size))
     y_bins = list(range(tile_size, surface_size[1] + 1, tile_size))
@@ -34,13 +36,23 @@ def map_eye_tracking(eye_data, top_left_x, top_left_y, surface_size, tile_size, 
         x_bin = np.digitize(x, x_bins)
         y_bin = np.digitize(y, y_bins)
         heat_map[x_bin][y_bin] += 1
+        gaze_obj_count[eye_pos_to_gaze_obj((x_bin, y_bin), state, p_idx)] += 1
 
     if np.max(heat_map) == 0:
         heat_map = np.full_like(heat_map, 1e-8)
     else:
         heat_map /= np.max(heat_map)
 
-    return heat_map
+    return heat_map, gaze_obj_count
+
+def eye_pos_to_gaze_obj(pos, state, p_idx):
+    if pos == state.players[0].position:
+        gaze_obj = 'self' if p_idx == 0 else 'teammate'
+    elif pos == state.players[1].position:
+        gaze_obj = 'self' if p_idx == 1 else 'teammate'
+    else:
+        gaze_obj = 'environment'
+    return GAZE_OBJ_TO_IDX[gaze_obj]
 
 
 def pad_to_shape(tensor, pad_shape):
@@ -76,10 +88,6 @@ def process_xdf_file(xdf_file_path):
             eye_data_df['LRavgXposClip'] = (i['time_series'][:, 0] + i['time_series'][:, 15]) * 1920 / 2
             eye_data_df['LRavgYposClip'] = (i['time_series'][:, 1] + i['time_series'][:, 16]) * 1080 / 2
 
-    # Convert to DataFrame
-    game_data_df = pd.DataFrame(game_data_df)
-    eye_data_df = pd.DataFrame(eye_data_df)
-
     # Filter out rows where X position is not null
     eye_data_df = eye_data_df[eye_data_df['LRavgXposClip'].notnull()]
     eye_data_gen = eye_data_df.iterrows()
@@ -88,19 +96,68 @@ def process_xdf_file(xdf_file_path):
     game_data_df = game_data_df[game_data_df['GameEvents'].apply(lambda x: json.loads(x)['trial_id']) != 0].reset_index(
         drop=True)
 
-    processed_data = []
+    prev_time, time = None, None
+    prev_trial_id, trial_id = None, None
+    prev_state, state = None, None
+    prev_participant_id, participant_id = None, None
+    game_data = None
+    curr_step = 0
+    subtask_start_idx = [0, 0]
     max_scores = get_max_scores_per_trial(game_data_df)
     processed_data = defaultdict(lambda: defaultdict(list))
+    subtask_data = defaultdict(lambda: defaultdict(lambda: np.zeros((400, 2))))
+    gaze_obj_data = defaultdict(lambda: defaultdict(lambda: np.zeros((400, 3))))
+
 
     game_data_0 = json.loads(game_data_df.iloc[0]['GameEvents'])
     mdp = OvercookedGridworld.from_layout_name(game_data_0['layout_name'])
 
     for index, row in game_data_df.iterrows():
+        prev_participant_id, prev_trial_id, prev_time, prev_state, prev_game_data = participant_id, trial_id, time, state, game_data
         time, game_str = row['Time'], row['GameEvents']
         game_data = json.loads(game_str)
+        curr_step = curr_step + 1 if prev_trial_id == game_data['trial_id'] else 1
+        if game_data['cur_gameloop'] != curr_step:
+            if curr_step > 400:
+                continue
+        trial_id = game_data['trial_id']
+        participant_id = str(game_data.get('user_id'))
         state = OvercookedState.from_dict(json.loads(game_data['state']))
 
+        # Calculate subtask data
+        # New trial, ignore eye_date between trials
+        if prev_trial_id != trial_id:
+            prev_time = time - 0.2
+            for i in range(2):
+                if prev_participant_id is not None:
+                    subtask_data[prev_participant_id][prev_trial_id][subtask_start_idx[i]:, i] = Subtasks.SUBTASKS_TO_IDS['unknown']
+                assert game_data['cur_gameloop'] == 1
+                subtask_start_idx[i] = game_data['cur_gameloop']
+        elif prev_game_data is not None:
+            # Add subtask data
+            try:
+                joint_action = json.loads(prev_game_data['joint_action'])
+            except json.decoder.JSONDecodeError:
+                # Hacky fix taken from https://github.com/HumanCompatibleAI/human_aware_rl/blob/master/human_aware_rl/human/data_processing_utils.py#L29
+                joint_action = eval(prev_game_data['joint_action'])
+
+            for i in range(2):
+                # All subtasks will start and end with an INTERACT action
+                if joint_action[i] == 'interact':
+                    # Find out which subtask has been completed
+                    subtask = calculate_completed_subtask(prev_game_data['layout'], prev_state, state, i)
+                    if subtask is not None:
+                        # Label previous actions with subtask
+                        assert game_data['cur_gameloop'] > subtask_start_idx[i]
+                        # cur_gameloops is 1-indexed
+                        subtask_data[participant_id][trial_id][subtask_start_idx[i]:game_data['cur_gameloop'] - 1, i] = subtask
+                        subtask_start_idx[i] = game_data['cur_gameloop'] - 1
+
+        # Calculate eye data
         eye_data = []
+        while prev_eye_row['Time'] < prev_time:
+            _, prev_eye_row = next(eye_data_gen)
+            continue
         while prev_eye_row['Time'] <= time:
             eye_data.append((prev_eye_row['LRavgXposClip'], prev_eye_row['LRavgYposClip']))
             _, prev_eye_row = next(eye_data_gen)
@@ -108,19 +165,23 @@ def process_xdf_file(xdf_file_path):
         x, y, surface_size, tile_size, grid_shape, hud_size = game_data['dimension']
         hud_size = 50
 
-        heatmap = map_eye_tracking(eye_data, x, y, surface_size, tile_size, grid_shape, hud_size)
+        heatmap, gaze_obj_count = map_eye_tracking(eye_data, x, y, surface_size, tile_size, grid_shape, hud_size, state, game_data['p_idx'])
+        gaze_obj_data[participant_id][trial_id][game_data['cur_gameloop'] - 1] = gaze_obj_count
         mdp = OvercookedGridworld.from_layout_name(game_data['layout_name'])
-        visual_observation = OAI_encode_state(mdp, state, grid_shape, horizon=50)['visual_obs']
-        visual_observation_for_one_player = visual_observation[0:1, :, :, :]
+        visual_observation = OAI_encode_state(mdp, state, grid_shape, p_idx=game_data['p_idx'], horizon=400)['visual_obs']
+        # human_visual_observation_for_one_player = visual_observation[0:1, :, :, :]
 
-        trial_id = game_data['trial_id']
-        visual_obs_padded = pad_to_shape(visual_observation_for_one_player, (desired_N, desired_M))
+        visual_obs_padded = pad_to_shape(visual_observation, (desired_N, desired_M))
         heatmap_padded = pad_to_shape(heatmap, (desired_N, desired_M))
-        participant_id = str(game_data.get('user_id'))
         highest_score = max_scores[trial_id]
         processed_data[participant_id][trial_id].append((visual_obs_padded, heatmap_padded, highest_score))
 
-    return processed_data
+    # Label last subtask as unknown
+    for i in range(2):
+        subtask_data[participant_id][trial_id][subtask_start_idx[i]:, i] = Subtasks.SUBTASKS_TO_IDS['unknown']
+        subtask_start_idx[i] = game_data['cur_gameloop']
+
+    return processed_data, subtask_data, gaze_obj_data
 
 
 def combine_state_and_heatmap(state, heatmap, mdp, tile_size, hud_size, timestep, trial_id):
@@ -142,25 +203,29 @@ def combine_state_and_heatmap(state, heatmap, mdp, tile_size, hud_size, timestep
     state_img.save(f'screenshots/{trial_id}_{timestep}.png')
 
 
-def process_folder_with_xdf_files(folder_path, obs_heatmap_memmap, participant_memmap):
-    global next_index_for_obs_heatmap
+def process_folder_with_xdf_files(folder_path, obs_heatmap_memmap, participant_memmap, subtask_memmap, gaze_obj_memmap):
+    next_index_for_obs_heatmap = 0
     xdf_files = glob.glob(str(Path(folder_path) / '*.xdf'))
 
     participant_index = 0
     for xdf_file in xdf_files:
-        processed_data = process_xdf_file(xdf_file)
+        game_and_eye_data, subtask_data, gaze_obj_data = process_xdf_file(xdf_file)
 
-        for userid, trials in processed_data.items():
+        for userid, trials in game_and_eye_data.items():
             for trial_id, data_list in trials.items():
                 # Determine the starting index for this user-trial combination in obs_heatmap_memmap
                 start_index = next_index_for_obs_heatmap
 
-                for data in data_list:
+                assert len(data_list) == 400
+                for i, data in enumerate(data_list):
                     observation, heatmap, score = data
 
                     # Store observation and heatmap data in obs_heatmap_memmap
                     obs_heatmap_memmap[next_index_for_obs_heatmap, :-1, :, :] = observation
                     obs_heatmap_memmap[next_index_for_obs_heatmap, -1, :, :] = heatmap
+
+                    subtask_memmap[next_index_for_obs_heatmap] = subtask_data[userid][trial_id][i]
+                    gaze_obj_memmap[next_index_for_obs_heatmap] = gaze_obj_data[userid][trial_id][i]
 
                     # Increment the index for the next data point in obs_heatmap_memmap
                     next_index_for_obs_heatmap += 1
@@ -171,7 +236,6 @@ def process_folder_with_xdf_files(folder_path, obs_heatmap_memmap, participant_m
                     start_index, next_index_for_obs_heatmap, 0, 0, 0, 0, 0
                 )
                 participant_index += 1
-
 
 # process_folder_with_xdf_files("path/to/xdf/files")
 
@@ -222,17 +286,3 @@ def fill_participant_questions_from_csv(participant_memmap_file, csv_file_path):
 
 # Example usage:
 # fill_participant_questions_from_csv(participant_memmap, 'path/to/your/csv_file.csv')
-
-
-def combine_and_standardize(visual_obs, heatmap, score, desired_N=9, desired_M=5):
-    """
-    Combines visual observation and heatmap into a single flattened array with the score appended at the end.
-    """
-    visual_obs_padded = pad_to_shape(visual_obs, (desired_N, desired_M))
-    heatmap_padded = pad_to_shape(heatmap, (desired_N, desired_M))
-
-    heatmap_expanded = np.expand_dims(heatmap_padded, axis=0)
-    visual_obs_with_heatmap = np.concatenate((visual_obs_padded, heatmap_expanded), axis=0)
-
-    flattened_output = visual_obs_with_heatmap.flatten()
-    return flattened_output

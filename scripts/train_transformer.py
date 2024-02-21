@@ -2,24 +2,30 @@ import torch
 from sklearn.model_selection import train_test_split
 from torch import optim, nn
 from torch.optim.lr_scheduler import StepLR
-from torch.utils.data import DataLoader, Dataset
 import csv
 
 from oai_agents.common.arguments_transformer import TransformerConfig, sweep_config
-from eye_tracking_dataset_operations.memmap_create_and_retrieve import return_memmaps
+from eye_tracking_dataset_operations.memmap_create_and_retrieve import return_memmaps, setup_and_process_xdf_files
 from eye_tracking_dataset_operations import models
-from eye_tracking_dataset_operations.transformer_helper import process_trial_data, process_data
+from eye_tracking_dataset_operations.eye_gaze_and_play_dataset import EyeGazeAndPlayDataset
 import wandb
 
-sweep_id = wandb.sweep(sweep=sweep_config, project="HAHA_eyetracking")
+# sweep_id = wandb.sweep(sweep=sweep_config, project="HAHA_eyetracking")
 
 # Memmap file paths
 participant_memmap_file = "path/to/the/participant_memmap"  # "path/to/memmap/participant_memmap.dat"
 obs_heatmap_memmap_file = "path/to/the/obs_heatmap_memmap"  # "path/to/memmap/obs_heatmap_memmap.dat"
-
+subtask_memmap_file = "path/to/the/subtask_memmap"  # "path/to/memmap/obs_heatmap_memmap.dat"
+gaze_obj_memmap_file = "path/to/the/gaze_obj_file"  # "path/to/memmap/gaze_obj_file.dat"
 
 # only needed initially to make the memmaps, please comment out after the memmaps are created.
-# setup_and_process_xdf_files("path/to/the/xdffiles", participant_memmap_file,obs_heatmap_memmap_file)
+# setup_and_process_xdf_files("data/eye_tracking_data/", participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
+# exit(0)
+
+participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap = return_memmaps(participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
+trial_data, trial_labels = process_data(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap, TransformerConfig.num_timesteps_to_consider)
+exit(0)
+
 # fill_participant_questions_from_csv(participant_memmap_file, 'path/to/the/GameData_EachTrial.csv')
 
 
@@ -27,34 +33,26 @@ def sweep_train():
     # Configuration for hyperparameters
     wandb.init()
 
-    participant_memmap, obs_heatmap_memmap = return_memmaps(participant_memmap_file, obs_heatmap_memmap_file)
+    participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap = return_memmaps(participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
 
-    trial_data, trial_labels = process_data(participant_memmap, obs_heatmap_memmap,
-                                            TransformerConfig.num_timesteps_to_consider)
+    # Encoding options are Game Data 'gd', Eye Gaze 'eg', both 'gd+eg', Gaze Object 'go', or Collapsed Eye Gaze 'ceg'
+    # Note that 'go and 'ceg' are baselines that aggregate over data over the time period, so should probably be
+    # inputted to a Linear classifier not a transformer
+    encoding_type = 'gd'
+    # Label options are 'score', 'subtask', 'q1', 'q2', 'q3', 'q4', or 'q5
+    label_type = 'score'
+    dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
+                                            encoding_type, label_type)
+
+    trial_data, trial_labels = process_data(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
+                                            encoding_type, label_type)
 
     processed_data = process_trial_data(trial_data, trial_labels)
 
-    participant_ids = list(processed_data.keys())
 
-    train_participant_ids, val_participant_ids = train_test_split(participant_ids, test_size=0.2, random_state=42)
-    print(f"train: {train_participant_ids}")
-    print(f"test: {val_participant_ids}")
-    X_train = [data for pid in train_participant_ids for data in processed_data[pid]['data']]
-    y_train = [labels for pid in train_participant_ids for labels in processed_data[pid]['labels']]
-    X_val = [data for pid in val_participant_ids for data in processed_data[pid]['data']]
-    y_val = [labels for pid in val_participant_ids for labels in processed_data[pid]['labels']]
 
     # Custom Dataset class
-    class CustomDataset(Dataset):
-        def __init__(self, data, labels):
-            self.data = data
-            self.labels = labels
 
-        def __len__(self):
-            return len(self.data)
-
-        def __getitem__(self, idx):
-            return self.data[idx], self.labels[idx]
 
     train_dataset = CustomDataset(X_train, y_train)
     val_dataset = CustomDataset(X_val, y_val)

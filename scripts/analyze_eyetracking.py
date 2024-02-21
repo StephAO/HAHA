@@ -111,7 +111,7 @@ def create_full_dataframe(xdf_file):
                 next_game_time += 0.2
                 for i in range(2):
                     subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
-                    eye_data_df.loc[subtask_start_idx[i]:index, f'p{i + 1}_curr_subtask'] = subtask
+                    eye_data_df.loc[subtask_start_idx[i]:index + 1, f'p{i + 1}_curr_subtask'] = subtask
                     subtask_start_idx[i] = index + 1
 
             curr_next_same_game = True
@@ -121,7 +121,7 @@ def create_full_dataframe(xdf_file):
                     subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
                     # NOTE because this is based on eye data index, the "next" subtask starts one eye dataframe index
                     # after the interact action occurs, NOT on the start of the next game step
-                    eye_data_df.loc[subtask_start_idx[i]:index, f'p{i + 1}_curr_subtask'] = subtask
+                    eye_data_df.loc[subtask_start_idx[i]:index + 1, f'p{i + 1}_curr_subtask'] = subtask
                     subtask_start_idx[i] = index + 1
 
             # Check for subtask completion
@@ -138,7 +138,7 @@ def create_full_dataframe(xdf_file):
                     subtask = calculate_completed_subtask(curr_game_data['layout'], curr_state, next_state, i)
                     if subtask is not None:
                         # Label previous actions with subtask
-                        eye_data_df.loc[subtask_start_idx[i]:index, f'p{i + 1}_curr_subtask'] = subtask
+                        eye_data_df.loc[subtask_start_idx[i]:index + 1, f'p{i + 1}_curr_subtask'] = subtask
                         subtask_start_idx[i] = index + 1
 
         # New trial, remove data between trials

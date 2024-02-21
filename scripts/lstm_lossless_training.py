@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from eye_tracking_dataset_operations.memmap_create_and_retrieve import return_memmaps
 from scripts import models
-from eye_tracking_dataset_operations.transformer_helper import process_trial_data, process_data
+from eye_tracking_dataset_operations.eye_gaze_and_play_dataset import process_trial_data, process_data
 
 import torch
 import torch.nn as nn
@@ -14,8 +14,9 @@ from sklearn.metrics import f1_score
 from oai_agents.common.arguments_transformer import LSTMConfig
 
 # Memmap file paths
-participant_memmap_file = "/data/obs_heatmap_memmap.dat"  # "/HAHA-eyetracking/data/participant_memmap.dat" "path/to/memmap/participant_memmap.dat"
-obs_heatmap_memmap_file = "/data/participant_memmap.dat"  # "/HAHA-eyetracking/data/obs_heatmap_memmap.dat" "path/to/memmap/obs_heatmap_memmap.dat"
+# TODO define these all in one place
+participant_memmap_file = "/data/participant_memmap.dat"  # "/HAHA-eyetracking/data/participant_memmap.dat" "path/to/memmap/participant_memmap.dat"
+obs_heatmap_memmap_file = "/data/obs_heatmap_memmap.dat"  # "/HAHA-eyetracking/data/obs_heatmap_memmap.dat" "path/to/memmap/obs_heatmap_memmap.dat"
 
 
 
@@ -43,7 +44,7 @@ num_epochs = LSTMConfig.num_epochs
 # setup_and_process_xdf_files("/path/t0/folder/with/xdfFiles", participant_memmap_file,obs_heatmap_memmap_file) # /path/t0/folder/with/xdfFiles
 
 
-participant_memmap, obs_heatmap_memmap = return_memmaps(participant_memmap_file, obs_heatmap_memmap_file)
+participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap = return_memmaps(participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
 
 trial_data, trial_labels = process_data(participant_memmap, obs_heatmap_memmap, num_timesteps_to_consider)
 processed_data = process_trial_data(trial_data, trial_labels)
