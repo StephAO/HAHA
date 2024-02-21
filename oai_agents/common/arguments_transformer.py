@@ -1,19 +1,16 @@
 sweep_config = {
-    "name": "sweepdemo",
-    "method": "bayes",
+    "name": "eye_and_gameplay",
+    "method": "grid",
     "metric": {"goal": "minimize", "name": "validation_loss"},
     "parameters": {
-        "learning_rate": {"distribution": "uniform", "min": 0.000001, "max": 0.00001},
+        "learning_rate": {"values": [3e-5, 1e-5, 1e-6]}, 
         "batch_size": {
-            "distribution": "q_log_uniform_values",
-            "max": 256,
-            "min": 32,
-            "q": 8,
+            "values": [32, 64, 128, 256]
         },
-        "epochs": {"values": [5, 10, 15]},
-        "decay_step_size": {"values": [30, 50, 70]},
-        "decay_factor": {"values": [0.5, 0.6, 0.7, 0.8, 0.9]}
-
+        "epochs": {"values": [400]},
+        "decay_step_size": {"values": [50]},
+        "decay_factor": {"values": [ 0.9]},
+        "num_timesteps_to_consider": {"values": [50]} 
     },
 }
 

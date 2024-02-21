@@ -91,7 +91,7 @@ class WarmupScheduler(optim.lr_scheduler._LRScheduler):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=25, dropout=0.0):
+    def __init__(self, d_model, max_len=130, dropout=0.0):
         super(PositionalEncoding, self).__init__()
         self.d_model = d_model  # Store d_model as an instance attribute
         self.dropout = nn.Dropout(p=dropout)

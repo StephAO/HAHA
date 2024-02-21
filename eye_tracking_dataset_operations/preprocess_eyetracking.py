@@ -14,6 +14,7 @@ from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
 from oai_agents.common.state_encodings import OAI_encode_state
 from oai_agents.common.subtasks import Subtasks, calculate_completed_subtask
 
+
 desired_N = 9
 desired_M = 5
 
@@ -169,7 +170,6 @@ def process_xdf_file(xdf_file_path):
         gaze_obj_data[participant_id][trial_id][game_data['cur_gameloop'] - 1] = gaze_obj_count
         mdp = OvercookedGridworld.from_layout_name(game_data['layout_name'])
         visual_observation = OAI_encode_state(mdp, state, grid_shape, p_idx=game_data['p_idx'], horizon=400)['visual_obs']
-        # human_visual_observation_for_one_player = visual_observation[0:1, :, :, :]
 
         visual_obs_padded = pad_to_shape(visual_observation, (desired_N, desired_M))
         heatmap_padded = pad_to_shape(heatmap, (desired_N, desired_M))
@@ -244,11 +244,11 @@ def fill_participant_questions_from_csv(participant_memmap_file, csv_file_path):
     Fill the Question_1 to Question_5 fields in participant_memmap based on a CSV file.
     """
 
-    num_participants = 26  # Total number of participants
+    num_participants = 83  # Total number of participants
     num_trials_per_participant = 18  # Trials per participant
 
     # Load participant data from CSV into a dictionary
-    participant_memmap, _ = np.memmap(
+    participant_memmap = np.memmap(
         participant_memmap_file,
         dtype=[('participant_id', 'S6'), ('trial_id', 'i4'), ('score', 'i4'), ('start_index', 'i4'),
                ('end_index', 'i4'), ('Question_1', 'i4'), ('Question_2', 'i4'), ('Question_3', 'i4'), ('Question_4', 'i4'), ('Question_5', 'i4')],
