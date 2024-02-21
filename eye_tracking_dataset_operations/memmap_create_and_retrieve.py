@@ -4,7 +4,7 @@ from pathlib import Path
 from eye_tracking_dataset_operations.preprocess_eyetracking import process_folder_with_xdf_files
 
 # Parameters
-num_participants = 26  # Total number of participants
+num_participants = 83  # Total number of participants
 num_trials_per_participant = 18  # Trials per participant
 obs_channels = 27  # Number of binary masks in the observation data
 grid_shape = (9, 5)  # Padded grid size
@@ -56,8 +56,8 @@ def return_memmaps(participant_memmap_file, obs_heatmap_memmap_file, num_partici
 # participant_memmap, obs_heatmap_memmap = create_memmaps(participant_memmap_file, obs_heatmap_memmap_file, num_participants, num_trials_per_participant, obs_channels, grid_shape)
 
 
-def setup_and_process_xdf_files(data_folder, participant_memmap_file, obs_heatmap_memmap_file, num_participants=18,
-                                num_trials_per_participant=num_participants,
+def setup_and_process_xdf_files(data_folder, participant_memmap_file, obs_heatmap_memmap_file, num_participants=num_participants,
+                                num_trials_per_participant=num_trials_per_participant,
                                 obs_channels=27, grid_shape=(9, 5)):
     """
     Sets up memory-mapped files and processes a folder with XDF files.

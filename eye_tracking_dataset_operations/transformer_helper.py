@@ -25,10 +25,20 @@ def process_data(participant_memmap, obs_heatmap_memmap, num_timesteps_to_consid
     for record in participant_memmap:
         participant_id, trial_id, score, start_idx, end_idx, question_1, question_2, question_3, question_4, question_5 = record
 
-        obs_heatmap_data = obs_heatmap_memmap[start_idx:end_idx]
+        # Ensure the end index does not exceed the 380th timestep for random selection
+        adjusted_end_idx = min(end_idx, start_idx + 380)
+        num_available_timesteps = adjusted_end_idx - start_idx
 
-        # Process visual observation and heatmap for the first X timesteps
-        for timestep_data in obs_heatmap_data[:num_timesteps_to_consider]:
+        # Select num_timesteps_to_consider randomly from the available range (0 to 380)
+        if num_timesteps_to_consider < num_available_timesteps:
+            selected_indices = np.sort(np.random.choice(range(start_idx, adjusted_end_idx), num_timesteps_to_consider, replace=False))
+        else:
+            # If requesting more timesteps than available, use all available timesteps
+            selected_indices = range(start_idx, adjusted_end_idx)
+
+        obs_heatmap_data = obs_heatmap_memmap[selected_indices]
+
+        for timestep_data in obs_heatmap_data:
             visual_obs = timestep_data[:-1, :, :]  # All but last channel
             heatmap = timestep_data[-1, :, :]  # Last channel
             flattened_output_with_score = combine_and_standardize(visual_obs, heatmap, score)
@@ -42,7 +52,7 @@ def process_data(participant_memmap, obs_heatmap_memmap, num_timesteps_to_consid
 # Example usage:
 # trial_data, trial_labels = process_data(participant_memmap, obs_heatmap_memmap, num_timesteps_to_consider)
 
-def process_trial_data(trial_data, trial_labels, num_bins=3):
+def process_trial_data(trial_data, trial_labels, num_bins=4):
     """
     Process trial data by binning the labels and organizing the data.
 

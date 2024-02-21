@@ -13,6 +13,7 @@ from overcooked_ai_py.mdp.overcooked_mdp import OvercookedState, OvercookedGridw
 from overcooked_ai_py.visualization.state_visualizer import StateVisualizer
 from oai_agents.common.state_encodings import OAI_encode_state
 
+
 desired_N = 9
 desired_M = 5
 next_index_for_obs_heatmap = 0
@@ -110,7 +111,7 @@ def process_xdf_file(xdf_file_path):
 
         heatmap = map_eye_tracking(eye_data, x, y, surface_size, tile_size, grid_shape, hud_size)
         mdp = OvercookedGridworld.from_layout_name(game_data['layout_name'])
-        visual_observation = OAI_encode_state(mdp, state, grid_shape, horizon=50)['visual_obs']
+        visual_observation = OAI_encode_state(mdp, state, grid_shape, horizon=400)['visual_obs']
         visual_observation_for_one_player = visual_observation[0:1, :, :, :]
 
         trial_id = game_data['trial_id']
@@ -180,11 +181,11 @@ def fill_participant_questions_from_csv(participant_memmap_file, csv_file_path):
     Fill the Question_1 to Question_5 fields in participant_memmap based on a CSV file.
     """
 
-    num_participants = 26  # Total number of participants
+    num_participants = 83  # Total number of participants
     num_trials_per_participant = 18  # Trials per participant
 
     # Load participant data from CSV into a dictionary
-    participant_memmap, _ = np.memmap(
+    participant_memmap = np.memmap(
         participant_memmap_file,
         dtype=[('participant_id', 'S6'), ('trial_id', 'i4'), ('score', 'i4'), ('start_index', 'i4'),
                ('end_index', 'i4'), ('Question_1', 'i4'), ('Question_2', 'i4'), ('Question_3', 'i4'), ('Question_4', 'i4'), ('Question_5', 'i4')],

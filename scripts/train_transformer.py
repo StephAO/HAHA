@@ -3,25 +3,40 @@ from sklearn.model_selection import train_test_split
 from torch import optim, nn
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader, Dataset
+from torch.nn.utils.rnn import pad_sequence
 import csv
 
 from oai_agents.common.arguments_transformer import TransformerConfig, sweep_config
-from eye_tracking_dataset_operations.memmap_create_and_retrieve import return_memmaps
+from eye_tracking_dataset_operations.memmap_create_and_retrieve import return_memmaps, setup_and_process_xdf_files
 from eye_tracking_dataset_operations import models
 from eye_tracking_dataset_operations.transformer_helper import process_trial_data, process_data
+from eye_tracking_dataset_operations.preprocess_eyetracking import fill_participant_questions_from_csv
 import wandb
 
 sweep_id = wandb.sweep(sweep=sweep_config, project="HAHA_eyetracking")
 
 # Memmap file paths
-participant_memmap_file = "path/to/the/participant_memmap"  # "path/to/memmap/participant_memmap.dat"
-obs_heatmap_memmap_file = "path/to/the/obs_heatmap_memmap"  # "path/to/memmap/obs_heatmap_memmap.dat"
+participant_memmap_file = # "/home/stephane/HAHA/eye_data/participant_memmap.dat"  # "path/to/memmap/participant_memmap.dat"
+obs_heatmap_memmap_file = # "/home/stephane/HAHA/eye_data/obs_heatmap_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
 
 
 # only needed initially to make the memmaps, please comment out after the memmaps are created.
-# setup_and_process_xdf_files("path/to/the/xdffiles", participant_memmap_file,obs_heatmap_memmap_file)
-# fill_participant_questions_from_csv(participant_memmap_file, 'path/to/the/GameData_EachTrial.csv')
+# setup_and_process_xdf_files("/home/stephane/HAHA/eye_data/Data/xdf_files", participant_memmap_file,obs_heatmap_memmap_file)
+# fill_participant_questions_from_csv(participant_memmap_file, '/home/stephane/HAHA/eye_data/GameData_EachTrial.csv')
 
+
+
+
+def custom_collate_fn(batch):
+    data, labels = zip(*batch)  # Unpack data and labels from the batch
+
+    # Pad data sequences to thave the same length
+    data_padded = pad_sequence(data, batch_first=True, padding_value=0)  # Adjust padding_value as needed
+
+    # Pad label sequences to have the same length as the longest sequence in data
+    labels_padded = pad_sequence(labels, batch_first=True, padding_value=-100)  # Use an ignore_index that matches your loss function's ignore_index
+
+    return data_padded, labels_padded
 
 def sweep_train():
     # Configuration for hyperparameters
@@ -30,9 +45,9 @@ def sweep_train():
     participant_memmap, obs_heatmap_memmap = return_memmaps(participant_memmap_file, obs_heatmap_memmap_file)
 
     trial_data, trial_labels = process_data(participant_memmap, obs_heatmap_memmap,
-                                            TransformerConfig.num_timesteps_to_consider)
+                                            wandb.config.num_timesteps_to_consider)
 
-    processed_data = process_trial_data(trial_data, trial_labels)
+    processed_data = process_trial_data(trial_data, trial_labels, TransformerConfig.num_classes)
 
     participant_ids = list(processed_data.keys())
 
@@ -59,8 +74,10 @@ def sweep_train():
     train_dataset = CustomDataset(X_train, y_train)
     val_dataset = CustomDataset(X_val, y_val)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=False)
+
+    train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True, collate_fn=custom_collate_fn)
+    val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=False, collate_fn=custom_collate_fn)
+
 
     model = models.SimpleTransformer(
         d_model=TransformerConfig.d_model,
@@ -71,7 +88,7 @@ def sweep_train():
         input_dim=TransformerConfig.input_dim
     )
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(ignore_index=-100)
     optimizer = optim.Adam(model.parameters(), lr=wandb.config.learning_rate, weight_decay=0)
     scheduler = models.WarmupScheduler(optimizer, TransformerConfig.warmup_steps, TransformerConfig.base_lr,
                                        TransformerConfig.max_lr)
@@ -184,8 +201,7 @@ def sweep_train():
         # Print epoch results
         print(
             f"Epoch {epoch + 1}/{TransformerConfig.num_epochs} - Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
-        wandb.log({'epoch': epoch + 1, 'train_loss': train_loss, 'val_loss': val_loss, 'train_acc': train_acc,
-                   'val_acc': val_acc})
+        wandb.log({'epoch': epoch + 1, 'train_loss': train_loss, 'val_loss': val_loss, 'train_acc': train_acc,'val_acc': val_acc})
 
     with open('training_metrics.csv', 'w', newline='') as file:
         writer = csv.writer(file)
@@ -235,3 +251,4 @@ def sweep_train():
 
 
 wandb.agent(sweep_id, function=sweep_train, count=5)
+
