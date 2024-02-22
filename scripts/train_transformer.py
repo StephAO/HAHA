@@ -2,6 +2,7 @@ import torch
 from sklearn.model_selection import train_test_split
 from torch import optim, nn
 from torch.optim.lr_scheduler import StepLR
+from torch.utils.data import DataLoader, Dataset
 import csv
 
 from oai_agents.common.arguments_transformer import TransformerConfig, sweep_config
@@ -10,7 +11,7 @@ from eye_tracking_dataset_operations import models
 from eye_tracking_dataset_operations.eye_gaze_and_play_dataset import EyeGazeAndPlayDataset
 import wandb
 
-# sweep_id = wandb.sweep(sweep=sweep_config, project="HAHA_eyetracking")
+sweep_id = wandb.sweep(sweep=sweep_config, project="HAHA_eyetracking")
 
 # Memmap file paths
 participant_memmap_file = "path/to/the/participant_memmap"  # "path/to/memmap/participant_memmap.dat"
@@ -22,58 +23,25 @@ gaze_obj_memmap_file = "path/to/the/gaze_obj_file"  # "path/to/memmap/gaze_obj_f
 # setup_and_process_xdf_files("data/eye_tracking_data/", participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
 # exit(0)
 
-participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap = return_memmaps(participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
-trial_data, trial_labels = process_data(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap, TransformerConfig.num_timesteps_to_consider)
-exit(0)
-
 # fill_participant_questions_from_csv(participant_memmap_file, 'path/to/the/GameData_EachTrial.csv')
 
 
-
-
-def custom_collate_fn(batch):
-    data, labels = zip(*batch)  # Unpack data and labels from the batch
-
-    # Pad data sequences to thave the same length
-    data_padded = pad_sequence(data, batch_first=True, padding_value=0)  # Adjust padding_value as needed
-
-    # Pad label sequences to have the same length as the longest sequence in data
-    labels_padded = pad_sequence(labels, batch_first=True, padding_value=-100)  # Use an ignore_index that matches your loss function's ignore_index
-
-    return data_padded, labels_padded
-
 def sweep_train():
-    # Configuration for hyperparameters
-    wandb.init()
-
     participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap = return_memmaps(participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
 
     # Encoding options are Game Data 'gd', Eye Gaze 'eg', both 'gd+eg', Gaze Object 'go', or Collapsed Eye Gaze 'ceg'
     # Note that 'go and 'ceg' are baselines that aggregate over data over the time period, so should probably be
     # inputted to a Linear classifier not a transformer
-    encoding_type = 'gd'
+    encoding_type = 'gd+eg'
     # Label options are 'score', 'subtask', 'q1', 'q2', 'q3', 'q4', or 'q5
     label_type = 'score'
     dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
                                             encoding_type, label_type)
 
-    trial_data, trial_labels = process_data(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
-                                            encoding_type, label_type)
-
-
-    processed_data = process_trial_data(trial_data, trial_labels, TransformerConfig.num_classes)
-
-
-
-    # Custom Dataset class
-
-
-    train_dataset = CustomDataset(X_train, y_train)
-    val_dataset = CustomDataset(X_val, y_val)
-
-
-    train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True, collate_fn=custom_collate_fn)
-    val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=False, collate_fn=custom_collate_fn)
+    # TODO ASAP save encoding type / label type with results / csv and in wandb logging to know what the results were for
+    exp_name = f'{encoding_type}_{label_type}'
+    # Configuration for hyperparameters
+    wandb.init(mode='online')
 
 
     model = models.SimpleTransformer(
@@ -81,8 +49,9 @@ def sweep_train():
         nhead=TransformerConfig.n_head,
         num_layers=TransformerConfig.num_layers,
         dim_feedforward=TransformerConfig.dim_feedforward,
-        num_classes=TransformerConfig.num_classes,
-        input_dim=TransformerConfig.input_dim
+        num_classes=dataset.num_classes,
+        max_len=dataset.num_timesteps,
+        input_dim=dataset.input_dim
     )
 
     criterion = nn.CrossEntropyLoss(ignore_index=-100)
@@ -108,11 +77,13 @@ def sweep_train():
         'val_acc': [],
         'learning_rate': []
     }
-    for epoch in range(wandb.config.epochs):
+    for epoch in range(400):
         # Training phase
         current_lr = optimizer.param_groups[0]['lr']
         learning_rates.append(current_lr)
         model.train()
+        dataset.set_split('train')
+        train_dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
         train_loss, train_acc = 0.0, 0.0
         for i, (data, labels) in enumerate(train_dataloader):
             optimizer.zero_grad()
@@ -130,10 +101,9 @@ def sweep_train():
             batch_size, seq_len, _ = data.shape
 
             # Calculate loss (reshape as per your requirement)
-            loss = criterion(torch.reshape(outputs, (batch_size * seq_len, TransformerConfig.num_classes)),
+            loss = criterion(torch.reshape(outputs, (batch_size * seq_len, dataset.num_classes)),
                              torch.reshape(labels, (batch_size * seq_len,)))
             loss.backward()  # Backward pass
-
             total_norm = 0
             num_params = 0
             for name, param in model.named_parameters():
@@ -146,6 +116,11 @@ def sweep_train():
 
             # Calculate accuracy
             _, predicted = torch.max(outputs, dim=2)
+            if label_type != 'score':
+                # Only calculate accuracy on last step
+                predicted = predicted[:, -1]
+                labels = labels[:, -1]
+
             predicted = predicted.view(-1)
             labels = labels.view(-1)
             acc = calculate_accuracy(predicted, labels)
@@ -165,6 +140,8 @@ def sweep_train():
 
         # Validation phase
         model.eval()
+        dataset.set_split('val')
+        val_dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
         val_loss, val_acc = 0.0, 0.0
         with torch.no_grad():
             for data, labels in val_dataloader:
@@ -177,11 +154,16 @@ def sweep_train():
 
                 # Calculate accuracy
                 _, predicted = torch.max(outputs, dim=2)
+                if label_type != 'score':
+                    # Only calculate accuracy on last step
+                    predicted = predicted[:, -1]
+                    labels = labels[:, -1]
                 predicted = predicted.view(-1)
                 labels = labels.view(-1)
                 acc = calculate_accuracy(predicted, labels)
                 val_loss += loss.item()
                 val_acc += acc
+                # TODO ASAP save best model based on val_acc
 
             val_loss /= len(val_dataloader)
             val_acc /= len(val_dataloader)
@@ -199,6 +181,9 @@ def sweep_train():
         print(
             f"Epoch {epoch + 1}/{TransformerConfig.num_epochs} - Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
         wandb.log({'epoch': epoch + 1, 'train_loss': train_loss, 'val_loss': val_loss, 'train_acc': train_acc,'val_acc': val_acc})
+
+    # TODO ASAP load best model and evaluate on test set and include in csv
+    # Make sure to index last timestep for accuracy calculation if label_type does not equal 'score'
 
     with open('training_metrics.csv', 'w', newline='') as file:
         writer = csv.writer(file)
@@ -242,10 +227,11 @@ def sweep_train():
     # plt.show()
     #
     # Save the model if needed
+    # TODO ASAP give this model a better name based on encoding type and label type
     torch.save(model.state_dict(), 'model.pth')
-    wandb.save('model.pth')
-    wandb.log_artifact('model.pth', type='model')
+    # wandb.save('model.pth')
+    # wandb.log_artifact('model.pth', type='model')
 
-
+# sweep_train()
 wandb.agent(sweep_id, function=sweep_train, count=5)
 

@@ -36,9 +36,6 @@ class LSTMFeatureBased(nn.Module):
         return outputs
 
 
-
-
-
 class LSTMLosslessEncoding(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers, dropout_rate):
         super(LSTMLosslessEncoding, self).__init__()
@@ -91,7 +88,7 @@ class WarmupScheduler(optim.lr_scheduler._LRScheduler):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=130, dropout=0.0):
+    def __init__(self, d_model, max_len, dropout=0.0):
         super(PositionalEncoding, self).__init__()
         self.d_model = d_model  # Store d_model as an instance attribute
         self.dropout = nn.Dropout(p=dropout)
@@ -110,14 +107,14 @@ class PositionalEncoding(nn.Module):
 
 
 class SimpleTransformer(nn.Module):
-    def __init__(self, d_model, nhead, num_layers, dim_feedforward, num_classes, input_dim, dropout=0.0):
+    def __init__(self, d_model, nhead, num_layers, dim_feedforward, num_classes, input_dim, max_len, dropout=0.0):
         super(SimpleTransformer, self).__init__()
         self.d_model = d_model
         # self.cls_token = nn.Parameter(torch.zeros(1, 1, d_model))
         # nn.init.xavier_uniform_(self.cls_token)
 
         self.input_linear = nn.Linear(input_dim, d_model)
-        self.pos_encoder = PositionalEncoding(d_model, dropout=dropout)
+        self.pos_encoder = PositionalEncoding(d_model, max_len, dropout=dropout)
         encoder_layers = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers)
         self.output_layer = nn.Linear(d_model, num_classes)

@@ -2,127 +2,136 @@ from collections import defaultdict
 import numpy as np
 import torch
 # from scripts.memmap_creation import participant_memmap, obs_heatmap_memmap
-from eye_tracking_dataset_operations.preprocess_eyetracking import combine_and_standardize
-from torch.utils.data import DataLoader, Dataset
-from sklearn.model_selection import train_test_split
+from torch.utils.data import Dataset
 
 class EyeGazeAndPlayDataset(Dataset):
-    def __init__(self, participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap, encoding_type, label_type):
+    def __init__(self, participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap, encoding_type,
+                 label_type, num_bins=4, num_timesteps=50):
         self.encoding_type = encoding_type
         self.label_type = label_type
+        # TODO add linear classifier for go and ceg
+        if self.encoding_type in ['go', 'ceg']:
+            assert self.label_type != 'score', f'Encoding type {self.encoding_type} does not support score labels'
+        self.num_bins = num_bins
+        self.num_timesteps = num_timesteps
+        self.num_trials_per_participant = 18
+        self.horizon = 400
 
-        participant_ids = list(processed_data.keys())
+        self.inputs, self.labels = self.process_data(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap)
+        self.participant_ids = list(self.participant_ids)
 
-        train_participant_ids, val_participant_ids = train_test_split(participant_ids, test_size=0.2, random_state=42)
-        print(f"train: {train_participant_ids}")
-        print(f"test: {val_participant_ids}")
-        X_train = [data for pid in train_participant_ids for data in processed_data[pid]['data']]
-        y_train = [labels for pid in train_participant_ids for labels in processed_data[pid]['labels']]
-        X_val = [data for pid in val_participant_ids for data in processed_data[pid]['data']]
-        y_val = [labels for pid in val_participant_ids for labels in processed_data[pid]['labels']]
+        print(self.participant_ids)
+        self.input_dim = self.inputs[(self.participant_ids[0], 1)].shape[-1]
+        self.num_classes = {'score': self.num_bins, 'subtask': 12, 'q1': 7, 'q2': 7, 'q3': 7, 'q4': 7, 'q5': 7}[self.label_type]
+
+        train_size, test_size = int(np.ceil(0.8 * len(self.participant_ids))), int(0.1 * np.ceil(len(self.participant_ids)))
+        np.random.shuffle(self.participant_ids)
+        self.splits = {'train': self.participant_ids[:train_size],
+                       'test': self.participant_ids[train_size:train_size + test_size],
+                       'val': self.participant_ids[train_size + test_size:]}
+        self.curr_split = 'train'
+
+    def set_split(self, split):
+        assert split in ['train', 'test', 'val']
+        self.curr_split = split
 
     def __len__(self):
-        return len(self.data)
+        return len(self.splits[self.curr_split]) * self.num_trials_per_participant
 
     def __getitem__(self, idx):
-        return self.data[idx], self.labels[idx]
+        participant_idx = idx // self.num_trials_per_participant
+        participant_id = self.splits[self.curr_split][participant_idx]
+        trial_id = (idx % self.num_trials_per_participant) + 1
 
-def process_data():
-    """
-    Process the data from memory-mapped arrays.
+        traj_start_idx = np.random.randint(0, self.horizon - self.num_timesteps)
 
-    Parameters:
-    - participant_memmap: Memory-mapped array with participant records.
-    - obs_heatmap_memmap: Memory-mapped array with observation and heatmap data.
-    - num_timesteps_to_consider: Number of timesteps to consider for processing.
+        input = self.inputs[(participant_id, trial_id)][traj_start_idx:traj_start_idx + self.num_timesteps]
+        if self.encoding_type in ['go', 'ceg']:
+            # Sum over timesteps
+            input = np.sum(input, dim=0)
+            # Normalize
+            input = input / np.sum(input, dim=-1, keepdims=True)
 
-    Returns:
-    - trial_data: Dictionary with processed data, keyed by (participant_id, trial_id).
-    - trial_labels: Dictionary with labels, keyed by (participant_id, trial_id).
-    """
+        label = self.labels[(participant_id, trial_id)][traj_start_idx:traj_start_idx + self.num_timesteps]
+        return input, label
 
-    input_data = {}
-    labels = {}
-    horizon = 400
+    def process_data(self, participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap):
+        """
+        Process the data from memory-mapped arrays.
 
-    for record in participant_memmap:
-        participant_id, trial_id, score, start_idx, end_idx, question_1, question_2, question_3, question_4, question_5 = record
-        questions = [question_1, question_2, question_3, question_4, question_5]
+        Parameters:
+        - participant_memmap: Memory-mapped array with participant records.
+        - obs_heatmap_memmap: Memory-mapped array with observation and heatmap data.
+        - subtask_memmap: Memory-mapped array with subtask data.
+        - gaze_obj_memmap: Memory-mapped array with gaze object data (i.e. counts of human looking at self/teammate/env
 
-        if start_idx - end_idx != horizon:
-            print(start_idx, end_idx, '!!!!!!!!!!!1111')
-        if encoding_type == 'gd':
-            in_data = obs_heatmap_memmap[start_idx:end_idx, :-1]
-        elif encoding_type == 'eg':
-            in_data = obs_heatmap_memmap[start_idx:end_idx, -1:]
-        elif encoding_type == 'gd+eg':
-            in_data = obs_heatmap_memmap[start_idx:end_idx]
-        elif encoding_type == 'ceg':
-            # Collapse in data loader
-            in_data = obs_heatmap_memmap[start_idx:end_idx, -1:]
-        elif encoding_type == 'go':
-            # Collapse in data loader
-            in_data = gaze_obj_memmap[start_idx:end_idx]
-        else:
-            raise ValueError(f'{encoding_type} is not a valid encoding type')
+        Returns:
+        - input_data: Dictionary with data to feed into network, keyed by (participant_id, trial_id). Data shape dependent on encoding type
+        - labels: Dictionary with labels, keyed by (participant_id, trial_id). Data shape dependent on label type
+        """
 
-        assert in_data.shape[0] == horizon, f'Expected {horizon} timesteps, got {in_data.shape[0]}'
-        input_data[(participant_id, trial_id)] = in_data.reshape((in_data.shape[0], -1))
+        input_data = {}
+        labels = {}
+        self.participant_ids = set()
 
-        if label_type == 'score':
-            labels[(participant_id, trial_id)] = np.full((horizon, 1), score).tolist()
-        elif label_type == 'subtask':
-            labels[(participant_id, trial_id)] = subtask_memmap[start_idx:end_idx]
-        elif label_type in ['q1', 'q2', 'q3', 'q4', 'q5']:
-            q_idx = int(label_type[1]) - 1
-            answer = questions[q_idx]
-            labels[(participant_id, trial_id)] = np.full((horizon, 1), answer).tolist()
-        else:
-            raise ValueError(f'{label_type} is not a valid label type')
+        if self.label_type == 'score':
+            self.all_scores = []
 
-    return input_data, labels
+        for record in participant_memmap:
+            participant_id, trial_id, score, start_idx, end_idx, question_1, question_2, question_3, question_4, question_5 = record
+            if participant_id == b'':
+                continue
+            self.participant_ids.add(participant_id)
+            questions = [question_1, question_2, question_3, question_4, question_5]
 
+            if self.label_type == 'score':
+                self.all_scores.append(score)
 
-# Example usage:
-# trial_data, trial_labels = process_data(participant_memmap, obs_heatmap_memmap, num_timesteps_to_consider)
+            if start_idx == 0 and end_idx == 0:
+                # Memmap is empty from this point on, stop processing. Should not happen if the number of participants
+                # is set correctly
+                break
 
-def process_trial_data(trial_data, trial_labels, num_bins=3):
-    """
-    Process trial data by binning the labels and organizing the data.
+            assert end_idx - start_idx == self.horizon, f'Expected {horizon} timesteps, got {end_idx - start_idx}'
 
-    Parameters:
-    - trial_data: Dictionary of trial data with keys as (participant_id, trial_id).
-    - trial_labels: Dictionary of trial labels with keys as (participant_id, trial_id).
-    - num_bins: Number of bins to use for binning the labels.
+            if self.encoding_type == 'gd':
+                in_data = obs_heatmap_memmap[start_idx:end_idx, :-1]
+            elif self.encoding_type == 'eg':
+                in_data = obs_heatmap_memmap[start_idx:end_idx, -1:]
+            elif self.encoding_type == 'gd+eg':
+                in_data = obs_heatmap_memmap[start_idx:end_idx]
+            elif self.encoding_type == 'ceg':
+                # Collapse in data loader
+                in_data = obs_heatmap_memmap[start_idx:end_idx, -1:]
+            elif self.encoding_type == 'go':
+                # Collapse in data loader
+                in_data = gaze_obj_memmap[start_idx:end_idx]
+            else:
+                raise ValueError(f'{self.encoding_type} is not a valid encoding type')
 
-    Returns:
-    - processed_datas: Dictionary with processed data and labels, organized by participant_id.
-    """
+            assert in_data.shape[0] == self.horizon, f'Expected {self.horizon} timesteps, got {in_data.shape[0]}'
+            input_data[(participant_id, trial_id)] = in_data.reshape((in_data.shape[0], -1))
 
-    # Calculate quantiles as bin edges
-    all_scores = [score for scores in trial_labels.values() for score in scores]
-    quantiles = np.percentile(all_scores, np.linspace(0, 100, num_bins + 1))
-    quantiles[-1] = quantiles[-1] + 1  # To ensure the maximum score falls within the last bin
+            if self.label_type == 'score':
+                labels[(participant_id, trial_id)] = np.full((self.horizon, 1), score).tolist()
+            elif self.label_type == 'subtask':
+                labels[(participant_id, trial_id)] = subtask_memmap[start_idx:end_idx]
+            elif self.label_type in ['q1', 'q2', 'q3', 'q4', 'q5']:
+                q_idx = int(label_type[1]) - 1
+                answer = questions[q_idx]
+                labels[(participant_id, trial_id)] = np.full((self.horizon, 1), answer).tolist()
+            else:
+                raise ValueError(f'{self.label_type} is not a valid label type')
 
-    # Initialize containers
-    processed_datas = defaultdict(lambda: {'data': [], 'labels': []})
-    bin_counts = defaultdict(int)
+        # Process scores into proficienty bins
+        if self.label_type == 'score':
+            # Calculate quantiles as bin edges
+            self.quantiles = np.percentile(self.all_scores, np.linspace(0, 100, self.num_bins + 1))
+            self.quantiles[-1] = self.quantiles[-1] + 1  # To ensure the maximum score falls within the last bin
+            print(f'Score min: {np.min(self.all_scores)}, max: {np.max(self.all_scores)}, mean: {np.mean(self.all_scores)}, Quantiles: {self.quantiles}')
 
-    # Process each trial
-    for (participant_id, trial_id), trial_data_list in trial_data.items():
-        trial_data_tensor = torch.tensor(trial_data_list, dtype=torch.float32)
-        trial_labels_list = trial_labels[(participant_id, trial_id)]
+            for k, v in labels.items():
+                labels[k] = np.digitize(v, self.quantiles, right=False) - 1
+                assert np.all(labels[k] >= 0) and np.all(labels[k] < self.num_bins), f'Invalid bin: {labels[k]}'
 
-        # Bin the scores using quantiles
-        binned_labels = np.digitize(trial_labels_list, quantiles, right=False) - 1
-        binned_labels = np.clip(binned_labels, 0, num_bins - 1)
-        trial_labels_tensor = torch.tensor(binned_labels, dtype=torch.long)
-
-        processed_datas[participant_id]['data'].append(trial_data_tensor)
-        processed_datas[participant_id]['labels'].append(trial_labels_tensor)
-
-        for label in binned_labels:
-            bin_counts[label] += 1
-
-    # Optionally, you can return bin_counts if needed
-    return processed_datas  # , bin_counts
+        return input_data, labels

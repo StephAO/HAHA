@@ -231,6 +231,7 @@ def process_folder_with_xdf_files(folder_path, obs_heatmap_memmap, participant_m
                     next_index_for_obs_heatmap += 1
 
                 # Update the participant_memmap with a single record for the trial
+                # TODO ASAP 0, 0, 0, 0, 0 should probably updated to include question answers
                 participant_memmap[participant_index] = (
                     userid.encode(), trial_id, score,
                     start_index, next_index_for_obs_heatmap, 0, 0, 0, 0, 0

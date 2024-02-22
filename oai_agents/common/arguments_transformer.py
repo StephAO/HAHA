@@ -22,8 +22,6 @@ class TransformerConfig:
     n_head = 8
     num_layers = 8
     dim_feedforward = 2048
-    num_classes = 4
-    input_dim = 1260  # Based on input dimension
 
     # Warmup
     warmup_steps = 300
@@ -52,7 +50,6 @@ class LSTMConfig:
     dropout_rate = 0.5  # Dropout rate
 
     # warmup
-
     warmup_steps = 300  # Define the number of steps for warmup
     base_lr = 1e-6  # Starting learning rate
     max_lr = 1e-5  # Target learning rate (same as the optimizer's initial lr)
