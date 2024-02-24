@@ -3,9 +3,9 @@ sweep_config = {
     "method": "grid",
     "metric": {"goal": "minimize", "name": "validation_loss"},
     "parameters": {
-        "learning_rate": {"values": [3e-5, 1e-5, 1e-6]}, 
+        "learning_rate": {"values": [3e-5]}, 
         "batch_size": {
-            "values": [32, 64, 128, 256]
+            "values": [128]
         },
         "epochs": {"values": [400]},
         "decay_step_size": {"values": [50]},
