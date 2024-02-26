@@ -129,27 +129,17 @@ def sweep_train():
                 # comment the next 2 lines if label_type is not subtask    
                 # labels = labels[:, :, 0]
                 # labels = labels.long()
-                # tensors = [label[0] for label in labels]  # This will create a list of tensors
 
-                # Stack the tensors to create a single tensor
-                # labels = torch.stack(tensors)
-                #data = torch.tensor(data, dtype=torch.float)
-                #labels = torch.tensor(labels, dtype=torch.long)    
                 data, labels = data.to(device), labels.to(device)
                 optimizer.zero_grad()
 
                 # Forward pass
                 outputs = model(data)  # outputs shape: [batch_size, seq_len, num_classes]
-                # print(f"Device of input data: {data.device}")
-                # print(f"Device of model parameters: {next(model.parameters()).device}")
-               
 
                 if i == 0:
                     print(f"Epoch {epoch + 1}")
                     print(f"Input shape: {data.shape}")
                     print(f"Output shape: {outputs.shape}")
-                    # print(f"Input example (first element): {data[0]}")
-                    # print(f"Output example (first element): {outputs[0]}")
 
                 # Obtain batch size and sequence length from data
                 batch_size, seq_len, _ = data.shape
@@ -265,8 +255,7 @@ def sweep_train():
         model.eval()
         dataset.set_split('test')
         test_dataloader = DataLoader(dataset, batch_size=128, shuffle=False, num_workers = 4)
-        test_acc = 0.0
-        test_labels_list, test_preds_list = [], []
+        test_labels_list, test_preds_list = {}, {}
         with torch.no_grad():
             for data, labels in test_dataloader:
                 # comment the next 2 lines if label_type is not subtask 
@@ -277,34 +266,28 @@ def sweep_train():
                 # Calculate accuracy
                 # Adjust the accuracy calculation based on your needs
                 _, predicted = torch.max(outputs, dim=2)
-                if label_type == 'score':
-                    # Only calculate accuracy on last step
-                    predicted = predicted[:, -1]
-                    labels = labels[:, -1]
-                predicted = predicted.view(-1)
-                labels = labels.view(-1)
-                test_labels_list.append(labels)
-                test_preds_list.append(predicted)
-                acc = calculate_accuracy(predicted, labels)
-                test_acc += acc
-        test_acc /= len(test_dataloader)
-        print(f"Test Accuracy: {test_acc}")
+                for t in [10, 20, 30, 40, 50]:
+                    # - 1 for indexing
+                    test_labels_list[t].append(labels[:, t - 1].view(-1))
+                    test_preds_list[t].append(predicted[:, t - 1].view(-1))
 
-        test_f1 = calculate_f1(torch.cat(test_preds_list), torch.cat(test_labels_list))
-        print(f"Test F1 Score: {test_f1}")
-        
+        for t in [10, 20, 30, 40, 50]:
+            test_acc = calculate_accuracy(torch.cat(test_preds_list[t]), torch.cat(test_labels_list[t]))
+            test_f1 = calculate_f1(torch.cat(test_preds_list[t]), torch.cat(test_labels_list[t]))
+            print(f"Test F1 Score @ t={t}: {test_f1}, Accuracy: {test_acc}")
+            wandb.log({f'test_accuracy_{t}': test_acc, f'test_f1_{t}': test_f1 })
+
 
         with open('test_metrics.csv', 'a', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(['Encoding Type', 'Label Type', 'Test Accuracy', 'F1_score'])
             writer.writerow([encoding_type, label_type, test_acc, test_f1])
 
-        wandb.log({'test_accuracy': test_acc, 'test_f1': test_f1 })
 
         with open('training_metrics.csv', 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(['Epoch', 'Train Loss', 'Train Accuracy','Train F1', 'Validation Loss', 'Validation Accuracy','Validation F1', 'Learning Rate'])
-            for i in range(400):
+            for i in range(wandb.config.epochs):
                 writer.writerow([metrics['epoch'][i], metrics['train_loss'][i], metrics['train_acc'][i], metrics['train_f1'][i],
                                 metrics['val_loss'][i], metrics['val_acc'][i],metrics['val_f1'][i], metrics['learning_rate'][i]])
 

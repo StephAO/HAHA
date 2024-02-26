@@ -7,9 +7,9 @@ sweep_config = {
         "batch_size": {
             "values": [128]
         },
-        "epochs": {"values": [1000, 800]},
+        "epochs": {"values": [10000]},
         "decay_step_size": {"values": [50]},
-        "decay_factor": {"values": [ 0.9]},
+        "decay_factor": {"values": [ 0.99]},
         "num_timesteps_to_consider": {"values": [10, 20, 30]} 
     },
 }
