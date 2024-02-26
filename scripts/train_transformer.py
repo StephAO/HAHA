@@ -17,10 +17,10 @@ import wandb
 sweep_id = wandb.sweep(sweep=sweep_config, project="HAHA_eyetracking")
 
 # Memmap file paths
-participant_memmap_file = "path/to/memmap/participant_memmap.dat"  # "path/to/memmap/participant_memmap.dat"
-obs_heatmap_memmap_file = "path/to/memmap/obs_heatmap_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
-subtask_memmap_file = "path/to/memmap/subtask_memmap_file.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
-gaze_obj_memmap_file = "path/to/memmap/gaze_obj_file.dat"  # "path/to/memmap/gaze_obj_file.dat"
+participant_memmap_file = "/home/stephane/HAHA/eye_data/participant_memmap.dat"  # "path/to/memmap/participant_memmap.dat"
+obs_heatmap_memmap_file = "/home/stephane/HAHA/eye_data/obs_heatmap_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
+subtask_memmap_file = "/home/stephane/HAHA/eye_data/subtask_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
+gaze_obj_memmap_file = "/home/stephane/HAHA/eye_data/gaze_obj_memmap.dat"  # "path/to/memmap/gaze_obj_file.dat"
 
 # only needed initially to make the memmaps, please comment out after the memmaps are created.
 # setup_and_process_xdf_files("/home/stephane/HAHA/eye_data/Data/xdf_files", participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
@@ -37,15 +37,16 @@ def sweep_train():
     # inputted to a Linear classifier not a transformer
     encoding_type = 'gd'
     # Label options are 'score', 'subtask', 'q1', 'q2', 'q3', 'q4', or 'q5
-    label_type = 'q2'
-    dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
-                                            encoding_type, label_type)
+    label_type = 'score'
+    
 
     # TODO ASAP save encoding type / label type with results / csv and in wandb logging to know what the results were for
     exp_name = f'{encoding_type}_{label_type}'
     # Configuration for hyperparameters
     with wandb.init(mode='online', group='EYE+GD') as run:
 
+        dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
+                                            encoding_type, label_type, num_timesteps = wandb.config.num_timesteps_to_consider)
 
         run.name = f'{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}'
 
@@ -109,11 +110,11 @@ def sweep_train():
             'val_loss': [],
             'val_acc': [],
             'val_f1':[],
-            'learning_rate': []
+            'learning_rate': [],
         }
         best_val_acc = 0.0
         
-        for epoch in range(400):
+        for epoch in range(wandb.config.epochs):
             train_labels_list, train_preds_list = [], []
             val_labels_list, val_preds_list = [], []
             # Training phase
@@ -122,18 +123,18 @@ def sweep_train():
             model.train()
             dataset.set_split('train')
             train_dataloader = DataLoader(dataset, batch_size=wandb.config.batch_size, shuffle=True, num_workers = 4)
+
             train_loss, train_acc = 0.0, 0.0
             for i, (data, labels) in enumerate(train_dataloader):
-
                 # comment the next 2 lines if label_type is not subtask    
                 # labels = labels[:, :, 0]
                 # labels = labels.long()
-                tensors = [label[0] for label in labels]  # This will create a list of tensors
+                # tensors = [label[0] for label in labels]  # This will create a list of tensors
 
                 # Stack the tensors to create a single tensor
-                labels = torch.stack(tensors)
-                data = torch.tensor(data, dtype=torch.float)
-                labels = torch.tensor(labels, dtype=torch.long)    
+                # labels = torch.stack(tensors)
+                #data = torch.tensor(data, dtype=torch.float)
+                #labels = torch.tensor(labels, dtype=torch.long)    
                 data, labels = data.to(device), labels.to(device)
                 optimizer.zero_grad()
 
@@ -159,6 +160,7 @@ def sweep_train():
                 # Calculate loss
                 loss = criterion(torch.reshape(outputs, (batch_size * seq_len, dataset.num_classes)),
                                 torch.reshape(labels, (batch_size * seq_len,)))
+
                 loss.backward()  # Backward pass
                 total_norm = 0
                 num_params = 0
@@ -255,7 +257,7 @@ def sweep_train():
             # Print epoch results
             print(
                 f"Epoch {epoch + 1}/{TransformerConfig.num_epochs} - Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, Train F1: {train_f1:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}, Val F1: {val_f1:.4f}")
-            wandb.log({'epoch': epoch + 1, 'train_loss': train_loss, 'train_f1': train_f1, 'val_loss': val_loss, 'train_acc': train_acc,'val_acc': val_acc, 'val_f1': val_f1 })
+            wandb.log({'epoch': epoch + 1, 'train_loss': train_loss, 'train_f1': train_f1, 'val_loss': val_loss, 'train_acc': train_acc,'val_acc': val_acc, 'val_f1': val_f1, 'lr': current_lr})
 
         # TODO ASAP load best model and evaluate on test set and include in csv
         # Make sure to index last timestep for accuracy calculation if label_type does not equal 'score'
@@ -349,5 +351,5 @@ def sweep_train():
         # wandb.log_artifact('model.pth', type='model')
 
 # sweep_train()
-wandb.agent(sweep_id, function=sweep_train, count=12)
+wandb.agent(sweep_id, function=sweep_train, count=1)
 

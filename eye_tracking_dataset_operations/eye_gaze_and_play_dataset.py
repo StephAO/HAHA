@@ -55,16 +55,16 @@ class EyeGazeAndPlayDataset(Dataset):
         if(self.curr_split == 'test'):
             traj_start_idx = self.horizon // 2
 
-        input = self.inputs[(participant_id, trial_id)][traj_start_idx:traj_start_idx + self.num_timesteps]
+        input_data = self.inputs[(participant_id, trial_id)][traj_start_idx:traj_start_idx + self.num_timesteps]
         if self.encoding_type in ['go', 'ceg']:
             # Sum over timesteps
-            input = np.sum(input, dim=0)
+            input_data = np.sum(input_data, dim=0)
             # Normalize
-            input = input / np.sum(input, dim=-1, keepdims=True)
+            input_data = input_data / np.sum(input_data, dim=-1, keepdims=True)
 
-        label = self.labels[(participant_id, trial_id)][traj_start_idx:traj_start_idx + self.num_timesteps]
-        
-        return input, label
+        label = self.labels[(participant_id, trial_id)][traj_start_idx:traj_start_idx + self.num_timesteps]  
+
+        return input_data, np.array(label)
 
     def process_data(self, participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap):
         """

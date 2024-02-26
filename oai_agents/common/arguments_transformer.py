@@ -3,14 +3,14 @@ sweep_config = {
     "method": "grid",
     "metric": {"goal": "minimize", "name": "validation_loss"},
     "parameters": {
-        "learning_rate": {"values": [3e-5]}, 
+        "learning_rate": {"values": [1e-5, 3e-5]}, 
         "batch_size": {
             "values": [128]
         },
-        "epochs": {"values": [400]},
+        "epochs": {"values": [1000, 800]},
         "decay_step_size": {"values": [50]},
         "decay_factor": {"values": [ 0.9]},
-        "num_timesteps_to_consider": {"values": [50]} 
+        "num_timesteps_to_consider": {"values": [10, 20, 30]} 
     },
 }
 
@@ -25,7 +25,7 @@ class TransformerConfig:
 
     # Warmup
     warmup_steps = 300
-    base_lr = 1e-6
+    base_lr = 1e-8
     max_lr = 1e-5
 
     decay_step_size = 50
