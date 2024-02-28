@@ -26,7 +26,21 @@ gaze_obj_memmap_file = "/home/stephane/HAHA/eye_data/gaze_obj_memmap.dat"  # "pa
 # setup_and_process_xdf_files("/home/stephane/HAHA/eye_data/Data/xdf_files", participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
 # exit(0)
 
-#  fill_participant_questions_from_csv(participant_memmap_file, '/home/stephane/HAHA/eye_data/GameData_EachTrial.csv')
+# fill_participant_questions_from_csv(participant_memmap_file, '/home/stephane/HAHA/eye_data/GameData_EachTrial.csv')
+# exit(0)
+
+# participant_memmap = np.memmap(
+#         participant_memmap_file,
+#         dtype=[('participant_id', 'S6'), ('trial_id', 'i4'), ('layout', 'i4'), ('score', 'i4'), ('start_index', 'i4'),
+#                ('end_index', 'i4'), ('Question_1', 'i4'), ('Question_2', 'i4'), ('Question_3', 'i4'), ('Question_4', 'i4'), ('Question_5', 'i4')],
+#         mode='r+',
+#         shape=(83 * 18,)
+#     )
+
+# for record in participant_memmap:
+#     if record['participant_id'] == b'CU2048':
+#         print(record)
+# exit(0)
 
 
 def sweep_train():
@@ -45,14 +59,17 @@ def sweep_train():
     # Configuration for hyperparameters
     with wandb.init(mode='online', group='EYE+GD') as run:
 
+        # layout options = 'asymmetric_advantages', 'coordination_ring','counter_circuit_o_1order'
+        layout = 'counter_circuit_o_1order'
         dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
-                                            encoding_type, label_type, num_timesteps = wandb.config.num_timesteps_to_consider)
+                                            encoding_type, label_type, num_timesteps = wandb.config.num_timesteps_to_consider, layout_to_use = layout)
 
         run.name = f'{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}'
 
         wandb.config.update({
         "encoding_type": encoding_type,
         "label_type": label_type,
+        "layout": layout,
         })
 
 
@@ -70,7 +87,7 @@ def sweep_train():
         model = model.to(device)
 
         criterion = nn.CrossEntropyLoss(ignore_index=-100)
-        optimizer = optim.Adam(model.parameters(), lr=wandb.config.learning_rate, weight_decay=0)
+        optimizer = optim.RAdam(model.parameters(), lr=wandb.config.learning_rate, weight_decay=0)
         scheduler = models.WarmupScheduler(optimizer, TransformerConfig.warmup_steps, TransformerConfig.base_lr,
                                         TransformerConfig.max_lr)
         scheduler_decay = StepLR(optimizer, step_size=wandb.config.decay_step_size, gamma=wandb.config.decay_factor)
@@ -129,7 +146,7 @@ def sweep_train():
                 # comment the next 2 lines if label_type is not subtask    
                 # labels = labels[:, :, 0]
                 # labels = labels.long()
-
+                
                 data, labels = data.to(device), labels.to(device)
                 optimizer.zero_grad()
 
@@ -164,10 +181,10 @@ def sweep_train():
 
                 # Calculate accuracy
                 _, predicted = torch.max(outputs, dim=2)
-                if label_type == 'score':
+                #if label_type == 'score':
                     # Only calculate accuracy on last step
-                    predicted = predicted[:, -1]
-                    labels = labels[:, -1]
+                #    predicted = predicted[:, -1]
+                #    labels = labels[:, -1]
 
                 predicted = predicted.view(-1)
                 labels = labels.view(-1)
@@ -210,10 +227,10 @@ def sweep_train():
 
                     # Calculate accuracy
                     _, predicted = torch.max(outputs, dim=2)
-                    if label_type == 'score':
+                    #if label_type == 'score':
                         # Only calculate accuracy on last step
-                        predicted = predicted[:, -1]
-                        labels = labels[:, -1]
+                    #    predicted = predicted[:, -1]
+                    #    labels = labels[:, -1]
                     predicted = predicted.view(-1)
                     labels = labels.view(-1)
                     val_labels_list.append(labels)
@@ -255,7 +272,8 @@ def sweep_train():
         model.eval()
         dataset.set_split('test')
         test_dataloader = DataLoader(dataset, batch_size=128, shuffle=False, num_workers = 4)
-        test_labels_list, test_preds_list = {}, {}
+        timesteps_to_test = [1, 2, 4, 8, 16, 32, 64]
+        test_labels_list, test_preds_list = {k: [] for k in timesteps_to_test}, {k: [] for k in timesteps_to_test}
         with torch.no_grad():
             for data, labels in test_dataloader:
                 # comment the next 2 lines if label_type is not subtask 
@@ -266,16 +284,16 @@ def sweep_train():
                 # Calculate accuracy
                 # Adjust the accuracy calculation based on your needs
                 _, predicted = torch.max(outputs, dim=2)
-                for t in [10, 20, 30, 40, 50]:
+                for t in timesteps_to_test:
                     # - 1 for indexing
                     test_labels_list[t].append(labels[:, t - 1].view(-1))
                     test_preds_list[t].append(predicted[:, t - 1].view(-1))
 
-        for t in [10, 20, 30, 40, 50]:
+        for t in timesteps_to_test:
             test_acc = calculate_accuracy(torch.cat(test_preds_list[t]), torch.cat(test_labels_list[t]))
             test_f1 = calculate_f1(torch.cat(test_preds_list[t]), torch.cat(test_labels_list[t]))
             print(f"Test F1 Score @ t={t}: {test_f1}, Accuracy: {test_acc}")
-            wandb.log({f'test_accuracy_{t}': test_acc, f'test_f1_{t}': test_f1 })
+            wandb.log({f'test_accuracy@t={t}': test_acc, f'test_f1@t={t}': test_f1 })
 
 
         with open('test_metrics.csv', 'a', newline='') as file:
@@ -334,5 +352,5 @@ def sweep_train():
         # wandb.log_artifact('model.pth', type='model')
 
 # sweep_train()
-wandb.agent(sweep_id, function=sweep_train, count=1)
+wandb.agent(sweep_id, function=sweep_train, count=12)
 

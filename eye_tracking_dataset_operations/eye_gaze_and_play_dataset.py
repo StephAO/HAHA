@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 
 class EyeGazeAndPlayDataset(Dataset):
     def __init__(self, participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap, encoding_type,
-                 label_type, num_bins=4, num_timesteps=50):
+                 label_type, num_bins=4, num_timesteps=50, layout_to_use = ''):
         self.encoding_type = encoding_type
         self.label_type = label_type
         # TODO add linear classifier for go and ceg
@@ -17,10 +17,21 @@ class EyeGazeAndPlayDataset(Dataset):
         self.num_trials_per_participant = 18
         self.horizon = 400
 
+        if layout_to_use == 'coordination_ring':
+            self.layout_to_use = 1
+        elif layout_to_use == 'asymmetric_advantages':
+            self.layout_to_use = 2
+        elif layout_to_use == 'counter_circuit_o_1order':
+            self.layout_to_use = 3
+        elif layout_to_use == '':
+            self.layout_to_use = 4
+
+        # self.inputs, self.labels = self.process_data(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap)
         self.inputs, self.labels = self.process_data(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap)
         self.participant_ids = list(self.participant_ids)
 
         print(self.participant_ids)
+        print(self.valid_trial_ids)
         self.input_dim = self.inputs[(self.participant_ids[0], 1)].shape[-1]
         self.num_classes = {'score': self.num_bins, 'subtask': 12, 'q1': 7, 'q2': 7, 'q3': 8, 'q4': 7, 'q5': 7}[self.label_type]
 
@@ -48,11 +59,17 @@ class EyeGazeAndPlayDataset(Dataset):
         participant_idx = idx // self.num_trials_per_participant
         participant_id = self.splits[self.curr_split][participant_idx]
         
-        trial_id = (idx % self.num_trials_per_participant) + 1
+       
+        if self.layout_to_use!=4:
+            valid_trials = self.valid_trial_ids[participant_id]
+            trial_id = valid_trials[idx % len(valid_trials)]
+        else:
+            trial_id = (idx % self.num_trials_per_participant) + 1
+        
 
         traj_start_idx = np.random.randint(0, self.horizon - self.num_timesteps)
 
-        if(self.curr_split == 'test'):
+        if(self.curr_split != 'train'):
             traj_start_idx = self.horizon // 2
 
         input_data = self.inputs[(participant_id, trial_id)][traj_start_idx:traj_start_idx + self.num_timesteps]
@@ -65,6 +82,7 @@ class EyeGazeAndPlayDataset(Dataset):
         label = self.labels[(participant_id, trial_id)][traj_start_idx:traj_start_idx + self.num_timesteps]  
 
         return input_data, np.array(label)
+
 
     def process_data(self, participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap):
         """
@@ -84,14 +102,24 @@ class EyeGazeAndPlayDataset(Dataset):
         input_data = {}
         labels = {}
         self.participant_ids = set()
+        self.valid_trial_ids = defaultdict(list)
 
         if self.label_type == 'score':
             self.all_scores = []
 
         for record in participant_memmap:
-            participant_id, trial_id, score, start_idx, end_idx, question_1, question_2, question_3, question_4, question_5 = record
+           
+            participant_id, trial_id, layout, score, start_idx, end_idx, question_1, question_2, question_3, question_4, question_5 = record
+            
+           
             if participant_id == b'' or participant_id in null_participants:
                 continue
+
+            if layout != 4:
+                if layout == self.layout_to_use:
+                    self.valid_trial_ids[participant_id].append(trial_id)
+            
+                
             self.participant_ids.add(participant_id)
             questions = [question_1, question_2, question_3, question_4, question_5]
 
@@ -103,7 +131,7 @@ class EyeGazeAndPlayDataset(Dataset):
                 # is set correctly
                 break
 
-            assert end_idx - start_idx == self.horizon, f'Expected {horizon} timesteps, got {end_idx - start_idx}'
+            assert end_idx - start_idx == self.horizon, f'Expected {self.horizon} timesteps, got {end_idx - start_idx}'
 
             if self.encoding_type == 'gd':
                 in_data = obs_heatmap_memmap[start_idx:end_idx, :-1]
@@ -136,6 +164,7 @@ class EyeGazeAndPlayDataset(Dataset):
 
         # Process scores into proficienty bins
         if self.label_type == 'score':
+            bin_counts = {i: 0 for i in range(self.num_bins)}
             # Calculate quantiles as bin edges
             self.quantiles = np.percentile(self.all_scores, np.linspace(0, 100, self.num_bins + 1))
             self.quantiles[-1] = self.quantiles[-1] + 1  # To ensure the maximum score falls within the last bin
@@ -143,6 +172,10 @@ class EyeGazeAndPlayDataset(Dataset):
 
             for k, v in labels.items():
                 labels[k] = np.digitize(v, self.quantiles, right=False) - 1
+                for bin_idx in labels[k]:
+                    bin_counts[bin_idx[0]] += 1
                 assert np.all(labels[k] >= 0) and np.all(labels[k] < self.num_bins), f'Invalid bin: {labels[k]}'
+
+            print('-->', bin_counts)
 
         return input_data, labels
