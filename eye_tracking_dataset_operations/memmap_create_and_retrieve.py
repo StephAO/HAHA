@@ -35,7 +35,7 @@ def return_memmaps(participant_memmap_file, obs_heatmap_memmap_file, subtask_mem
 
     participant_memmap = np.memmap(
         participant_memmap_file,
-        dtype=[('participant_id', 'S6'), ('trial_id', 'i4'),('layout', 'i4'), ('score', 'i4'), ('start_index', 'i4'), 
+        dtype=[('participant_id', 'S6'), ('trial_id', 'i4'),('layout', 'i4'), ('agent', 'i4'), ('score', 'i4'), ('start_index', 'i4'),
                ('end_index', 'i4'), ('Question_1', 'i4'), ('Question_2', 'i4'), ('Question_3', 'i4'), ('Question_4', 'i4'), ('Question_5', 'i4')],
         mode='r+',
         shape=(num_participants * num_trials_per_participant,)
@@ -96,7 +96,7 @@ def setup_and_process_xdf_files(data_folder, participant_memmap_file, obs_heatma
     # Create participant memmap
     participant_memmap = np.memmap(
         participant_memmap_file,
-        dtype=[('participant_id', 'S6'), ('trial_id', 'i4'), ('layout', 'i4'), ('score', 'i4'), ('start_index', 'i4'), ('end_index', 'i4'), ('Question_1', 'i4'), ('Question_2', 'i4'), ('Question_3', 'i4'), ('Question_4', 'i4'), ('Question_5', 'i4')],
+        dtype=[('participant_id', 'S6'), ('trial_id', 'i4'), ('layout', 'i4'), ('agent', 'i4'), ('score', 'i4'), ('start_index', 'i4'), ('end_index', 'i4'), ('Question_1', 'i4'), ('Question_2', 'i4'), ('Question_3', 'i4'), ('Question_4', 'i4'), ('Question_5', 'i4')],
         mode='w+',
         shape=(num_participants * num_trials_per_participant, )
     )

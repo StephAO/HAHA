@@ -3,10 +3,11 @@ import numpy as np
 import torch
 # from scripts.memmap_creation import participant_memmap, obs_heatmap_memmap
 from torch.utils.data import Dataset
+from eye_tracking_dataset_operations.preprocess_eyetracking import AGENT_TO_IDX, LAYOUT_TO_IDX
 
 class EyeGazeAndPlayDataset(Dataset):
     def __init__(self, participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap, encoding_type,
-                 label_type, num_bins=4, num_timesteps=50, layout_to_use = ''):
+                 label_type, num_bins=4, num_timesteps=50, layout_to_use = '', agent_to_use = ''):
         self.encoding_type = encoding_type
         self.label_type = label_type
         # TODO add linear classifier for go and ceg
@@ -16,18 +17,19 @@ class EyeGazeAndPlayDataset(Dataset):
         self.num_timesteps = num_timesteps
         self.horizon = 400
 
-        if layout_to_use == 'coordination_ring':
-            self.layout_to_use = 1
-            self.num_trials_per_participant = 6
-        elif layout_to_use == 'asymmetric_advantages':
-            self.layout_to_use = 2
-            self.num_trials_per_participant = 6
-        elif layout_to_use == 'counter_circuit_o_1order':
-            self.layout_to_use = 3
-            self.num_trials_per_participant = 6
-        elif layout_to_use == '':
+        self.num_trials_per_participant = 18
+        if layout_to_use in LAYOUT_TO_IDX:
+            self.layout_to_use = LAYOUT_TO_IDX[layout_to_use]
+            self.num_trials_per_participant = self.num_trials_per_participant // 3
+        else:
             self.layout_to_use = 4
-            self.num_trials_per_participant = 18
+
+        if agent_to_use in AGENT_TO_IDX:
+            self.agent_to_use = AGENT_TO_IDX[agent_to_use]
+            self.num_trials_per_participant = self.num_trials_per_participant // 3
+        else:
+            self.agent_to_use = 4
+
 
         # self.inputs, self.labels = self.process_data(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap)
         self.inputs, self.labels = self.process_data(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap)
@@ -115,18 +117,17 @@ class EyeGazeAndPlayDataset(Dataset):
 
         for record in participant_memmap:
            
-            participant_id, trial_id, layout, score, start_idx, end_idx, question_1, question_2, question_3, question_4, question_5 = record
+            participant_id, trial_id, layout, agent, score, start_idx, end_idx, question_1, question_2, question_3, question_4, question_5 = record
             
            
             if participant_id == b'' or participant_id in null_participants:
                 continue
 
-            if layout != 4:
-                if layout == self.layout_to_use:
-                    self.valid_trial_ids[participant_id].append(trial_id)
-                else:
-                    continue
-            
+
+            if (layout == self.layout_to_use or self.layout_to_use == 4) and (agent == self.agent_to_use or self.agent_to_use == 4):
+                self.valid_trial_ids[participant_id].append(trial_id)
+            else:
+                continue
                 
             self.participant_ids.add(participant_id)
             questions = [question_1, question_2, question_3, question_4, question_5]

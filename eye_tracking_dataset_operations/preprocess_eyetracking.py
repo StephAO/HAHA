@@ -19,6 +19,8 @@ desired_N = 9
 desired_M = 5
 
 GAZE_OBJ_TO_IDX = {'self': 0, 'teammate': 1, 'environment': 2}
+LAYOUT_TO_IDX = {'coordination_ring': 1, 'asymmetric_advantages': 2, 'counter_circuit_o_1order': 3}
+AGENT_TO_IDX = {'haha': 0, 'selfplay': 1, 'random_agent': 2}
 
 def map_eye_tracking(eye_data, top_left_x, top_left_y, surface_size, tile_size, grid_shape, hud_size, state, p_idx):
     grid_top_left = (top_left_x, top_left_y + hud_size)
@@ -124,13 +126,9 @@ def process_xdf_file(xdf_file_path):
         trial_id = game_data['trial_id']
         participant_id = str(game_data.get('user_id'))
         state = OvercookedState.from_dict(json.loads(game_data['state']))
-        trial_layout = game_data['layout_name']
-        if trial_layout == 'coordination_ring':
-            layout = 1
-        elif trial_layout == 'asymmetric_advantages':
-            layout = 2
-        elif trial_layout == 'counter_circuit_o_1order':
-            layout = 3
+
+        layout = LAYOUT_TO_IDX[game_data['layout_name']]
+        agent = AGENT_TO_IDX[game_data['agent']]
 
         # Calculate subtask data
         # New trial, ignore eye_date between trials
@@ -181,7 +179,7 @@ def process_xdf_file(xdf_file_path):
         visual_obs_padded = pad_to_shape(visual_observation, (desired_N, desired_M))
         heatmap_padded = pad_to_shape(heatmap, (desired_N, desired_M))
         highest_score = max_scores[trial_id]
-        processed_data[participant_id][trial_id].append((visual_obs_padded, heatmap_padded, highest_score, layout))
+        processed_data[participant_id][trial_id].append((visual_obs_padded, heatmap_padded, highest_score, layout, agent))
 
     # Label last subtask as unknown
     for i in range(2):
@@ -225,7 +223,7 @@ def process_folder_with_xdf_files(folder_path, obs_heatmap_memmap, participant_m
 
                 assert len(data_list) == 400
                 for i, data in enumerate(data_list):
-                    observation, heatmap, score, layout = data
+                    observation, heatmap, score, layout, agent = data
 
                     # Store observation and heatmap data in obs_heatmap_memmap
                     obs_heatmap_memmap[next_index_for_obs_heatmap, :-1, :, :] = observation
@@ -240,7 +238,7 @@ def process_folder_with_xdf_files(folder_path, obs_heatmap_memmap, participant_m
                 # Update the participant_memmap with a single record for the trial
                 # TODO ASAP 0, 0, 0, 0, 0 should probably updated to include question answers
                 participant_memmap[participant_index] = (
-                    userid.encode(), trial_id, layout, score, 
+                    userid.encode(), trial_id, layout, agent, score,
                     start_index, next_index_for_obs_heatmap, 0, 0, 0, 0, 0
                 )
                 participant_index += 1
@@ -258,7 +256,7 @@ def fill_participant_questions_from_csv(participant_memmap_file, csv_file_path):
     # Load participant data from CSV into a dictionary
     participant_memmap = np.memmap(
         participant_memmap_file,
-        dtype=[('participant_id', 'S6'), ('trial_id', 'i4'), ('layout', 'i4'), ('score', 'i4'), ('start_index', 'i4'),
+        dtype=[('participant_id', 'S6'), ('trial_id', 'i4'), ('layout', 'i4'), ('score', 'i4'), ('agent', 'i4'), ('start_index', 'i4'),
                ('end_index', 'i4'), ('Question_1', 'i4'), ('Question_2', 'i4'), ('Question_3', 'i4'), ('Question_4', 'i4'), ('Question_5', 'i4')],
         mode='r+',
         shape=(num_participants * num_trials_per_participant,)

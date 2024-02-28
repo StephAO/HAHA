@@ -23,10 +23,8 @@ subtask_memmap_file = "/home/stephane/HAHA/eye_data/subtask_memmap.dat"  # "path
 gaze_obj_memmap_file = "/home/stephane/HAHA/eye_data/gaze_obj_memmap.dat"  # "path/to/memmap/gaze_obj_file.dat"
 
 # only needed initially to make the memmaps, please comment out after the memmaps are created.
-# setup_and_process_xdf_files("/home/stephane/HAHA/eye_data/Data/xdf_files", participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
-# exit(0)
-
-# fill_participant_questions_from_csv(participant_memmap_file, '/home/stephane/HAHA/eye_data/GameData_EachTrial.csv')
+setup_and_process_xdf_files("/home/stephane/HAHA/eye_data/Data/xdf_files", participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
+fill_participant_questions_from_csv(participant_memmap_file, '/home/stephane/HAHA/eye_data/GameData_EachTrial.csv')
 # exit(0)
 
 # participant_memmap = np.memmap(
