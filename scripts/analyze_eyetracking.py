@@ -85,6 +85,10 @@ def create_full_dataframe(xdf_file):
     next_game_data = json.loads(next_game_str)
     next_state = OvercookedState.from_dict(json.loads(next_game_data['state']))
 
+    user_id = curr_game_data['user_id']
+    player_subtask_count = {}
+    player_subtask_count[(curr_game_data['trial_id'], curr_game_data['agent'], curr_game_data['layout_name'])] = [0, 0]
+
     object_columns = {k: [] for k in ['Game_Timestep', 'Trial_ID', 'AvgGridX', 'AvgGridY', 'AvgObj', 'LObj', 'RObj']}
     eye_data_df['p1_curr_subtask'] = None
     eye_data_df['p2_curr_subtask'] = None
@@ -114,9 +118,11 @@ def create_full_dataframe(xdf_file):
                     eye_data_df.loc[subtask_start_idx[i]:index + 1, f'p{i + 1}_curr_subtask'] = subtask
                     subtask_start_idx[i] = index + 1
 
+
             curr_next_same_game = True
             if curr_trial_id != next_game_data['trial_id']:
                 curr_next_same_game = False
+                player_subtask_count[(next_game_data['trial_id'], next_game_data['agent'], next_game_data['layout_name'])] = [0, 0]
                 for i in range(2):
                     subtask = Subtasks.SUBTASKS_TO_IDS['unknown']
                     # NOTE because this is based on eye data index, the "next" subtask starts one eye dataframe index
@@ -140,6 +146,7 @@ def create_full_dataframe(xdf_file):
                         # Label previous actions with subtask
                         eye_data_df.loc[subtask_start_idx[i]:index + 1, f'p{i + 1}_curr_subtask'] = subtask
                         subtask_start_idx[i] = index + 1
+                        player_subtask_count[(curr_game_data['trial_id'], curr_game_data['agent'], curr_game_data['layout_name'])][i] += 1
 
         # New trial, remove data between trials
         if curr_trial_id != next_game_data['trial_id']:
@@ -213,6 +220,7 @@ def create_full_dataframe(xdf_file):
     csv_filename = str(xdf_file).replace('.xdf', '_GazeLabels.csv')
     eye_data_df.to_csv(csv_filename)
     print(f'Created {csv_filename} of length {len(eye_data_df)} from {xdf_file}')
+    return user_id, player_subtask_count
 
 
 def eye_pos_to_gaze_obj(pos, state, mdp, p_idx):
@@ -319,10 +327,12 @@ def contains_gaze_labels(files_in_folder):
 
 
 if __name__ == '__main__':
-    root_directory = 'C:/Users/anthony.ries/OneDrive - US Army/Documents/MDrive/Experiments/OAI_eyetracking/Data/'
+    # root_directory = 'C:/Users/anthony.ries/OneDrive - US Army/Documents/MDrive/Experiments/OAI_eyetracking/Data/'
+    root_directory = 'data/eye_tracking_data/'
+    player_metrics = {}
     for folder in os.listdir(root_directory):
         folder_path = os.path.join(root_directory, folder)
-
+        print(folder_path)
         if os.path.isdir(folder_path) and (folder.startswith("AF") or folder.startswith("CU")):
             files_in_folder = os.listdir(folder_path)
 
@@ -335,7 +345,21 @@ if __name__ == '__main__':
 
                 # Check if it is a file and has a .xdf extension
                 if os.path.isfile(file_path) and filename.endswith('.xdf'):
-                    create_full_dataframe(file_path)
+                    user_id, subtask_counts = create_full_dataframe(file_path)
+                    player_metrics[user_id] = subtask_counts
+
+
+    player_metrics_df = pd.DataFrame()
+    for user_id, subtask_counts in player_metrics.items():
+        for (trial_id, agent_name, layout_name), counts in subtask_counts.items():
+            humanCRC = (counts[0] / (counts[0] + counts[1])) - (counts[1] / (counts[0] + counts[1]))
+            player_metrics_df = player_metrics_df.append({'user_id': user_id, 'trial_id': trial_id,
+                                                          'agent_name': agent_name, 'layout_name': layout_name,
+                                                          'Human_PCA': counts[0], 'Agent_PCA': counts[1],
+                                                          'Human_PCA_duration': counts[0] / 80, 'Agent_PCA_duration': counts[1] / 80,
+                                                          'Human_CRC': humanCRC, 'Agent_CRC': -humanCRC}, ignore_index=True)
+    print(player_metrics_df)
+    player_metrics_df.to_csv(os.path.join(root_directory, 'player_metrics.csv'))
 
                     
     # create_heatmap('data/eye_tracking_data/oaiET_stephane_test2.xdf')
