@@ -14,17 +14,20 @@ class EyeGazeAndPlayDataset(Dataset):
             assert self.label_type != 'score', f'Encoding type {self.encoding_type} does not support score labels'
         self.num_bins = num_bins
         self.num_timesteps = num_timesteps
-        self.num_trials_per_participant = 18
         self.horizon = 400
 
         if layout_to_use == 'coordination_ring':
             self.layout_to_use = 1
+            self.num_trials_per_participant = 6
         elif layout_to_use == 'asymmetric_advantages':
             self.layout_to_use = 2
+            self.num_trials_per_participant = 6
         elif layout_to_use == 'counter_circuit_o_1order':
             self.layout_to_use = 3
+            self.num_trials_per_participant = 6
         elif layout_to_use == '':
             self.layout_to_use = 4
+            self.num_trials_per_participant = 18
 
         # self.inputs, self.labels = self.process_data(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap)
         self.inputs, self.labels = self.process_data(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap)
@@ -32,7 +35,9 @@ class EyeGazeAndPlayDataset(Dataset):
 
         print(self.participant_ids)
         print(self.valid_trial_ids)
-        self.input_dim = self.inputs[(self.participant_ids[0], 1)].shape[-1]
+        p_id = self.participant_ids[0]
+        trial_id = self.valid_trial_ids[p_id][0]
+        self.input_dim = self.inputs[(p_id, trial_id)].shape[-1]
         self.num_classes = {'score': self.num_bins, 'subtask': 12, 'q1': 7, 'q2': 7, 'q3': 8, 'q4': 7, 'q5': 7}[self.label_type]
 
         train_size, test_size = int(np.ceil(0.8 * len(self.participant_ids))), int(0.1 * np.ceil(len(self.participant_ids)))
@@ -41,10 +46,10 @@ class EyeGazeAndPlayDataset(Dataset):
         #                'test': self.participant_ids[train_size:train_size + test_size],
         #                'val': self.participant_ids[train_size + test_size:]}
 
-        self.splits = {'train': [b'AF1021', b'CU2050', b'AF1057', b'AF1024', b'CU2047', b'AF1034', b'CU2017', b'AF1007', b'CU2014', b'CU1040', b'AF1046', b'AF1037', b'AF1048', b'CU2025', b'CU2046', b'CU2038', b'AF1056', b'CU2016', b'CU2032', b'AF1005', b'AF1039', b'CU2042', b'CU2008', b'AF1045', b'CU2018', b'AF1019', b'AF1026', b'AF1023', b'AF1052', b'CU2026', b'CU2019', b'AF1016', b'CU2048', b'CU2040', b'CU2052', b'AF1042', b'AF1008', b'AF1036', b'CU2015', b'AF1013', b'CU2028', b'CU2045', b'AF1012', b'AF1058', b'AF1032', b'AF1003', b'AF1053', b'AF1015', b'CU2044', b'CU2024', b'AF1051', b'AF1062', b'AF1028', b'CU2003', b'CU2002', b'AF1050', b'CU2030', b'CU2049', b'AF1041', b'AF1031'],
+        self.splits = {'train': [b'AF1021', b'CU2050', b'AF1057', b'AF1024', b'CU2047', b'AF1034', b'CU2017', b'AF1007', b'CU2014', b'CU1040', b'AF1046', b'AF1037', b'AF1048', b'CU2025', b'CU2046', b'CU2038', b'AF1056', b'CU2016', b'CU2032', b'AF1005', b'AF1039', b'CU2042', b'CU2008', b'AF1045', b'CU2018', b'AF1019', b'AF1026', b'AF1023', b'AF1052', b'CU2019', b'AF1016', b'CU2048', b'CU2040', b'CU2052', b'AF1042', b'AF1008', b'AF1036', b'CU2015', b'AF1013', b'CU2028', b'CU2045', b'AF1012', b'AF1058', b'AF1032', b'AF1003', b'AF1053', b'AF1015', b'CU2044', b'CU2024', b'AF1051', b'AF1062', b'AF1028', b'CU2003', b'CU2002', b'AF1050', b'CU2030', b'CU2049', b'AF1041', b'AF1031'],
                        'test': [b'AF1028', b'CU2002', b'CU2035', b'CU2046', b'CU2050', b'AF1042', b'AF1005', b'AF1057', b'AF1013', b'AF1062'],
                        'val': [b'AF1003', b'CU2019', b'AF1050', b'AF1023', b'AF1056']}
-        
+        # In train: , b'CU2026'
         
         self.curr_split = 'train'
 
@@ -62,6 +67,7 @@ class EyeGazeAndPlayDataset(Dataset):
        
         if self.layout_to_use!=4:
             valid_trials = self.valid_trial_ids[participant_id]
+            assert len(valid_trials) == self.num_trials_per_participant
             trial_id = valid_trials[idx % len(valid_trials)]
         else:
             trial_id = (idx % self.num_trials_per_participant) + 1
@@ -118,6 +124,8 @@ class EyeGazeAndPlayDataset(Dataset):
             if layout != 4:
                 if layout == self.layout_to_use:
                     self.valid_trial_ids[participant_id].append(trial_id)
+                else:
+                    continue
             
                 
             self.participant_ids.add(participant_id)
@@ -177,5 +185,4 @@ class EyeGazeAndPlayDataset(Dataset):
                 assert np.all(labels[k] >= 0) and np.all(labels[k] < self.num_bins), f'Invalid bin: {labels[k]}'
 
             print('-->', bin_counts)
-
         return input_data, labels

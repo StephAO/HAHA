@@ -43,7 +43,7 @@ gaze_obj_memmap_file = "/home/stephane/HAHA/eye_data/gaze_obj_memmap.dat"  # "pa
 # exit(0)
 
 
-def sweep_train():
+def train():
     participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap = return_memmaps(participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
 
     # Encoding options are Game Data 'gd', Eye Gaze 'eg', both 'gd+eg', Gaze Object 'go', or Collapsed Eye Gaze 'ceg'
@@ -51,7 +51,7 @@ def sweep_train():
     # inputted to a Linear classifier not a transformer
     encoding_type = 'gd'
     # Label options are 'score', 'subtask', 'q1', 'q2', 'q3', 'q4', or 'q5
-    label_type = 'score'
+    label_type = 'q3'
     
 
     # TODO ASAP save encoding type / label type with results / csv and in wandb logging to know what the results were for
@@ -60,7 +60,7 @@ def sweep_train():
     with wandb.init(mode='online', group='EYE+GD') as run:
 
         # layout options = 'asymmetric_advantages', 'coordination_ring','counter_circuit_o_1order'
-        layout = 'counter_circuit_o_1order'
+        layout = 'asymmetric_advantages'#'counter_circuit_o_1order'
         dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
                                             encoding_type, label_type, num_timesteps = wandb.config.num_timesteps_to_consider, layout_to_use = layout)
 
@@ -351,6 +351,6 @@ def sweep_train():
         # wandb.save('model.pth')
         # wandb.log_artifact('model.pth', type='model')
 
-# sweep_train()
-wandb.agent(sweep_id, function=sweep_train, count=12)
+#train()
+wandb.agent(sweep_id, function=train, count=1)
 
