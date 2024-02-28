@@ -327,8 +327,7 @@ def contains_gaze_labels(files_in_folder):
 
 
 if __name__ == '__main__':
-    # root_directory = 'C:/Users/anthony.ries/OneDrive - US Army/Documents/MDrive/Experiments/OAI_eyetracking/Data/'
-    root_directory = 'data/eye_tracking_data/'
+    root_directory = 'C:/Users/anthony.ries/OneDrive - US Army/Documents/MDrive/Experiments/OAI_eyetracking/Data/'
     player_metrics = {}
     for folder in os.listdir(root_directory):
         folder_path = os.path.join(root_directory, folder)
