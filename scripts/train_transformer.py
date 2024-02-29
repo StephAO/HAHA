@@ -153,10 +153,10 @@ def train():
                 # Forward pass
                 outputs = model(data)  # outputs shape: [batch_size, seq_len, num_classes]
 
-                if i == 0:
-                    print(f"Epoch {epoch + 1}")
-                    print(f"Input shape: {data.shape}")
-                    print(f"Output shape: {outputs.shape}")
+                # if i == 0:
+                #     print(f"Epoch {epoch + 1}")
+                #     print(f"Input shape: {data.shape}")
+                #     print(f"Output shape: {outputs.shape}")
 
                 # Obtain batch size and sequence length from data
                 batch_size, seq_len, _ = data.shape
@@ -262,8 +262,8 @@ def train():
             metrics['val_f1'].append(val_f1)
 
             # Print epoch results
-            print(
-                f"Epoch {epoch + 1}/{TransformerConfig.num_epochs} - Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, Train F1: {train_f1:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}, Val F1: {val_f1:.4f}")
+            # print(
+            #     f"Epoch {epoch + 1}/{TransformerConfig.num_epochs} - Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, Train F1: {train_f1:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}, Val F1: {val_f1:.4f}")
             wandb.log({'epoch': epoch + 1, 'train_loss': train_loss, 'train_f1': train_f1, 'val_loss': val_loss, 'train_acc': train_acc,'val_acc': val_acc, 'val_f1': val_f1, 'lr': current_lr})
 
         # TODO ASAP load best model and evaluate on test set and include in csv

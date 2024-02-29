@@ -106,6 +106,20 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 
+class HeadTransform(nn.Module):
+    # Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/bert/modeling_bert.py#L664C1-L678C29
+    def __init__(self, d_model):
+        super().__init__()
+        self.dense = nn.Linear(d_model, d_model)
+        self.transform_act_fn = nn.ReLU()
+        self.LayerNorm = nn.LayerNorm(d_model, eps=1e-6)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.transform_act_fn(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states)
+        return hidden_states
+
 class SimpleTransformer(nn.Module):
     def __init__(self, d_model, nhead, num_layers, dim_feedforward, num_classes, input_dim, max_len, dropout=0.0):
         super(SimpleTransformer, self).__init__()
@@ -113,10 +127,11 @@ class SimpleTransformer(nn.Module):
         # self.cls_token = nn.Parameter(torch.zeros(1, 1, d_model))
         # nn.init.xavier_uniform_(self.cls_token)
 
-        self.input_linear = nn.Linear(input_dim, d_model)
+        self.input_encoder = nn.Sequential([nn.Linear(input_dim, d_model), nn.ReLU(), nn.Linear(d_model, d_model)])
         self.pos_encoder = PositionalEncoding(d_model, max_len, dropout=dropout)
         encoder_layers = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers)
+        self.transform_head = HeadTransform(d_model)
         self.output_layer = nn.Linear(d_model, num_classes)
 
         self._init_parameters()
@@ -130,7 +145,7 @@ class SimpleTransformer(nn.Module):
 
     def forward(self, src):
         batch_size, seq_len, _ = src.shape
-        src = self.input_linear(src)
+        src = self.input_encoder(src)
         src = self.pos_encoder(src)
 
         device = src.device
@@ -138,6 +153,7 @@ class SimpleTransformer(nn.Module):
         causal_mask = self.generate_square_subsequent_mask(batch_size).to(device)
 
         output = self.transformer_encoder(src, mask=causal_mask, src_key_padding_mask=att_mask, is_causal=True)
+        output = self.transform_head(output)
         return self.output_layer(output)
 
     def _init_parameters(self):
