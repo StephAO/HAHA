@@ -163,7 +163,7 @@ class EyeGazeAndPlayDataset(Dataset):
             if self.label_type == 'score':
                 labels[(participant_id, trial_id)] = np.full((self.horizon, 1), score).tolist()
             elif self.label_type == 'subtask':
-                labels[(participant_id, trial_id)] = subtask_memmap[start_idx:end_idx]
+                labels[(participant_id, trial_id)] = subtask_memmap[start_idx:end_idx, 0].astype(int)
             elif self.label_type in ['q1', 'q2', 'q3', 'q4', 'q5']:
                 q_idx = int(self.label_type[1]) - 1
                 answer = questions[q_idx]

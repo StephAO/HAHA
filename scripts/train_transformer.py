@@ -23,9 +23,9 @@ subtask_memmap_file = "/home/stephane/HAHA/eye_data/subtask_memmap.dat"  # "path
 gaze_obj_memmap_file = "/home/stephane/HAHA/eye_data/gaze_obj_memmap.dat"  # "path/to/memmap/gaze_obj_file.dat"
 
 # only needed initially to make the memmaps, please comment out after the memmaps are created.
-setup_and_process_xdf_files("/home/stephane/HAHA/eye_data/Data/xdf_files", participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
-fill_participant_questions_from_csv(participant_memmap_file, '/home/stephane/HAHA/eye_data/GameData_EachTrial.csv')
-# exit(0)
+#setup_and_process_xdf_files("/home/stephane/HAHA/eye_data/Data/xdf_files", participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
+#fill_participant_questions_from_csv(participant_memmap_file, '/home/stephane/HAHA/eye_data/GameData_EachTrial.csv')
+#exit(0)
 
 # participant_memmap = np.memmap(
 #         participant_memmap_file,
@@ -49,7 +49,7 @@ def train():
     # inputted to a Linear classifier not a transformer
     encoding_type = 'gd'
     # Label options are 'score', 'subtask', 'q1', 'q2', 'q3', 'q4', or 'q5
-    label_type = 'q3'
+    label_type = 'score'
     
 
     # TODO ASAP save encoding type / label type with results / csv and in wandb logging to know what the results were for
@@ -58,9 +58,10 @@ def train():
     with wandb.init(mode='online', group='EYE+GD') as run:
 
         # layout options = 'asymmetric_advantages', 'coordination_ring','counter_circuit_o_1order'
-        layout = 'asymmetric_advantages'#'counter_circuit_o_1order'
+        layout = 'counter_circuit_o_1order'#'asymmetric_advantages'#'counter_circuit_o_1order'
+        agent_name = 'random_agent'
         dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
-                                            encoding_type, label_type, num_timesteps = wandb.config.num_timesteps_to_consider, layout_to_use = layout)
+                                            encoding_type, label_type, num_timesteps = wandb.config.num_timesteps_to_consider, layout_to_use = layout, agent_to_use=agent_name)
 
         run.name = f'{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}'
 
@@ -68,6 +69,7 @@ def train():
         "encoding_type": encoding_type,
         "label_type": label_type,
         "layout": layout,
+        "agent": agent_name
         })
 
 
@@ -270,7 +272,7 @@ def train():
         model.eval()
         dataset.set_split('test')
         test_dataloader = DataLoader(dataset, batch_size=128, shuffle=False, num_workers = 4)
-        timesteps_to_test = [1, 2, 4, 8, 16, 32, 64]
+        timesteps_to_test = list(range(64))#[1, 2, 4, 8, 16, 32, 64]
         test_labels_list, test_preds_list = {k: [] for k in timesteps_to_test}, {k: [] for k in timesteps_to_test}
         with torch.no_grad():
             for data, labels in test_dataloader:
@@ -291,7 +293,7 @@ def train():
             test_acc = calculate_accuracy(torch.cat(test_preds_list[t]), torch.cat(test_labels_list[t]))
             test_f1 = calculate_f1(torch.cat(test_preds_list[t]), torch.cat(test_labels_list[t]))
             print(f"Test F1 Score @ t={t}: {test_f1}, Accuracy: {test_acc}")
-            wandb.log({f'test_accuracy@t={t}': test_acc, f'test_f1@t={t}': test_f1 })
+            wandb.log({'timestep': t, f'test_accuracy': test_acc, f'test_f1': test_f1 })
 
 
         with open('test_metrics.csv', 'a', newline='') as file:
