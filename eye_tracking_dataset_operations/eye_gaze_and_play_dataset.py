@@ -4,6 +4,8 @@ import torch
 # from scripts.memmap_creation import participant_memmap, obs_heatmap_memmap
 from torch.utils.data import Dataset
 from eye_tracking_dataset_operations.preprocess_eyetracking import AGENT_TO_IDX, LAYOUT_TO_IDX
+from sklearn.metrics import f1_score
+
 
 class EyeGazeAndPlayDataset(Dataset):
     def __init__(self, participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap, encoding_type,
@@ -54,6 +56,23 @@ class EyeGazeAndPlayDataset(Dataset):
         # In train: , b'CU2026'
         
         self.curr_split = 'train'
+        self.calculate_split_distributions()
+
+    def calculate_split_distributions(self):
+        for split in ['train', 'test', 'val']:
+            bin_counts = [0 for _ in range(self.num_bins)]
+            true_labels = []
+            print(f'{split} split: {len(self.splits[split])} participants')
+            for p_id in self.splits[split]:
+                for t_id in self.valid_trial_ids[p_id]:
+                    bin_counts[self.labels[(p_id, t_id)][0]] += 1
+                    true_labels.append(self.labels[(p_id, t_id)][0])
+            preds = np.full_like(true_labels, np.argmax(bin_counts))
+            print(f'{split} split bin counts: {bin_counts}')
+            print(f'Most frequent class accuracy: {max(bin_counts) / sum(bin_counts)}')
+            print(f'Most frequent class f1: {f1_score(true_labels, preds, average="weighted")}}')
+            print(bin_counts)
+
 
     def set_split(self, split):
         assert split in ['train', 'test', 'val']
@@ -65,15 +84,13 @@ class EyeGazeAndPlayDataset(Dataset):
     def __getitem__(self, idx):
         participant_idx = idx // self.num_trials_per_participant
         participant_id = self.splits[self.curr_split][participant_idx]
-        
-       
+
         if self.layout_to_use!=4:
             valid_trials = self.valid_trial_ids[participant_id]
             assert len(valid_trials) == self.num_trials_per_participant
             trial_id = valid_trials[idx % len(valid_trials)]
         else:
             trial_id = (idx % self.num_trials_per_participant) + 1
-        
 
         traj_start_idx = 0#np.random.randint(0, self.horizon - self.num_timesteps)
 
