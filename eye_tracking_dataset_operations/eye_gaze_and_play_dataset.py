@@ -7,7 +7,7 @@ from eye_tracking_dataset_operations.preprocess_eyetracking import AGENT_TO_IDX,
 
 class EyeGazeAndPlayDataset(Dataset):
     def __init__(self, participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap, encoding_type,
-                 label_type, num_bins=4, num_timesteps=50, layout_to_use = '', agent_to_use = ''):
+                 label_type, num_bins=3, num_timesteps=50, layout_to_use = '', agent_to_use = ''):
         self.encoding_type = encoding_type
         self.label_type = label_type
         # TODO add linear classifier for go and ceg
@@ -75,10 +75,10 @@ class EyeGazeAndPlayDataset(Dataset):
             trial_id = (idx % self.num_trials_per_participant) + 1
         
 
-        traj_start_idx = np.random.randint(0, self.horizon - self.num_timesteps)
+        traj_start_idx = 0#np.random.randint(0, self.horizon - self.num_timesteps)
 
-        if(self.curr_split != 'train'):
-            traj_start_idx = self.horizon // 2
+        #if(self.curr_split != 'train'):
+        #    traj_start_idx = self.horizon // 2
 
         input_data = self.inputs[(participant_id, trial_id)][traj_start_idx:traj_start_idx + self.num_timesteps]
         if self.encoding_type in ['go', 'ceg']:

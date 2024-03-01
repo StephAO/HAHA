@@ -63,6 +63,21 @@ def train():
         dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
                                             encoding_type, label_type, num_timesteps = wandb.config.num_timesteps_to_consider, layout_to_use = layout, agent_to_use=agent_name)
 
+        ############3333
+        #test = None
+        #for i in range(len(dataset)):
+        #    data, labels = dataset[i]
+        #    if test is None:
+        #        test = data
+        #    print(data.shape)
+        #    if not np.all(data[0] == test[0]):
+        #        import sys
+        #        np.set_printoptions(threshold=sys.maxsize)
+        #        print(i, test[0], data[0])
+        #        break
+        #exit(0)
+        ###############
+
         run.name = f'{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}'
 
         wandb.config.update({
@@ -272,7 +287,7 @@ def train():
         model.eval()
         dataset.set_split('test')
         test_dataloader = DataLoader(dataset, batch_size=128, shuffle=False, num_workers = 4)
-        timesteps_to_test = list(range(64))#[1, 2, 4, 8, 16, 32, 64]
+        timesteps_to_test = list(range(400))#[1, 2, 4, 8, 16, 32, 64]
         test_labels_list, test_preds_list = {k: [] for k in timesteps_to_test}, {k: [] for k in timesteps_to_test}
         with torch.no_grad():
             for data, labels in test_dataloader:

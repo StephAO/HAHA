@@ -7,10 +7,10 @@ sweep_config = {
         "batch_size": {
             "values": [128]
         },
-        "epochs": {"values": [2000]},
-        "decay_step_size": {"values": [50]},
-        "decay_factor": {"values": [ 0.9]},
-        "num_timesteps_to_consider": {"values": [64]} 
+        "epochs": {"values": [10000]},
+        "decay_step_size": {"values": [1]},
+        "decay_factor": {"values": [ 0.999]},
+        "num_timesteps_to_consider": {"values": [400]} 
     },
 }
 
@@ -24,7 +24,7 @@ class TransformerConfig:
     dim_feedforward = 2048
 
     # Warmup
-    warmup_steps = 400
+    warmup_steps = 2000
     base_lr = 1e-8
     max_lr = 1e-5
 

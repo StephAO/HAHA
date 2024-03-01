@@ -127,7 +127,7 @@ class SimpleTransformer(nn.Module):
         # self.cls_token = nn.Parameter(torch.zeros(1, 1, d_model))
         # nn.init.xavier_uniform_(self.cls_token)
 
-        self.input_encoder = nn.Sequential([nn.Linear(input_dim, d_model), nn.ReLU(), nn.Linear(d_model, d_model)])
+        self.input_encoder = nn.Sequential(nn.Linear(input_dim, d_model), nn.ReLU(), nn.Linear(d_model, d_model))
         self.pos_encoder = PositionalEncoding(d_model, max_len, dropout=dropout)
         encoder_layers = nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers)
