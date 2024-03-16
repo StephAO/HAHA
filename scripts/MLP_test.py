@@ -85,7 +85,7 @@ class SimpleMLP(nn.Module):
 #     training_filepath = f'mlp_training_results_{encoding_type}_{label_type}.csv'
 #     write_results_to_csv(training_results, ['Epoch', 'Training Loss', 'Training Accuracy'], training_filepath)
 
-def train_mlp(model, dataset, device, encoding_type, label_type, layout):
+def train_mlp(model, dataset, device, encoding_type, label_type, layout, agent):
     model.train()
     dataset.set_split('train')
     dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
@@ -93,7 +93,7 @@ def train_mlp(model, dataset, device, encoding_type, label_type, layout):
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
     
     training_results = []
-    for epoch in range(4000):  # Adjust epochs as needed
+    for epoch in range(4000): 
         # print(f"Starting training epoch {epoch+1}")
         total_loss = 0
         correct_predictions = 0
@@ -124,12 +124,13 @@ def train_mlp(model, dataset, device, encoding_type, label_type, layout):
         accuracy = correct_predictions / total_predictions
         avg_f1 = f1_score(all_labels, all_predictions, average='weighted')
         print(f"\tEpoch {epoch+1} completed: Avg Loss = {avg_loss}, Avg Accuracy = {accuracy}, Avg F1 Score = {avg_f1}")
-        training_results.append((layout, epoch + 1, avg_loss, accuracy, avg_f1))
+        training_results.append((agent, layout, epoch + 1, avg_loss, accuracy, avg_f1))
     
     training_filepath = f'mlp_training_results_{encoding_type}_{label_type}.csv'
-    with open(training_filepath, 'w', newline='') as f:
+    with open(training_filepath, 'a', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['Layout', 'Epoch', 'Training Loss', 'Training Accuracy', 'Training F1 Score'])
+        if os.stat(training_filepath).st_size == 0:
+            writer.writerow(['Agent', 'Layout', 'Epoch', 'Training Loss', 'Training Accuracy', 'Training F1 Score'])
         for row in training_results:
             writer.writerow(row)
 
@@ -199,7 +200,7 @@ def train_mlp(model, dataset, device, encoding_type, label_type, layout):
 
 
 
-def test_mlp(model, dataset, device, encoding_type, label_type, layout):
+def test_mlp(model, dataset, device, encoding_type, label_type, layout, agent):
     model.eval()
     dataset.set_split('test')
     dataloader = DataLoader(dataset, batch_size=128, shuffle=False)
@@ -231,12 +232,12 @@ def test_mlp(model, dataset, device, encoding_type, label_type, layout):
     avg_accuracy = np.mean(batch_accuracies)
     avg_f1 = f1_score(all_labels, all_predictions, average='weighted')
 
-    testing_results = [(layout, encoding_type, avg_loss, avg_accuracy, avg_f1)]
+    testing_results = [(agent, layout, encoding_type, avg_loss, avg_accuracy, avg_f1)]
     testing_filepath = f'mlp_testing_detailed_results_{encoding_type}_{label_type}.csv'
     with open(testing_filepath, 'a', newline='') as f:
         writer = csv.writer(f)
-        if f.tell() == 0:
-            writer.writerow(['Layout', 'Encoding Type', 'Test Loss', 'Test Accuracy', 'Test F1 Score'])
+        if os.stat(testing_filepath).st_size == 0:
+            writer.writerow(['Agent', 'Layout', 'Encoding Type', 'Test Loss', 'Test Accuracy', 'Test F1 Score'])
         for row in testing_results:
             writer.writerow(row)
 
@@ -248,26 +249,31 @@ obs_heatmap_memmap_file = "/home/stephane/HAHA/eye_data/obs_heatmap_memmap.dat" 
 subtask_memmap_file = "/home/stephane/HAHA/eye_data/subtask_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
 gaze_obj_memmap_file = "/home/stephane/HAHA/eye_data/gaze_obj_memmap.dat"  # "path/to/memmap/gaze_obj_file.dat"
 
-# Loading data and device setup
+
 participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap = return_memmaps(
     participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-# Loop through each combination of encoding types and layouts
-encoding_types = ['ceg']
+
+encoding_types = ['go']
 layouts = ['asymmetric_advantages', 'coordination_ring', 'counter_circuit_o_1order']
-label_type = 'q3'
+label_type = 'score'
+agents = ['haha', 'random_agent', 'selfplay']
 
 for encoding_type in encoding_types:
     for layout in layouts:
-        print(f"Processing for encoding type: {encoding_type} and layout: {layout}")
-        dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
-                                        encoding_type, label_type, num_timesteps=20, layout_to_use=layout)
-        
-        model = SimpleMLP(input_dim=dataset.input_dim, hidden_dim=128, num_classes=dataset.num_classes).to(device)
-        train_mlp(model, dataset, device, encoding_type, label_type, layout)
-        test_mlp(model, dataset, device, encoding_type, label_type, layout)
+        for agent in agents:
+            print(f"Processing for encoding type: {encoding_type}, layout: {layout}, and agent: {agent}")
+            dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
+                                            encoding_type, label_type, num_timesteps=20, layout_to_use=layout, agent_to_use=agent)
+            
+            # Ensure model initialization happens inside the loop to avoid reusing the same model weights across different runs
+            model = SimpleMLP(input_dim=dataset.input_dim, hidden_dim=128, num_classes=dataset.num_classes).to(device)
+            
+            # Train and test the model; assume these functions handle setting the dataset splits internally
+            train_mlp(model, dataset, device, encoding_type, label_type, layout, agent)
+            test_mlp(model, dataset, device, encoding_type, label_type, layout, agent)
 
 
 
