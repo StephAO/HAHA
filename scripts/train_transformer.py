@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, Dataset
 import csv
 from sklearn.metrics import f1_score
 import numpy as np
+import os
 
 from eye_tracking_dataset_operations.preprocess_eyetracking import fill_participant_questions_from_csv
 from oai_agents.common.arguments_transformer import TransformerConfig, sweep_config
@@ -47,7 +48,7 @@ def train():
     # Encoding options are Game Data 'gd', Eye Gaze 'eg', both 'gd+eg', Gaze Object 'go', or Collapsed Eye Gaze 'ceg'
     # Note that 'go and 'ceg' are baselines that aggregate over data over the time period, so should probably be
     # inputted to a Linear classifier not a transformer
-    encoding_type = 'gd'
+    encoding_type = 'eg'
     # Label options are 'score', 'subtask', 'q1', 'q2', 'q3', 'q4', or 'q5
     label_type = 'score'
     
@@ -58,13 +59,14 @@ def train():
     with wandb.init(mode='online', group='EYE+GD') as run:
 
         # layout options = 'asymmetric_advantages', 'coordination_ring','counter_circuit_o_1order'
-        layout = 'counter_circuit_o_1order'#'asymmetric_advantages'#'counter_circuit_o_1order'
-        agent_name = 'random_agent'
+        layout = wandb.config.layout#'asymmetric_advantages'#'counter_circuit_o_1order'
+        agent_name = wandb.config.agent_name
         dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
                                             encoding_type, label_type, num_timesteps = wandb.config.num_timesteps_to_consider, layout_to_use = layout, agent_to_use=agent_name)
 
-        ############3333
+        ##############
         #test = None
+        #dataset.set_split('test')
         #for i in range(len(dataset)):
         #    data, labels = dataset[i]
         #    if test is None:
@@ -196,10 +198,10 @@ def train():
 
                 # Calculate accuracy
                 _, predicted = torch.max(outputs, dim=2)
-                #if label_type == 'score':
+                if label_type == 'score':
                     # Only calculate accuracy on last step
-                #    predicted = predicted[:, -1]
-                #    labels = labels[:, -1]
+                   predicted = predicted[:, -1]
+                   labels = labels[:, -1]
 
                 predicted = predicted.view(-1)
                 labels = labels.view(-1)
@@ -242,10 +244,10 @@ def train():
 
                     # Calculate accuracy
                     _, predicted = torch.max(outputs, dim=2)
-                    #if label_type == 'score':
+                    if label_type == 'score':
                         # Only calculate accuracy on last step
-                    #    predicted = predicted[:, -1]
-                    #    labels = labels[:, -1]
+                       predicted = predicted[:, -1]
+                       labels = labels[:, -1]
                     predicted = predicted.view(-1)
                     labels = labels.view(-1)
                     val_labels_list.append(labels)
@@ -287,7 +289,10 @@ def train():
         model.eval()
         dataset.set_split('test')
         test_dataloader = DataLoader(dataset, batch_size=128, shuffle=False, num_workers = 4)
-        timesteps_to_test = list(range(400))#[1, 2, 4, 8, 16, 32, 64]
+
+        
+
+        timesteps_to_test = list(range(wandb.config.num_timesteps_to_consider))#[1, 2, 4, 8, 16, 32, 64]
         test_labels_list, test_preds_list = {k: [] for k in timesteps_to_test}, {k: [] for k in timesteps_to_test}
         with torch.no_grad():
             for data, labels in test_dataloader:
@@ -301,28 +306,55 @@ def train():
                 _, predicted = torch.max(outputs, dim=2)
                 for t in timesteps_to_test:
                     # - 1 for indexing
-                    test_labels_list[t].append(labels[:, t - 1].view(-1))
-                    test_preds_list[t].append(predicted[:, t - 1].view(-1))
+                    test_labels_list[t].append(labels[:, t].view(-1))
+                    test_preds_list[t].append(predicted[:, t].view(-1))
 
+        timestep_metrics = []
         for t in timesteps_to_test:
             test_acc = calculate_accuracy(torch.cat(test_preds_list[t]), torch.cat(test_labels_list[t]))
             test_f1 = calculate_f1(torch.cat(test_preds_list[t]), torch.cat(test_labels_list[t]))
             print(f"Test F1 Score @ t={t}: {test_f1}, Accuracy: {test_acc}")
             wandb.log({'timestep': t, f'test_accuracy': test_acc, f'test_f1': test_f1 })
+            timestep_metrics.append((t, test_acc, test_f1))
 
+        test_metrics_file = f'test_metrics_{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}.csv'
+        training_metrics_file = f'training_metrics_{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}.csv'
 
-        with open('test_metrics.csv', 'a', newline='') as file:
+        # Function to write headers only if the file does not exist
+        def write_headers_if_needed(file_path, headers):
+            if not os.path.exists(file_path):
+                with open(file_path, 'w', newline='') as file:
+                    writer = csv.writer(file)
+                    writer.writerow(headers)
+
+        # Write test metrics
+        write_headers_if_needed(test_metrics_file, ['Encoding Type', 'Label Type','Timestep', 'Test Accuracy', 'F1_score', 'Timesteps considered', 'Layout', 'Agent Name'])
+        with open(test_metrics_file, 'a', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Encoding Type', 'Label Type', 'Test Accuracy', 'F1_score'])
-            writer.writerow([encoding_type, label_type, test_acc, test_f1])
+            for t, test_acc, test_f1 in timestep_metrics:
+                writer.writerow([encoding_type, label_type, t, test_acc, test_f1, wandb.config.num_timesteps_to_consider, wandb.config.layout, wandb.config.agent_name])
 
-
-        with open('training_metrics.csv', 'w', newline='') as file:
+        # Write training metrics
+        write_headers_if_needed(training_metrics_file, ['Encoding Type', 'Label Type','Epoch', 'Train Loss', 'Train Accuracy', 'Train F1', 'Validation Loss', 'Validation Accuracy', 'Validation F1', 'Learning Rate','Timesteps', 'Layout', 'Agent Name'])
+        with open(training_metrics_file, 'a', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Epoch', 'Train Loss', 'Train Accuracy','Train F1', 'Validation Loss', 'Validation Accuracy','Validation F1', 'Learning Rate'])
             for i in range(wandb.config.epochs):
-                writer.writerow([metrics['epoch'][i], metrics['train_loss'][i], metrics['train_acc'][i], metrics['train_f1'][i],
-                                metrics['val_loss'][i], metrics['val_acc'][i],metrics['val_f1'][i], metrics['learning_rate'][i]])
+                writer.writerow([encoding_type, label_type, metrics['epoch'][i], metrics['train_loss'][i], metrics['train_acc'][i], metrics['train_f1'][i],
+                                metrics['val_loss'][i], metrics['val_acc'][i], metrics['val_f1'][i], metrics['learning_rate'][i], wandb.config.num_timesteps_to_consider, wandb.config.layout, wandb.config.agent_name])
+
+
+        # with open(f'test_metrics_{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}_{wandb.config.num_timesteps_to_consider}.csv', 'a', newline='') as file:
+        #     writer = csv.writer(file)
+        #     writer.writerow(['Encoding Type', 'Label Type', 'Test Accuracy', 'F1_score'])
+        #     writer.writerow([encoding_type, label_type, test_acc, test_f1])
+
+
+        # with open(f'training_metrics_{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}_{wandb.config.num_timesteps_to_consider}.csv', 'w', newline='') as file:
+        #     writer = csv.writer(file)
+        #     writer.writerow(['Epoch', 'Train Loss', 'Train Accuracy','Train F1', 'Validation Loss', 'Validation Accuracy','Validation F1', 'Learning Rate'])
+        #     for i in range(wandb.config.epochs):
+        #         writer.writerow([metrics['epoch'][i], metrics['train_loss'][i], metrics['train_acc'][i], metrics['train_f1'][i],
+        #                         metrics['val_loss'][i], metrics['val_acc'][i],metrics['val_f1'][i], metrics['learning_rate'][i]])
 
         # plt.figure()
         # plt.plot(average_gradient_norms)
@@ -367,5 +399,5 @@ def train():
         # wandb.log_artifact('model.pth', type='model')
 
 #train()
-wandb.agent(sweep_id, function=train, count=1)
+wandb.agent(sweep_id, function=train, count=27)
 

@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import Dataset
 from eye_tracking_dataset_operations.preprocess_eyetracking import AGENT_TO_IDX, LAYOUT_TO_IDX
 from sklearn.metrics import f1_score
-
+from collections import Counter
 
 class EyeGazeAndPlayDataset(Dataset):
     def __init__(self, participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap, encoding_type,
@@ -13,8 +13,8 @@ class EyeGazeAndPlayDataset(Dataset):
         self.encoding_type = encoding_type
         self.label_type = label_type
         # TODO add linear classifier for go and ceg
-        if self.encoding_type in ['go', 'ceg']:
-            assert self.label_type != 'score', f'Encoding type {self.encoding_type} does not support score labels'
+        # if self.encoding_type in ['go', 'ceg']:
+        #     assert self.label_type != 'score', f'Encoding type {self.encoding_type} does not support score labels'
         self.num_bins = num_bins
         self.num_timesteps = num_timesteps
         self.horizon = 400
@@ -56,7 +56,7 @@ class EyeGazeAndPlayDataset(Dataset):
         # In train: , b'CU2026'
         
         self.curr_split = 'train'
-        self.calculate_split_distributions()
+        # self.calculate_split_distributions()
 
     def calculate_split_distributions(self):
         for split in ['train', 'test', 'val']:
@@ -65,13 +65,14 @@ class EyeGazeAndPlayDataset(Dataset):
             print(f'{split} split: {len(self.splits[split])} participants')
             for p_id in self.splits[split]:
                 for t_id in self.valid_trial_ids[p_id]:
-                    bin_counts[self.labels[(p_id, t_id)][0]] += 1
-                    true_labels.append(self.labels[(p_id, t_id)][0])
+                    bin_counts[self.labels[(p_id, t_id)][0][0]] += 1
+                    true_labels.append(self.labels[(p_id, t_id)][0][0])
             preds = np.full_like(true_labels, np.argmax(bin_counts))
             print(f'{split} split bin counts: {bin_counts}')
             print(f'Most frequent class accuracy: {max(bin_counts) / sum(bin_counts)}')
-            print(f'Most frequent class f1: {f1_score(true_labels, preds, average="weighted")}}')
+            print(f'Most frequent class f1: {f1_score(true_labels, preds, average="weighted")}')
             print(bin_counts)
+        #exit(0)
 
 
     def set_split(self, split):
@@ -100,13 +101,29 @@ class EyeGazeAndPlayDataset(Dataset):
         input_data = self.inputs[(participant_id, trial_id)][traj_start_idx:traj_start_idx + self.num_timesteps]
         if self.encoding_type in ['go', 'ceg']:
             # Sum over timesteps
-            input_data = np.sum(input_data, dim=0)
+            input_data = np.sum(input_data, axis=0)
             # Normalize
-            input_data = input_data / np.sum(input_data, dim=-1, keepdims=True)
+            epsilon = 1e-10
+            input_data = input_data / (np.sum(input_data, axis=-1, keepdims=True) + epsilon)
+
+            # print(f'__getitem__: normalized input_data shape {input_data.shape}, sum after normalization {np.sum(input_data)}')
+
 
         label = self.labels[(participant_id, trial_id)][traj_start_idx:traj_start_idx + self.num_timesteps]  
-
-        return input_data, np.array(label)
+        # print(label)
+        if self.encoding_type == 'go' or self.encoding_type == 'ceg':
+            
+            # label_count = Counter(label)
+            # majority_label = label_count.most_common(1)[0][0]
+            # label = np.array([majority_label])
+            label = label[-1]
+  # Taking the first element should be fine if label is consistent
+            #print(f'__getitem__: label {label}')
+            
+        # return input_data, np.array(label)
+        #print(f'__getitem__: input_data {input_data}')
+        #print(f'__getitem__: label {label}')
+        return torch.tensor(input_data, dtype=torch.float), torch.tensor(label, dtype=torch.long)
 
 
     def process_data(self, participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap):
