@@ -140,8 +140,7 @@ class SimpleTransformer(nn.Module):
         """Generate a square mask for the sequence. The masked positions are filled with float('-inf').
            Unmasked positions are filled with float(0.0).
         """
-        device = next(self.parameters()).device
-        return torch.triu(torch.full((sz, sz), float('-inf'), device=device), diagonal=1).bool()
+        return torch.triu(torch.full((sz, sz), float('-inf')), diagonal=1).bool()
 
     def forward(self, src):
         batch_size, seq_len, _ = src.shape
@@ -149,10 +148,10 @@ class SimpleTransformer(nn.Module):
         src = self.pos_encoder(src)
 
         device = src.device
-        att_mask = torch.full((seq_len, batch_size), False, device=device)
-        causal_mask = self.generate_square_subsequent_mask(batch_size).to(device)
+        #att_mask = torch.full((seq_len, batch_size), False, device=device)
+        causal_mask = self.generate_square_subsequent_mask(seq_len).to(device)
 
-        output = self.transformer_encoder(src, mask=causal_mask, src_key_padding_mask=att_mask, is_causal=True)
+        output = self.transformer_encoder(src, mask=causal_mask, is_causal=True) #, src_key_padding_mask=att_mask
         output = self.transform_head(output)
         return self.output_layer(output)
 

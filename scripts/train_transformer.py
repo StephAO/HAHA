@@ -61,6 +61,7 @@ def train():
         # layout options = 'asymmetric_advantages', 'coordination_ring','counter_circuit_o_1order'
         layout = wandb.config.layout#'asymmetric_advantages'#'counter_circuit_o_1order'
         agent_name = wandb.config.agent_name
+    
         dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
                                             encoding_type, label_type, num_timesteps = wandb.config.num_timesteps_to_consider, layout_to_use = layout, agent_to_use=agent_name)
 
@@ -146,7 +147,7 @@ def train():
             'val_f1':[],
             'learning_rate': [],
         }
-        best_val_acc = 0.0
+        best_val_f1 = 0.0
         
         for epoch in range(wandb.config.epochs):
             train_labels_list, train_preds_list = [], []
@@ -198,10 +199,10 @@ def train():
 
                 # Calculate accuracy
                 _, predicted = torch.max(outputs, dim=2)
-                if label_type == 'score':
+                if False and label_type == 'score':
                     # Only calculate accuracy on last step
-                   predicted = predicted[:, -1]
-                   labels = labels[:, -1]
+                    predicted = predicted[:, -1]
+                    labels = labels[:, -1]
 
                 predicted = predicted.view(-1)
                 labels = labels.view(-1)
@@ -244,7 +245,7 @@ def train():
 
                     # Calculate accuracy
                     _, predicted = torch.max(outputs, dim=2)
-                    if label_type == 'score':
+                    if False and label_type == 'score':
                         # Only calculate accuracy on last step
                        predicted = predicted[:, -1]
                        labels = labels[:, -1]
@@ -255,18 +256,20 @@ def train():
                     acc = calculate_accuracy(predicted, labels)
                     val_loss += loss.item()
                     val_acc += acc
-                    # TODO ASAP save best model based on val_acc
-                    best_model_path = f'best_model_{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}.pth'
-                    if val_acc > best_val_acc:
-                        best_val_acc = val_acc
-                        torch.save(model.state_dict(), best_model_path)
-                        print(f"New best model saved with val_acc: {val_acc}")
 
                 val_loss /= len(val_dataloader)
                 val_acc /= len(val_dataloader)
                 val_accs.append(val_acc)
                 val_losses.append(val_loss)
                 val_f1 = calculate_f1(torch.cat(val_preds_list), torch.cat(val_labels_list))
+
+                # TODO ASAP save best model based on val_acc
+                best_model_path = f'best_model_{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}.pth'
+                if val_f1 >= best_val_f1:
+                    best_val_f1 = val_f1
+                    torch.save(model.state_dict(), best_model_path)
+                    print(f"New best model saved with val_acc: {val_acc}")
+
                 
 
             metrics['epoch'].append(epoch + 1)

@@ -123,7 +123,7 @@ def train_mlp(model, dataset, device, encoding_type, label_type, layout, agent):
         avg_loss = total_loss / len(dataloader)
         accuracy = correct_predictions / total_predictions
         avg_f1 = f1_score(all_labels, all_predictions, average='weighted')
-        print(f"\tEpoch {epoch+1} completed: Avg Loss = {avg_loss}, Avg Accuracy = {accuracy}, Avg F1 Score = {avg_f1}")
+        #print(f"\tEpoch {epoch+1} completed: Avg Loss = {avg_loss}, Avg Accuracy = {accuracy}, Avg F1 Score = {avg_f1}")
         training_results.append((agent, layout, epoch + 1, avg_loss, accuracy, avg_f1))
     
     training_filepath = f'mlp_training_results_{encoding_type}_{label_type}.csv'
@@ -241,6 +241,8 @@ def test_mlp(model, dataset, device, encoding_type, label_type, layout, agent):
         for row in testing_results:
             writer.writerow(row)
 
+    print(f'{layout} - {agent}: {avg_f1}')
+
     return avg_loss, avg_accuracy, all_predictions, all_labels, avg_f1
 
 # Define your memmap file paths
@@ -256,7 +258,7 @@ participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap = return
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-encoding_types = ['go']
+encoding_types = ['ceg']
 layouts = ['asymmetric_advantages', 'coordination_ring', 'counter_circuit_o_1order']
 label_type = 'score'
 agents = ['haha', 'random_agent', 'selfplay']
@@ -266,7 +268,7 @@ for encoding_type in encoding_types:
         for agent in agents:
             print(f"Processing for encoding type: {encoding_type}, layout: {layout}, and agent: {agent}")
             dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
-                                            encoding_type, label_type, num_timesteps=20, layout_to_use=layout, agent_to_use=agent)
+                                            encoding_type, label_type, num_timesteps=10, layout_to_use=layout, agent_to_use=agent)
             
             # Ensure model initialization happens inside the loop to avoid reusing the same model weights across different runs
             model = SimpleMLP(input_dim=dataset.input_dim, hidden_dim=128, num_classes=dataset.num_classes).to(device)
