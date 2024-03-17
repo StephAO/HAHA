@@ -23,6 +23,9 @@ if __name__ == "__main__":
 
     args = get_arguments(additional_args)
 
+    args.layout = 'counter_circuit_o_1order'
+    args.p_idx = 1
+
     # bc, human_proxy = BehavioralCloningTrainer.load_bc_and_human_proxy(args, name=f'bc_{args.layout}')
     # agent, tm = bc, human_proxy
     # teammate = bc
@@ -31,8 +34,10 @@ if __name__ == "__main__":
     # agent = HumanManagerHRL(worker, args)
 
 
-    tm = load_agent(Path('agent_models_ICML/HAHA_fcp_61'), args)# 'human'# HumanManagerHRL(haha.worker, args)
-    agent = load_agent(Path('agent_models_ICML/HAHA_fcp_61'), args)#load_agent(Path('agent_models/HAHA_fcp_fcp'), args)
+    tm = load_agent(Path('agent_models_ICML/HAHA_fcp_219'), args)# 'human'# HumanManagerHRL(haha.worker, args)
+    # tm = load_agent(Path('agent_models_ICML/fcp_1811'), args)# 'human'# HumanManagerHRL(haha.worker, args)
+
+    agent = 'human'#load_agent(Path('agent_models_ICML/HAHA_fcp_61'), args)#load_agent(Path('agent_models/HAHA_fcp_fcp'), args)
 
     t_idx = 1 - args.p_idx
     # teammate = DummyAgent('random')# load_agent(Path(args.teammate), args)
@@ -43,6 +48,7 @@ if __name__ == "__main__":
     #     agent = load_agent(Path(args.agent), args)
     #     agent.set_idx(args.p_idx, args.layout, is_haha=isinstance(agent, HierarchicalRL), tune_subtasks=False)
 
-    dc = OvercookedGUI(args, agent=agent, teammate=tm, layout_name=args.layout, p_idx=args.p_idx, fps=10)
+    dc = OvercookedGUI(args, agent=agent, teammate=tm, layout_name=args.layout, p_idx=args.p_idx, fps=10,
+                       horizon=100)
     dc.on_execute()
     print(dc.trajectory)
