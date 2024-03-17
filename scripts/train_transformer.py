@@ -54,13 +54,16 @@ def train():
     
 
     # TODO ASAP save encoding type / label type with results / csv and in wandb logging to know what the results were for
-    exp_name = f'{encoding_type}_{label_type}'
+    exp_name = f'TEST_{encoding_type}_{label_type}'
     # Configuration for hyperparameters
     with wandb.init(mode='online', group='EYE+GD') as run:
 
         # layout options = 'asymmetric_advantages', 'coordination_ring','counter_circuit_o_1order'
-        layout = wandb.config.layout#'asymmetric_advantages'#'counter_circuit_o_1order'
-        agent_name = wandb.config.agent_name
+        # layout = wandb.config.layout#'asymmetric_advantages'#'counter_circuit_o_1order'
+        # agent_name = wandb.config.agent_name
+
+        layout = 'asymmetric_advantages'#'counter_circuit_o_1order'
+        agent_name = 'random_agent'
     
         dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
                                             encoding_type, label_type, num_timesteps = wandb.config.num_timesteps_to_consider, layout_to_use = layout, agent_to_use=agent_name)
@@ -297,6 +300,14 @@ def train():
 
         timesteps_to_test = list(range(wandb.config.num_timesteps_to_consider))#[1, 2, 4, 8, 16, 32, 64]
         test_labels_list, test_preds_list = {k: [] for k in timesteps_to_test}, {k: [] for k in timesteps_to_test}
+
+        cum_test_preds_list = {k: [] for k in timesteps_to_test}
+        cum_preds = np.zeros((wandb.config.num_timesteps_to_consider, test_dataloader.num_classes))
+
+        cumsf_test_preds_list = {k: [] for k in timesteps_to_test}
+        cumsf_preds = np.zeros((wandb.config.num_timesteps_to_consider, test_dataloader.num_classes))
+
+
         with torch.no_grad():
             for data, labels in test_dataloader:
                 # comment the next 2 lines if label_type is not subtask 
@@ -304,6 +315,13 @@ def train():
                 # labels = labels.long()
                 data, labels = data.to(device), labels.to(device)
                 outputs = model(data)
+
+
+                cum_preds = outputs / torch.sum(outputs, dim=2, keepdims=True)
+                _, cum_preds = torch.max(torch.cumsum(cum_preds, 1), dim=2)
+
+                cumsf_preds = torch.nn.functional.softmax(outputs, dim=2)
+                _, cumsf_preds = torch.max(torch.cumsum(cumsf_preds, 1), dim=2)
                 # Calculate accuracy
                 # Adjust the accuracy calculation based on your needs
                 _, predicted = torch.max(outputs, dim=2)
@@ -312,12 +330,22 @@ def train():
                     test_labels_list[t].append(labels[:, t].view(-1))
                     test_preds_list[t].append(predicted[:, t].view(-1))
 
+                    # Calculate accuracy for cumulative predictions
+                    cum_test_preds_list[t].append(cum_preds[:, t].view(-1))
+                    cumsf_test_preds_list[t].append(cumsf_preds[:, t].view(-1))
+
+
         timestep_metrics = []
         for t in timesteps_to_test:
             test_acc = calculate_accuracy(torch.cat(test_preds_list[t]), torch.cat(test_labels_list[t]))
             test_f1 = calculate_f1(torch.cat(test_preds_list[t]), torch.cat(test_labels_list[t]))
+
+            cum_test_f1 = calculate_f1(torch.cat(cum_test_preds_list[t]), torch.cat(test_labels_list[t]))
+            cumsf_test_f1 = calculate_f1(torch.cat(cumsf_test_preds_list[t]), torch.cat(test_labels_list[t]))
+
+
             print(f"Test F1 Score @ t={t}: {test_f1}, Accuracy: {test_acc}")
-            wandb.log({'timestep': t, f'test_accuracy': test_acc, f'test_f1': test_f1 })
+            wandb.log({'timestep': t, f'test_accuracy': test_acc, f'test_f1': test_f1, 'cum_f1': cum_test_f1, 'cumsf_f1': cumsf_test_f1})
             timestep_metrics.append((t, test_acc, test_f1))
 
         test_metrics_file = f'test_metrics_{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}.csv'
@@ -402,5 +430,5 @@ def train():
         # wandb.log_artifact('model.pth', type='model')
 
 #train()
-wandb.agent(sweep_id, function=train, count=27)
+wandb.agent(sweep_id, function=train, count=1)
 
