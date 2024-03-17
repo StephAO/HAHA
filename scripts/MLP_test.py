@@ -125,6 +125,32 @@ def train_mlp(model, dataset, device, encoding_type, label_type, layout, agent):
         avg_f1 = f1_score(all_labels, all_predictions, average='weighted')
         #print(f"\tEpoch {epoch+1} completed: Avg Loss = {avg_loss}, Avg Accuracy = {accuracy}, Avg F1 Score = {avg_f1}")
         training_results.append((agent, layout, epoch + 1, avg_loss, accuracy, avg_f1))
+
+
+        # Validation
+        all_predictions = []
+        all_labels = []
+        print(f"Starting testing for layout {layout} and encoding type {encoding_type}")
+        with torch.no_grad():
+            for data_idx, (data, labels) in enumerate(dataloader):
+                data, labels = data.to(device), labels.to(device).long()
+
+                outputs = model(data)
+
+                loss = criterion(outputs, labels.view(-1))
+                batch_losses.append(loss.item())
+
+                _, predicted = torch.max(outputs, 1)
+                all_predictions.extend(predicted.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+
+                correct = (predicted == labels.view(-1)).sum().item()
+                accuracy = correct / labels.numel()
+                batch_accuracies.append(accuracy)
+
+        avg_loss = np.mean(batch_losses)
+        avg_accuracy = np.mean(batch_accuracies)
+        avg_f1 = f1_score(all_labels, all_predictions, average='weighted')
     
     training_filepath = f'mlp_training_results_{encoding_type}_{label_type}.csv'
     with open(training_filepath, 'a', newline='') as f:

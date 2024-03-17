@@ -8,8 +8,8 @@ sweep_config = {
             "values": [128]
         },
         "epochs": {"values": [10000]},
-        "decay_step_size": {"values": [5]},
-        "decay_factor": {"values": [ 0.9995]},
+        "decay_step_size": {"values": [10]},
+        "decay_factor": {"values": [ 0.998]},
         "num_timesteps_to_consider": {"values": [20]},
         "agent_name": {"values": ['haha', 'random_agent', 'selfplay']},
         "layout": {"values": ['asymmetric_advantages', 'coordination_ring','counter_circuit_o_1order']}
@@ -19,10 +19,10 @@ sweep_config = {
 
 class TransformerConfig:
     # Transformer Model Initialization
-    num_timesteps_to_consider = 50
+    num_timesteps_to_consider = 20
     d_model = 512
     n_head = 8
-    num_layers = 8
+    num_layers = 6
     dim_feedforward = 2048
 
     # Warmup

@@ -18,10 +18,11 @@ import wandb
 sweep_id = wandb.sweep(sweep=sweep_config, project="HAHA_eyetracking")
 
 # Memmap file paths
-participant_memmap_file = "/home/stephane/HAHA/eye_data/participant_memmap.dat"  # "path/to/memmap/participant_memmap.dat"
-obs_heatmap_memmap_file = "/home/stephane/HAHA/eye_data/obs_heatmap_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
-subtask_memmap_file = "/home/stephane/HAHA/eye_data/subtask_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
-gaze_obj_memmap_file = "/home/stephane/HAHA/eye_data/gaze_obj_memmap.dat"  # "path/to/memmap/gaze_obj_file.dat"
+base_dir = "/home/stephane/HAHA/eye_data" if False else '/projects/star7023/HAHA/eye_data'
+participant_memmap_file = f"{base_dir}/participant_memmap.dat"  # "path/to/memmap/participant_memmap.dat"
+obs_heatmap_memmap_file = f"{base_dir}/obs_heatmap_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
+subtask_memmap_file = f"{base_dir}/subtask_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
+gaze_obj_memmap_file = f"{base_dir}/gaze_obj_memmap.dat"  # "path/to/memmap/gaze_obj_file.dat"
 
 # only needed initially to make the memmaps, please comment out after the memmaps are created.
 #setup_and_process_xdf_files("/home/stephane/HAHA/eye_data/Data/xdf_files", participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
@@ -54,19 +55,19 @@ def train():
     
 
     # TODO ASAP save encoding type / label type with results / csv and in wandb logging to know what the results were for
-    exp_name = f'TEST_{encoding_type}_{label_type}'
+    exp_name = f'{encoding_type}_{label_type}'
     # Configuration for hyperparameters
     with wandb.init(mode='online', group='EYE+GD') as run:
 
         # layout options = 'asymmetric_advantages', 'coordination_ring','counter_circuit_o_1order'
-        # layout = wandb.config.layout#'asymmetric_advantages'#'counter_circuit_o_1order'
-        # agent_name = wandb.config.agent_name
+        layout = wandb.config.layout#'asymmetric_advantages'#'counter_circuit_o_1order'
+        agent_name = wandb.config.agent_name
 
-        layout = 'asymmetric_advantages'#'counter_circuit_o_1order'
-        agent_name = 'random_agent'
+        # layout = 'asymmetric_advantages'#'counter_circuit_o_1order'
+        # agent_name = 'random_agent'
     
         dataset = EyeGazeAndPlayDataset(participant_memmap, obs_heatmap_memmap, subtask_memmap, gaze_obj_memmap,
-                                            encoding_type, label_type, num_timesteps = wandb.config.num_timesteps_to_consider, layout_to_use = layout, agent_to_use=agent_name)
+                                        encoding_type, label_type, num_timesteps = wandb.config.num_timesteps_to_consider, layout_to_use = layout, agent_to_use=agent_name)
 
         ##############
         #test = None
@@ -83,8 +84,8 @@ def train():
         #        break
         #exit(0)
         ###############
-
-        run.name = f'{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}'
+        run.name = f'{exp_name}_{layout}_{agent_name}'
+        best_model_path = f'{base_dir}/models/best_model_{exp_name}_{layout}_{agent_name}.pth'
 
         wandb.config.update({
         "encoding_type": encoding_type,
@@ -150,7 +151,7 @@ def train():
             'val_f1':[],
             'learning_rate': [],
         }
-        best_val_f1 = 0.0
+        best_val_loss = float('inf')
         
         for epoch in range(wandb.config.epochs):
             train_labels_list, train_preds_list = [], []
@@ -173,17 +174,8 @@ def train():
 
                 # Forward pass
                 outputs = model(data)  # outputs shape: [batch_size, seq_len, num_classes]
-
-                # if i == 0:
-                #     print(f"Epoch {epoch + 1}")
-                #     print(f"Input shape: {data.shape}")
-                #     print(f"Output shape: {outputs.shape}")
-
                 # Obtain batch size and sequence length from data
                 batch_size, seq_len, _ = data.shape
-                # print(f"Min label: {labels.min().item()}, Max label: {labels.max().item()}")
-                # print(f"num_classes:{dataset.num_classes}")
-
 
                 # Calculate loss
                 loss = criterion(torch.reshape(outputs, (batch_size * seq_len, dataset.num_classes)),
@@ -220,7 +212,6 @@ def train():
             train_accs.append(train_acc)
             train_losses.append(train_loss)
             train_f1 = calculate_f1(torch.cat(train_preds_list), torch.cat(train_labels_list))
-            
 
             # Learning rate scheduling
             if epoch < TransformerConfig.warmup_steps:
@@ -229,84 +220,78 @@ def train():
                 scheduler_decay.step()
 
             # Validation phase
-            model.eval()
-            dataset.set_split('val')
-            val_dataloader = DataLoader(dataset, batch_size=wandb.config.batch_size, shuffle=True, num_workers = 4)
-            val_loss, val_acc = 0.0, 0.0
-            with torch.no_grad():
-                for data, labels in val_dataloader:
-                    # comment the next 2 lines if label_type is not subtask 
-                    # labels = labels[:, :, 0] 
-                    # labels = labels.long()
-                    data, labels = data.to(device), labels.to(device)
-                    outputs = model(data)
+            if epoch % 10 == 0:
+                model.eval()
+                dataset.set_split('val')
+                val_dataloader = DataLoader(dataset, batch_size=wandb.config.batch_size, shuffle=True, num_workers = 4)
+                val_loss, val_acc = 0.0, 0.0
+                with torch.no_grad():
+                    for data, labels in val_dataloader:
+                        # comment the next 2 lines if label_type is not subtask
+                        # labels = labels[:, :, 0]
+                        # labels = labels.long()
+                        data, labels = data.to(device), labels.to(device)
+                        outputs = model(data)
 
-                    # Calculate loss
-                    batch_size, seq_len, _ = data.shape
-                    loss = criterion(torch.reshape(outputs, (batch_size * seq_len, dataset.num_classes)),
-                                    torch.reshape(labels, (batch_size * seq_len,)))
+                        # Calculate loss
+                        batch_size, seq_len, _ = data.shape
+                        loss = criterion(torch.reshape(outputs, (batch_size * seq_len, dataset.num_classes)),
+                                        torch.reshape(labels, (batch_size * seq_len,)))
 
-                    # Calculate accuracy
-                    _, predicted = torch.max(outputs, dim=2)
-                    if False and label_type == 'score':
-                        # Only calculate accuracy on last step
-                       predicted = predicted[:, -1]
-                       labels = labels[:, -1]
-                    predicted = predicted.view(-1)
-                    labels = labels.view(-1)
-                    val_labels_list.append(labels)
-                    val_preds_list.append(predicted)
-                    acc = calculate_accuracy(predicted, labels)
-                    val_loss += loss.item()
-                    val_acc += acc
+                        # Calculate accuracy
+                        _, predicted = torch.max(outputs, dim=2)
+                        if False and label_type == 'score':
+                            # Only calculate accuracy on last step
+                           predicted = predicted[:, -1]
+                           labels = labels[:, -1]
+                        predicted = predicted.view(-1)
+                        labels = labels.view(-1)
+                        val_labels_list.append(labels)
+                        val_preds_list.append(predicted)
+                        acc = calculate_accuracy(predicted, labels)
+                        val_loss += loss.item()
+                        val_acc += acc
 
-                val_loss /= len(val_dataloader)
-                val_acc /= len(val_dataloader)
-                val_accs.append(val_acc)
-                val_losses.append(val_loss)
-                val_f1 = calculate_f1(torch.cat(val_preds_list), torch.cat(val_labels_list))
+                    val_loss /= len(val_dataloader)
+                    val_acc /= len(val_dataloader)
+                    val_accs.append(val_acc)
+                    val_losses.append(val_loss)
+                    val_f1 = calculate_f1(torch.cat(val_preds_list), torch.cat(val_labels_list))
 
-                # TODO ASAP save best model based on val_acc
-                best_model_path = f'best_model_{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}.pth'
-                if val_f1 >= best_val_f1:
-                    best_val_f1 = val_f1
-                    torch.save(model.state_dict(), best_model_path)
-                    print(f"New best model saved with val_acc: {val_acc}")
+                    # TODO ASAP save best model based on val_acc
+                    if val_loss <= best_val_loss:
+                        best_val_loss = val_loss
+                        torch.save(model.state_dict(), best_model_path)
+                        print(f"New best model saved on epoch {epoch} with val_loss: {val_loss}")
 
                 
 
-            metrics['epoch'].append(epoch + 1)
-            metrics['train_loss'].append(train_loss)
-            metrics['train_acc'].append(train_acc)
-            metrics['train_f1'].append(train_f1)
-            metrics['val_loss'].append(val_loss)
-            metrics['val_acc'].append(val_acc)
-            metrics['learning_rate'].append(current_lr)
-            metrics['val_f1'].append(val_f1)
+                metrics['epoch'].append(epoch + 1)
+                metrics['train_loss'].append(train_loss)
+                metrics['train_acc'].append(train_acc)
+                metrics['train_f1'].append(train_f1)
+                metrics['val_loss'].append(val_loss)
+                metrics['val_acc'].append(val_acc)
+                metrics['learning_rate'].append(current_lr)
+                metrics['val_f1'].append(val_f1)
 
-            # Print epoch results
-            # print(
-            #     f"Epoch {epoch + 1}/{TransformerConfig.num_epochs} - Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, Train F1: {train_f1:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}, Val F1: {val_f1:.4f}")
-            wandb.log({'epoch': epoch + 1, 'train_loss': train_loss, 'train_f1': train_f1, 'val_loss': val_loss, 'train_acc': train_acc,'val_acc': val_acc, 'val_f1': val_f1, 'lr': current_lr})
+                # Print epoch results
+                # print(
+                #     f"Epoch {epoch + 1}/{TransformerConfig.num_epochs} - Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, Train F1: {train_f1:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}, Val F1: {val_f1:.4f}")
+                wandb.log({'epoch': epoch + 1, 'train_loss': train_loss, 'train_f1': train_f1, 'val_loss': val_loss, 'train_acc': train_acc,'val_acc': val_acc, 'val_f1': val_f1, 'lr': current_lr})
 
         # TODO ASAP load best model and evaluate on test set and include in csv
         # Make sure to index last timestep for accuracy calculation if label_type does not equal 'score'
         model.load_state_dict(torch.load(best_model_path))
         model.eval()
         dataset.set_split('test')
-        test_dataloader = DataLoader(dataset, batch_size=128, shuffle=False, num_workers = 4)
+        test_dataloader = DataLoader(dataset, batch_size=128, shuffle=False, num_workers=4)
 
-        
 
         timesteps_to_test = list(range(wandb.config.num_timesteps_to_consider))#[1, 2, 4, 8, 16, 32, 64]
         test_labels_list, test_preds_list = {k: [] for k in timesteps_to_test}, {k: [] for k in timesteps_to_test}
 
-        cum_test_preds_list = {k: [] for k in timesteps_to_test}
-        cum_preds = np.zeros((wandb.config.num_timesteps_to_consider, test_dataloader.num_classes))
-
         cumsf_test_preds_list = {k: [] for k in timesteps_to_test}
-        cumsf_preds = np.zeros((wandb.config.num_timesteps_to_consider, test_dataloader.num_classes))
-
 
         with torch.no_grad():
             for data, labels in test_dataloader:
@@ -315,10 +300,6 @@ def train():
                 # labels = labels.long()
                 data, labels = data.to(device), labels.to(device)
                 outputs = model(data)
-
-
-                cum_preds = outputs / torch.sum(outputs, dim=2, keepdims=True)
-                _, cum_preds = torch.max(torch.cumsum(cum_preds, 1), dim=2)
 
                 cumsf_preds = torch.nn.functional.softmax(outputs, dim=2)
                 _, cumsf_preds = torch.max(torch.cumsum(cumsf_preds, 1), dim=2)
@@ -331,7 +312,6 @@ def train():
                     test_preds_list[t].append(predicted[:, t].view(-1))
 
                     # Calculate accuracy for cumulative predictions
-                    cum_test_preds_list[t].append(cum_preds[:, t].view(-1))
                     cumsf_test_preds_list[t].append(cumsf_preds[:, t].view(-1))
 
 
@@ -340,16 +320,14 @@ def train():
             test_acc = calculate_accuracy(torch.cat(test_preds_list[t]), torch.cat(test_labels_list[t]))
             test_f1 = calculate_f1(torch.cat(test_preds_list[t]), torch.cat(test_labels_list[t]))
 
-            cum_test_f1 = calculate_f1(torch.cat(cum_test_preds_list[t]), torch.cat(test_labels_list[t]))
             cumsf_test_f1 = calculate_f1(torch.cat(cumsf_test_preds_list[t]), torch.cat(test_labels_list[t]))
 
-
             print(f"Test F1 Score @ t={t}: {test_f1}, Accuracy: {test_acc}")
-            wandb.log({'timestep': t, f'test_accuracy': test_acc, f'test_f1': test_f1, 'cum_f1': cum_test_f1, 'cumsf_f1': cumsf_test_f1})
+            wandb.log({'timestep': t, f'test_accuracy': test_acc, f'test_f1': test_f1, 'cumsf_f1': cumsf_test_f1})
             timestep_metrics.append((t, test_acc, test_f1))
 
-        test_metrics_file = f'test_metrics_{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}.csv'
-        training_metrics_file = f'training_metrics_{exp_name}_{wandb.config.learning_rate}_{wandb.config.batch_size}.csv'
+        test_metrics_file = f'{base_dir}/results/test_metrics_{exp_name}.csv'
+        training_metrics_file = f'{base_dir}/results/training_metrics_{exp_name}.csv'
 
         # Function to write headers only if the file does not exist
         def write_headers_if_needed(file_path, headers):
@@ -359,11 +337,11 @@ def train():
                     writer.writerow(headers)
 
         # Write test metrics
-        write_headers_if_needed(test_metrics_file, ['Encoding Type', 'Label Type','Timestep', 'Test Accuracy', 'F1_score', 'Timesteps considered', 'Layout', 'Agent Name'])
+        write_headers_if_needed(test_metrics_file, ['Encoding Type', 'Label Type','Timestep', 'Test Accuracy', 'F1_score', 'Cummulative_F1_score', 'Timesteps considered', 'Layout', 'Agent Name'])
         with open(test_metrics_file, 'a', newline='') as file:
             writer = csv.writer(file)
             for t, test_acc, test_f1 in timestep_metrics:
-                writer.writerow([encoding_type, label_type, t, test_acc, test_f1, wandb.config.num_timesteps_to_consider, wandb.config.layout, wandb.config.agent_name])
+                writer.writerow([encoding_type, label_type, t, test_acc, test_f1, cumsf_test_f1, wandb.config.num_timesteps_to_consider, wandb.config.layout, wandb.config.agent_name])
 
         # Write training metrics
         write_headers_if_needed(training_metrics_file, ['Encoding Type', 'Label Type','Epoch', 'Train Loss', 'Train Accuracy', 'Train F1', 'Validation Loss', 'Validation Accuracy', 'Validation F1', 'Learning Rate','Timesteps', 'Layout', 'Agent Name'])
@@ -422,10 +400,10 @@ def train():
         #
         # Save the model if needed
         # TODO ASAP give this model a better name based on encoding type and label type
-        descriptive_model_path = f'model_{encoding_type}_{label_type}.pth'
-        torch.save(model.state_dict(), descriptive_model_path)
-        print(f"Model saved as {descriptive_model_path}")
-        wandb.save(descriptive_model_path)
+        # descriptive_model_path = f'model_{encoding_type}_{label_type}.pth'
+        # torch.save(model.state_dict(), descriptive_model_path)
+        # print(f"Model saved as {descriptive_model_path}")
+        # wandb.save(descriptive_model_path)
         # wandb.save('model.pth')
         # wandb.log_artifact('model.pth', type='model')
 
