@@ -99,7 +99,7 @@ class RLAgentTrainer(OAITrainer):
 
     def train_agents(self, train_timesteps=2e6, exp_name=None):
         exp_name = exp_name or self.args.exp_name
-        run = wandb.init(project="overcooked_ai", entity=self.args.wandb_ent, dir=str(self.args.base_dir / 'wandb'),
+        run = wandb.init(project="overcooked_ai_icml", entity=self.args.wandb_ent, dir=str(self.args.base_dir / 'wandb'),
                          reinit=True, name=exp_name + '_' + self.name, mode=self.args.wandb_mode, id=self.run_id,
                          resume="allow")
         if self.run_id is None:
