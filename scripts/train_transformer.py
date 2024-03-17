@@ -18,11 +18,11 @@ import wandb
 sweep_id = wandb.sweep(sweep=sweep_config, project="HAHA_eyetracking")
 
 # Memmap file paths
-base_dir = "/home/stephane/HAHA/eye_data" if False else '/projects/star7023/HAHA/eye_data'
-participant_memmap_file = f"{base_dir}/participant_memmap.dat"  # "path/to/memmap/participant_memmap.dat"
-obs_heatmap_memmap_file = f"{base_dir}/obs_heatmap_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
-subtask_memmap_file = f"{base_dir}/subtask_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
-gaze_obj_memmap_file = f"{base_dir}/gaze_obj_memmap.dat"  # "path/to/memmap/gaze_obj_file.dat"
+base_dir = "/home/stephane/HAHA" if True else '/projects/star7023/HAHA/'
+participant_memmap_file = f"{base_dir}/eye_data/participant_memmap.dat"  # "path/to/memmap/participant_memmap.dat"
+obs_heatmap_memmap_file = f"{base_dir}/eye_data/obs_heatmap_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
+subtask_memmap_file = f"{base_dir}/eye_data/subtask_memmap.dat"  # "path/to/memmap/obs_heatmap_memmap.dat"
+gaze_obj_memmap_file = f"{base_dir}/eye_data/gaze_obj_memmap.dat"  # "path/to/memmap/gaze_obj_file.dat"
 
 # only needed initially to make the memmaps, please comment out after the memmaps are created.
 #setup_and_process_xdf_files("/home/stephane/HAHA/eye_data/Data/xdf_files", participant_memmap_file, obs_heatmap_memmap_file, subtask_memmap_file, gaze_obj_memmap_file)
@@ -49,7 +49,7 @@ def train():
     # Encoding options are Game Data 'gd', Eye Gaze 'eg', both 'gd+eg', Gaze Object 'go', or Collapsed Eye Gaze 'ceg'
     # Note that 'go and 'ceg' are baselines that aggregate over data over the time period, so should probably be
     # inputted to a Linear classifier not a transformer
-    encoding_type = 'eg'
+    encoding_type = 'gd+eg'
     # Label options are 'score', 'subtask', 'q1', 'q2', 'q3', 'q4', or 'q5
     label_type = 'score'
     
@@ -161,7 +161,7 @@ def train():
             learning_rates.append(current_lr)
             model.train()
             dataset.set_split('train')
-            train_dataloader = DataLoader(dataset, batch_size=wandb.config.batch_size, shuffle=True, num_workers = 4)
+            train_dataloader = DataLoader(dataset, batch_size=wandb.config.batch_size, shuffle=True, num_workers = 5)
 
             train_loss, train_acc = 0.0, 0.0
             for i, (data, labels) in enumerate(train_dataloader):
@@ -220,7 +220,7 @@ def train():
                 scheduler_decay.step()
 
             # Validation phase
-            if epoch % 10 == 0:
+            if epoch > 9500:
                 model.eval()
                 dataset.set_split('val')
                 val_dataloader = DataLoader(dataset, batch_size=wandb.config.batch_size, shuffle=True, num_workers = 4)
@@ -264,8 +264,6 @@ def train():
                         torch.save(model.state_dict(), best_model_path)
                         print(f"New best model saved on epoch {epoch} with val_loss: {val_loss}")
 
-                
-
                 metrics['epoch'].append(epoch + 1)
                 metrics['train_loss'].append(train_loss)
                 metrics['train_acc'].append(train_acc)
@@ -279,6 +277,8 @@ def train():
                 # print(
                 #     f"Epoch {epoch + 1}/{TransformerConfig.num_epochs} - Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}, Train F1: {train_f1:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}, Val F1: {val_f1:.4f}")
                 wandb.log({'epoch': epoch + 1, 'train_loss': train_loss, 'train_f1': train_f1, 'val_loss': val_loss, 'train_acc': train_acc,'val_acc': val_acc, 'val_f1': val_f1, 'lr': current_lr})
+            else:
+                wandb.log({'epoch': epoch + 1, 'train_loss': train_loss, 'train_f1': train_f1, 'train_acc': train_acc, 'lr': current_lr})
 
         # TODO ASAP load best model and evaluate on test set and include in csv
         # Make sure to index last timestep for accuracy calculation if label_type does not equal 'score'
@@ -408,5 +408,5 @@ def train():
         # wandb.log_artifact('model.pth', type='model')
 
 #train()
-wandb.agent(sweep_id, function=train, count=1)
+wandb.agent(sweep_id, function=train, count=9)
 
