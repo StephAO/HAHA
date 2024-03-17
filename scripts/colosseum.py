@@ -21,23 +21,29 @@ def run_game(env, agent, deterministic=False):
         cum_reward += reward
     return cum_reward
 
-def eval_agents_with_various_teammates(agents_to_evaluate, teammates, training_tms=None, agent_det=False, tm_det=False):
+def eval_agents_with_various_teammates(agents_to_evaluate, teammates, use_self_as_tm=False, training_tms=None,
+                                       agent_det=False, tm_det=False):
     eval_envs_kwargs = {'is_eval_env': True, 'args': args, 'horizon': 400, 'ret_completed_subtasks': True}
+    # args.layout_names = ['counter_circuit_o_1order']
     args.layout_names = ['asymmetric_advantages', 'coordination_ring', 'counter_circuit_o_1order', 'cramped_room', 'forced_coordination']
-    # args.layout_names = [ln + '_mod' for ln in args.layout_names]
+    args.layout_names = [ln + '_mod' for ln in args.layout_names]
     num_teammates = len(teammates) + 1 if training_tms else len(teammates)
-    score_matrices = {ln: np.zeros((len(agents_to_evaluate), num_teammates)) for ln in args.layout_names}
+    if use_self_as_tm:
+        num_teammates = 1
+    score_matrices = np.zeros((len(agents_to_evaluate), len(args.layout_names), num_teammates))
 
     tot_rounds = len(args.layout_names) * len(agents_to_evaluate) * num_teammates
     with tqdm(total=tot_rounds) as pbar:
         for i, p1 in enumerate(agents_to_evaluate):
             eval_envs_kwargs['ret_completed_subtasks'] = ('haha' in p1.name)
             eval_envs = [OvercookedGymEnv(**{'env_index': i, **eval_envs_kwargs}) for i in range(len(args.layout_names))]
-            for eval_env in eval_envs:
+            for j, eval_env in enumerate(eval_envs):
                 eval_env.deterministic = tm_det
                 eval_env.encoding_fn = p1.encoding_fn
                 tms = teammates + training_tms[i] if training_tms is not None else teammates
-                for j, p2 in enumerate(tms):
+                if use_self_as_tm and len(teammates) == len(agents_to_evaluate):
+                    tms = [teammates[i]]
+                for k, p2 in enumerate(tms):
                     # if type(p2) != dict and p1.name == p2.name:
                     #     continue
                     p2 = p2[eval_env.layout_name][-1] if type(p2) == dict else p2
@@ -52,13 +58,11 @@ def eval_agents_with_various_teammates(agents_to_evaluate, teammates, training_t
                             reward = run_game(eval_env, p1, deterministic=agent_det)
                             # mean_reward, std_reward = evaluate_policy(p1, eval_env, n_eval_episodes=10,
                             #                                           deterministic=True, warn=False, render=False)
-                            score_matrices[eval_env.layout_name][i][j] += reward / num_trials
+                            score_matrices[i][j][k] += reward / num_trials
                     pbar.update(1)
                     # div by 2 for both indices
-                    score_matrices[eval_env.layout_name][i][j] /= 2
+                    score_matrices[i][j][k] /= 2
     pbar.close()
-
-    print(score_matrices)
 
     print([p.name for p in agents_to_evaluate])
     print([('bc' if type(p) == dict else p.name) for p in teammates])
@@ -82,100 +86,64 @@ def load_agents_population(filepaths, args):
 
 if __name__ == "__main__":
     args = get_arguments()
-    base_dir = args.base_dir / 'agent_models'# / 'ent_aamas24'
-    main_agents_fns = ['HAHA_fcp_fcp', 'fcp', 'HAHA_bcp_bcp', "bcp"]#, "HAHA_fcp_fcp"]# "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
-    main_agents_fns = [base_dir / fn for fn in main_agents_fns]
+    base_dir = args.base_dir / 'agent_models_ICML'# / 'ent_aamas24'
+    main_agents_names = ['HAHA_fcp']#,'HAHA_fcp',  'HAHA_bcp', 'bcp']#, "HAHA_fcp_fcp"]# "FCP", "BCP"]#, "HAHA+tuned", "HAHA_new36+tuned"]#"HAHA+tuned", "HAHA", "FCP"] #"FCP", "fcp/last_hope/agents_dir/agent_0", "bcp/last_hope/agents_dir/agent_0", "selfplay/best/agents_dir/agent_0"]
+    seeds = ['61', '102', '219', '1811', '4573']
 
-    main_agents = load_agents_population(main_agents_fns, args) #+[DummyAgent('random')] +
     bc, human_proxy = get_bc_and_human_proxy(args)
-
-    inc_training_tm = False
-    print(main_agents_fns)
-
-    if inc_training_tm:
-        training_tms = []
-        for fn in main_agents_fns:
-            if 'bcp' in str(fn):
-                training_tms.append([bc])
-            elif 'fcp' in str(fn):
-                fcp_pop = {}
-                for layout_name in args.layout_names:
-                    fcp_pop[layout_name] = RLAgentTrainer.load_agents(args, name=f'fcp_pop_{layout_name}', tag='aamas24')[:3]
-                training_tms.append([fcp_pop])
-            else:
-                training_tms.append(load_agents_population([fn], args))
+    use_self_as_tm = True
+    if use_self_as_tm:
+        num_tms = 1
     else:
-        training_tms = None
-    # Load main agents again to avoid issues with hrl object
-    # tms = [*load_agents_population(["SP"], args), DummyAgent('random'), human_proxy] # *load_agents_population(main_agents_fns, args),
-    # tms = get_fcp_population(args, training_steps)
+        tms = [*load_agents_population([base_dir / "sp_test"], args), human_proxy, DummyAgent('random')]
+        num_tms = len(tms)
 
-    # tm_fns = ["ck_0", "ck_4", "ck_8", "ck_12", "ck_16", "best"]
-    # tm_fns = [base_dir / '2l_hd128_s1997' / fn / 'agents_dir' / 'agent_0' for fn in tm_fns]
-    # tms = [bc, human_proxy]
-    tms = [*load_agents_population([base_dir / "SP"], args), human_proxy, DummyAgent('random')] # [*load_agents_population(tm_fns, args)]
-    # tms = load_agents_population(main_agents_fns, args)
+    main_agent_scores = {k: np.zeros((len(args.layout_names) + 1, num_tms + 1)) for k in main_agents_names} # +1s for average
+    main_agent_stds = {k: np.zeros((len(args.layout_names) + 1, num_tms + 1)) for k in main_agents_names} # +1s for average
 
-    """
-    I want a csv for each teammate and for overall across all teammates x 2 for deterministic and stochastic tms
-    In each csv, I want a score with teammate on each layout and on average
-    With 3 tms, this is 8 csv files
-    """
+    for main_agent in main_agents_names:
+        agent_fns = [base_dir / f'{main_agent}_{seed}' for seed in seeds]
+
+        main_agents = load_agents_population(agent_fns, args)
+        if use_self_as_tm:
+            tms = [*load_agents_population(agent_fns, args)]
+
+        score_matrices = eval_agents_with_various_teammates(main_agents, tms, use_self_as_tm=use_self_as_tm)
+
+        agent_means = np.mean(score_matrices, axis=(1, 2))
+        agent_mean = np.mean(agent_means)
+        agent_std = np.std(agent_means)
+
+        # Average across seeds
+        main_agent_scores[main_agent][:-1, :-1] = np.mean(score_matrices, axis=0)
+        main_agent_stds[main_agent][:-1, :-1] = np.std(score_matrices, axis=0)
+
+        # Average across layouts
+        layout_avgs = np.mean(score_matrices, axis=1)
+        main_agent_scores[main_agent][-1, :-1] = np.mean(layout_avgs, axis=0)
+        main_agent_stds[main_agent][-1, :-1] = np.std(layout_avgs, axis=0)
+
+        # Average across all teammates
+        tm_avgs = np.mean(score_matrices, axis=2)
+        main_agent_scores[main_agent][:-1, -1] = np.mean(tm_avgs, axis=0)
+        main_agent_stds[main_agent][:-1, -1] = np.std(tm_avgs, axis=0)
+
+        # Average acroos tms and layouts
+        main_agent_scores[main_agent][-1, -1] = agent_mean
+        main_agent_stds[main_agent][-1, -1] = agent_std
+
+        column_names = ['agent_name'] + args.layout_names + ['average']
+        with open(f'results_{main_agent}_mod.csv', 'w') as f:
+            f.write(','.join(column_names))
+            for i in range(num_tms):
+                tm_name = tms[i].name if not isinstance(tms[i], dict) else 'human_proxy'
+                f.write(f'\n{tm_name},')
+                for mean, std in zip(main_agent_scores[main_agent][:, i], main_agent_stds[main_agent][:, i]):
+                    f.write(f'{mean:.3f}+-({std:.3f}),')
+            f.write('\naverage,')
+            for mean, std in zip(main_agent_scores[main_agent][:, -1], main_agent_stds[main_agent][:, -1]):
+                f.write(f'{mean:.3f}+-({std:.3f}),')
 
 
-    column_names = ['agent_name'] + args.layout_names + ['average']
-    score_matrices = eval_agents_with_various_teammates(main_agents, tms, training_tms=training_tms, agent_det=False, tm_det=False)
-            # print(f"For layouts: {args.layout_names}, agents{main_agents_fns}")
-            # for layout in args.layout_names:
-            #     for i, agent in enumerate(main_agents):
-            #         print(np.mean(score_matrices[layout][i][:3]),end='' if (i == len(main_agents) - 1) else ',')
-            #     # print(f"Agent {agent.name} had an average score of {np.mean(score_matrices[layout][i][:3])} with other agents and {score_matrices[layout][i][-1]} with itself")
-            #     print()
-            # for layout in args.layout_names:
-            #     for i, agent in enumerate(main_agents):
-            #         print(np.mean(score_matrices[layout][i][-1]),end='' if (i == len(main_agents) - 1) else ',')
-            #     print()
-    tm_names = [('human_proxy' if isinstance(a, dict) else a.name) for a in tms]
-    if inc_training_tm:
-        tm_names += ['training_partner']
 
-    for i, tm_name in enumerate(tm_names):
-        # SEPARATE CSVS
-        data = []
-        # ONE ROW IS 1 AGENT
-        for j, agent_name in enumerate([a.name for a in main_agents]):
-            row_data = [agent_name]
-            avg = []
-            # EACH COL is a separate layout + average
-            for layout_name in args.layout_names:
-                row_data.append(score_matrices[layout_name][j][i])
-                if tm_name == 'training_partner':
-                    continue
-                avg.append(score_matrices[layout_name][j][i])
-
-            row_data.append(np.mean(avg))
-            data.append(row_data)
-
-        df = pd.DataFrame(data=data, columns=column_names)
-        df.to_csv(f'data/ua_eval_{tm_name}.csv')
-
-    # AVERAGE OVER TMS CSV
-    data = []
-    # ONE ROW IS 1 AGENT
-    for j, agent_name in enumerate([a.name for a in main_agents]):
-        # EACH AGENT NAME is two rows for det/sto
-        row_data = [agent_name]
-        avg = []
-        # EACH COL is a separate layout + average
-        for layout_name in args.layout_names:
-            # :-1 to remove training teammate score
-            row_data.append(np.mean(score_matrices[layout_name][j][:-1]))
-            avg.append(np.mean(score_matrices[layout_name][j][:-1]))
-
-        row_data.append(np.mean(avg))
-
-        data.append(row_data)
-
-    df = pd.DataFrame(data=data, columns=column_names)
-    df.to_csv(f'data/ua_eval_avg_over_tms.csv')
 

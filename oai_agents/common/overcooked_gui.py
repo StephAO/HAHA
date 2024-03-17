@@ -10,6 +10,7 @@ import time
 
 matplotlib.use('TkAgg')
 
+import os
 from os import listdir, environ, system, name
 from os.path import isfile, join
 import re
@@ -67,14 +68,14 @@ class OvercookedGUI:
             kwargs = {'single_subtask_id': 10, 'args': args, 'is_eval_env': True}
             self.env = OvercookedSubtaskGymEnv(**p_kwargs, **kwargs)
         else:
-            self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=False,
+            self.env = OvercookedGymEnv(layout_name=self.layout_name, args=args, ret_completed_subtasks=True,
                                         is_eval_env=True, horizon=horizon)
         self.agent = agent
         self.p_idx = p_idx
         self.env.set_teammate(teammate)
         self.env.reset(p_idx=self.p_idx)
         if self.agent != 'human':
-            self.agent.set_encoding_params(self.p_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.agent, HierarchicalRL), tune_subtasks=True)
+            self.agent.set_encoding_params(self.p_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.agent, HierarchicalRL), tune_subtasks=False)
             self.env.encoding_fn = self.agent.encoding_fn
         self.env.teammate.set_encoding_params(self.env.t_idx, self.args.horizon, env=self.env, is_haha=isinstance(self.env.teammate, HierarchicalRL), tune_subtasks=True)
         self.teammate_name=teammate.name
@@ -100,6 +101,10 @@ class OvercookedGUI:
         # Currently unused, but keeping in case we need it in the future.
         self.collect_trajectory = True
         self.trajectory = []
+
+        self.gif_name = f'HAHA_tuned_coord_receiver'
+        if not os.path.exists(f'screenshots/{self.gif_name}'):
+            os.makedirs(f'screenshots/{self.gif_name}')
 
     def start_screen(self):
         pygame.init()
@@ -145,8 +150,8 @@ class OvercookedGUI:
         pygame.display.flip()
         self._running = True
 
-        pygame.image.save(self.window, f"screenshots/{self.env.layout_name}.png")
-        exit(0)
+        pygame.image.save(self.window, f"screenshots/{self.gif_name}/-1.png")
+        # exit(0)
 
         if USING_WINDOWS:
             win = gw.getWindowsWithTitle('pygame window')[0]
@@ -236,7 +241,7 @@ class OvercookedGUI:
         self.window.blit(surface, (0, 0))
         pygame.display.flip()
         # Save screenshot
-        # pygame.image.save(self.window, f"screenshots/screenshot_{self.curr_tick}.bmp")
+        pygame.image.save(self.window, f"screenshots/{self.gif_name}/{self.curr_tick}.png")
 
     def on_cleanup(self):
         pygame.quit()
@@ -250,7 +255,7 @@ class OvercookedGUI:
         while (self._running):
             if self.agent == 'human':
 
-                if self.human_action is None:
+                while self.human_action is None:
                     for event in pygame.event.get():
                         self.on_event(event)
                     pygame.event.pump()
@@ -262,6 +267,7 @@ class OvercookedGUI:
                 # pygame.time.wait(sleep_time)
 
             done = self.step_env(action)
+
             self.human_action = None
             if True or self.curr_tick < 200:
                 pygame.time.wait(sleep_time)
